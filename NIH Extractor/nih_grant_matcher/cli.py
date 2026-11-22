@@ -1,13 +1,12 @@
 from __future__ import annotations
-import argparse, json
+import argparse, json, ssl, sys, urllib.error
 from pathlib import Path
-from .agents import DigestAgent, GrantParserAgent, IngestionAgent, MLRelevanceAgent, NihContextAgent, NihGuideIngestionAgent
-from .clients import GrantsGovClient, GrantsGovXmlClient, NihGuideClient, NihReporterClient
+from .agents import DigestAgent, NihContextAgent
+from .clients import GrantsGovXmlClient, NihReporterClient
 from .config import MatcherConfig
 from .excel import write_excel
-from .filters import is_current_nih_hhs_opportunity
-from .scoring import MLRelevanceScorer
 from .store import OpportunityStore
+from .workflow import fetch_score_opportunities
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find NIH grant opportunities relevant to ML/data analysis.")
@@ -52,40 +51,17 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     config = MatcherConfig(agencies=tuple(args.agency or ("HHS-NIH11",)), statuses=tuple(args.status or ("posted", "forecasted")), rows=args.limit, min_digest_score=args.min_score, db_path=args.db)
-    parser = GrantParserAgent()
-    relevance = MLRelevanceAgent(MLRelevanceScorer(config))
-    opportunities = []
-    fetched = 0
-    if args.source in ("nih-guide", "both"):
-        guide_opportunities = NihGuideIngestionAgent(NihGuideClient(), config).ingest(keyword=args.keyword)
-        opportunities.extend(guide_opportunities)
-        fetched += len(guide_opportunities)
-    if args.source in ("grants.gov", "both"):
-        enriched = IngestionAgent(GrantsGovClient(), config).ingest(keyword=args.keyword)
-        opportunities.extend(parser.parse(hit, detail) for hit, detail in enriched)
-        fetched += len(enriched)
-    opportunities = _dedupe_opportunities(opportunities)
-    scored = [relevance.score(opp) for opp in opportunities]
-    scored = [item for item in scored if is_current_nih_hhs_opportunity(item.opportunity)]
+    scored, fetched = fetch_score_opportunities(config, source=args.source, keyword=args.keyword)
     store = OpportunityStore(config.db_path)
     try:
-        store.upsert_many(scored)
+        saved = store.upsert_many(scored)
         digest_path = DigestAgent(store, min_score=args.min_score).write(args.out, limit=max(100, args.limit))
     finally:
         store.close()
     print(f"Fetched {fetched} opportunities from {args.source}.")
-    print(f"Saved {len(scored)} current NIH/HHS opportunities to {config.db_path}.")
+    print(f"Saved {saved} current NIH/HHS opportunities to {config.db_path}.")
     print(f"Wrote digest to {digest_path}.")
     return 0
-
-def _dedupe_opportunities(opportunities):
-    deduped = {}
-    for opportunity in opportunities:
-        key = opportunity.opportunity_number or opportunity.source_id
-        existing = deduped.get(key)
-        if existing is None or opportunity.source_id.startswith("nih-guide:"):
-            deduped[key] = opportunity
-    return list(deduped.values())
 
 def _digest(args: argparse.Namespace) -> int:
     store = OpportunityStore(args.db)
@@ -111,5 +87,12 @@ def _reporter_context(args: argparse.Namespace) -> int:
     return 0
 
 def _backfill_xml(args: argparse.Namespace) -> int:
-    print(f"Downloaded latest Grants.gov XML extract to {GrantsGovXmlClient().download_latest(Path(args.out))}.")
+    try:
+        path = GrantsGovXmlClient().download_latest(Path(args.out))
+    except urllib.error.URLError as exc:
+        if not isinstance(exc.reason, ssl.SSLCertVerificationError):
+            raise
+        print("Could not verify the certificate of www.grants.gov, so nothing was downloaded. The server does not send its intermediate certificate. Download the extract in a browser from https://www.grants.gov/xml-extract.", file=sys.stderr)
+        return 1
+    print(f"Downloaded latest Grants.gov XML extract to {path}.")
     return 0

@@ -1,14 +1,15 @@
 from __future__ import annotations
 import math, re
 from collections import Counter
-from datetime import date, datetime
-from .config import GENERIC_BIOMEDICAL_TERMS, MatcherConfig
+from datetime import date, datetime, timezone
+from .config import GENERIC_BIOMEDICAL_TERMS, KEYWORD_PATTERNS, MatcherConfig
 from .models import Opportunity, ScoreBreakdown, ScoredOpportunity
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
 AI_WORD_RE = re.compile(r"\bai\b", re.IGNORECASE)
+STOPWORDS = frozenset("a an and are as at be by for from in is it of on or that the this to use using will with".split())
 def _term_frequency(text: str) -> Counter[str]:
-    return Counter(TOKEN_RE.findall(text.lower()))
+    return Counter(token for token in TOKEN_RE.findall(text.lower()) if token not in STOPWORDS)
 def _cosine(left: Counter[str], right: Counter[str]) -> float:
     if not left or not right:
         return 0.0
@@ -21,6 +22,9 @@ class MLRelevanceScorer:
     def __init__(self, config: MatcherConfig | None = None) -> None:
         self.config = config or MatcherConfig()
         self.example_vectors = [_term_frequency(example) for example in self.config.semantic_examples]
+        # A keyword starts at a word boundary, so "modeling" does not match "remodeling", and may take a suffix
+        # ("algorithm" matches "algorithms"). An acronym of three letters or fewer takes a plural only.
+        self.keyword_patterns = {phrase: re.compile(KEYWORD_PATTERNS.get(phrase) or rf"\b{re.escape(phrase)}" + (r"\w*" if len(phrase) > 3 else r"s?\b")) for phrase in self.config.keywords}
     def score(self, opportunity: Opportunity, today: date | None = None) -> ScoredOpportunity:
         today = today or date.today()
         text = opportunity.searchable_text.lower()
@@ -30,11 +34,17 @@ class MLRelevanceScorer:
             matched_terms.append("AI")
             keyword_score += 18
             centrality_score += 12 if AI_WORD_RE.search(opportunity.title) else 4
-        for phrase, weight in self.config.keywords.items():
-            if phrase in text:
-                matched_terms.append(phrase)
-                keyword_score += weight
-                centrality_score += min(weight * (0.8 if phrase in title else 0.25), 12 if phrase in title else 4)
+        spans = {phrase: [match.span() for match in pattern.finditer(text)] for phrase, pattern in self.keyword_patterns.items()}
+        for phrase in [phrase for phrase, found in spans.items() if found]:
+            # A match that lies inside a longer phrase's match is the same evidence, so only the longer one counts.
+            longer = [span for other, found in spans.items() if len(other) > len(phrase) for span in found]
+            if all(any(a <= start and end <= b for a, b in longer) for start, end in spans[phrase]):
+                continue
+            weight = self.config.keywords[phrase]
+            in_title = bool(self.keyword_patterns[phrase].search(title))
+            matched_terms.append(phrase)
+            keyword_score += weight
+            centrality_score += min(weight * (0.8 if in_title else 0.25), 12 if in_title else 4)
         vector = _term_frequency(opportunity.searchable_text)
         semantic_score = min(max((_cosine(vector, ex) for ex in self.example_vectors), default=0.0) * 80, 20)
         nih_score = 10.0 if self._is_nih_hhs(opportunity) else 0.0
@@ -42,7 +52,7 @@ class MLRelevanceScorer:
         completeness_score = self._completeness_score(opportunity)
         generic_penalty = self._generic_penalty(text, matched_terms)
         score = max(0.0, min(100.0, keyword_score + semantic_score + nih_score + urgency_score + completeness_score + min(centrality_score, 18) - generic_penalty))
-        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(score), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1)), scored_at=datetime.utcnow())
+        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(score), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1)), scored_at=datetime.now(timezone.utc).replace(tzinfo=None))
     @staticmethod
     def _is_nih_hhs(opportunity: Opportunity) -> bool:
         combined = f"{opportunity.agency_code} {opportunity.agency_name}".lower()

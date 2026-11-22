@@ -20,3 +20,17 @@ def test_grantsgov_search_all_paginates() -> None:
     assert len(hits) == 125
     assert client.calls == [(100, 0), (100, 100)]
 
+
+def test_read_retries_a_dropped_connection(monkeypatch) -> None:
+    import io, urllib.error
+    from nih_grant_matcher import clients
+    responses = [urllib.error.URLError("reset"), urllib.error.HTTPError("u", 503, "busy", None, None), io.BytesIO(b"ok")]
+    def fake_urlopen(request, timeout):
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+    monkeypatch.setattr(clients.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    assert clients._read("request", timeout=1) == b"ok"
+    assert responses == []
