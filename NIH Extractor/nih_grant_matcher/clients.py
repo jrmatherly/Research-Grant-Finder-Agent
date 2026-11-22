@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, re, ssl, time, urllib.error, urllib.parse, urllib.request, zipfile
+import http.client, json, re, ssl, time, urllib.error, urllib.parse, urllib.request, zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,7 +17,8 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
         except urllib.error.HTTPError as exc:
             if exc.code < 500 or attempt == attempts:
                 raise
-        except (urllib.error.URLError, TimeoutError) as exc:
+        # urllib wraps only a failed send in URLError. A connection that drops while the response is read raises OSError or HTTPException.
+        except (OSError, http.client.HTTPException) as exc:
             if attempt == attempts or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
                 raise
         time.sleep(2 ** (attempt - 1))

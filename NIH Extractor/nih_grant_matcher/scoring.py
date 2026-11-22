@@ -22,9 +22,18 @@ class MLRelevanceScorer:
     def __init__(self, config: MatcherConfig | None = None) -> None:
         self.config = config or MatcherConfig()
         self.example_vectors = [_term_frequency(example) for example in self.config.semantic_examples]
-        # A keyword starts at a word boundary, so "modeling" does not match "remodeling", and may take a suffix
+        # A keyword starts at the start of a word, so "modeling" does not match "remodeling", and may take a suffix
         # ("algorithm" matches "algorithms"). An acronym of three letters or fewer takes a plural only.
-        self.keyword_patterns = {phrase: re.compile(KEYWORD_PATTERNS.get(phrase) or rf"\b{re.escape(phrase)}" + (r"\w*" if len(phrase) > 3 else r"s?\b")) for phrase in self.config.keywords}
+        self.keyword_patterns = {phrase: re.compile(KEYWORD_PATTERNS.get(phrase) or rf"(?<!\w){re.escape(phrase)}" + (r"\w*" if len(phrase) > 3 else r"s?(?!\w)")) for phrase in self.config.keywords}
+    def _keyword_hits(self, text: str) -> list[str]:
+        spans = {phrase: [match.span() for match in pattern.finditer(text)] for phrase, pattern in self.keyword_patterns.items()}
+        hits = []
+        for phrase, found in spans.items():
+            # A match that lies inside a longer phrase's match is the same evidence, so only the longer one counts.
+            longer = [span for other, others in spans.items() if len(other) > len(phrase) for span in others]
+            if found and not all(any(a <= start and end <= b for a, b in longer) for start, end in found):
+                hits.append(phrase)
+        return hits
     def score(self, opportunity: Opportunity, today: date | None = None) -> ScoredOpportunity:
         today = today or date.today()
         text = opportunity.searchable_text.lower()
@@ -34,14 +43,10 @@ class MLRelevanceScorer:
             matched_terms.append("AI")
             keyword_score += 18
             centrality_score += 12 if AI_WORD_RE.search(opportunity.title) else 4
-        spans = {phrase: [match.span() for match in pattern.finditer(text)] for phrase, pattern in self.keyword_patterns.items()}
-        for phrase in [phrase for phrase, found in spans.items() if found]:
-            # A match that lies inside a longer phrase's match is the same evidence, so only the longer one counts.
-            longer = [span for other, found in spans.items() if len(other) > len(phrase) for span in found]
-            if all(any(a <= start and end <= b for a, b in longer) for start, end in spans[phrase]):
-                continue
+        title_hits = self._keyword_hits(title)
+        for phrase in self._keyword_hits(text):
             weight = self.config.keywords[phrase]
-            in_title = bool(self.keyword_patterns[phrase].search(title))
+            in_title = phrase in title_hits
             matched_terms.append(phrase)
             keyword_score += weight
             centrality_score += min(weight * (0.8 if in_title else 0.25), 12 if in_title else 4)
