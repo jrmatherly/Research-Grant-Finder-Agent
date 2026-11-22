@@ -1,7 +1,8 @@
 services:
   app:
     build: ./NIH Extractor
-    image: nih-grant-matcher
+    # Published by .github/workflows/docker-image.yml. `docker compose pull` fetches it and `--build` builds it here.
+    image: ghcr.io/jrmatherly/nih-grant-matcher:latest
     ports:
       # Loopback only: the dashboard has no login and takes file paths as input.
       - "127.0.0.1:8501:8501"

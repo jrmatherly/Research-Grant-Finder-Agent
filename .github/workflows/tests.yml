@@ -1,28 +1,65 @@
-name: tests
+name: "🧪 Tests"
+
 on:
+  pull_request:
+    branches: [main]
+  # Work also lands on main without a pull request, so run on every push to main.
   push:
     branches: [main]
-  pull_request:
+  workflow_dispatch:
+
+# Nothing in this workflow writes, so the token is read-only and never persisted.
 permissions:
   contents: read
+
+# A new push to a pull request supersedes the running matrix. A run on main finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   pytest:
+    name: "🧪 pytest (${{ matrix.python-version }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
+      # One version failing must not cancel the evidence from the others.
+      fail-fast: false
       matrix:
+        # The declared floor (pyproject.toml), the version the image runs, and the newest release.
         python-version: ["3.11", "3.13", "3.14"]
     defaults:
       run:
         working-directory: NIH Extractor
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - name: "⬇️ Checkout"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: "🐍 Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -r requirements.lock pytest
-      - run: python -m pytest -q
-  docker:
+          cache: pip
+          cache-dependency-path: NIH Extractor/requirements.lock
+      # The locked versions, so that tests/test_streamlit_app_run.py runs the dashboard the image ships.
+      - name: "📦 Install dependencies"
+        run: python -m pip install -r requirements.lock pytest
+      - name: "🧪 Run the test suite"
+        run: python -m pytest -q -W error::DeprecationWarning
+
+  test-result:
+    name: "✅ Required checks passed"
+    # The one check to require: the matrix legs change, this name does not.
+    # always(), because a failed job would otherwise skip this one, and a skipped job counts as passing.
+    needs: [pytest]
+    if: ${{ always() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - run: docker build "NIH Extractor"
+      - name: "🧾 Fail unless every test leg passed"
+        env:
+          PYTEST_RESULT: ${{ needs.pytest.result }}
+        run: |
+          echo "pytest legs: $PYTEST_RESULT"
+          [ "$PYTEST_RESULT" = success ]
