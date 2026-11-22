@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from datetime import date
 from .models import Opportunity
 
@@ -12,7 +13,9 @@ def is_current_nih_hhs_opportunity(opportunity: Opportunity, today: date | None 
     is_nih_guide = str(opportunity.source_id).startswith("nih-guide:")
     if status and status not in ACTIVE_STATUSES:
         return False
-    if not is_nih_guide and not any(token in agency for token in NIH_TOKENS):
+    # Single-word tokens match whole words, so "nia" does not match "Virginia".
+    words = set(re.findall(r"[a-z]+", agency))
+    if not is_nih_guide and not any(token in agency if " " in token else token in words for token in NIH_TOKENS):
         return False
     if opportunity.close_date and opportunity.close_date < today:
         return False

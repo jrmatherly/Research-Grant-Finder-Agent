@@ -16,6 +16,8 @@ DEFAULT_KEYWORDS = {
     "electronic health record": 10, "imaging analytics": 12, "data analysis": 8,
     "analytics": 7, "algorithm": 7, "modeling": 6,
 }
+# A keyword listed here is matched with its own pattern. "omics" covers genomics and proteomics, but not economics.
+KEYWORD_PATTERNS = {"omics": r"\b(?!\w*(?:econ|ergon)omics)\w*omics\b"}
 CURATED_COMPUTATIONAL_EXAMPLES = (
     "Develop machine learning models to predict clinical risk from electronic health records.",
     "Use deep learning and computer vision to analyze biomedical imaging data.",

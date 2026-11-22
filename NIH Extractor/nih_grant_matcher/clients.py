@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, re, time, urllib.parse, urllib.request, zipfile
+import json, re, ssl, time, urllib.error, urllib.parse, urllib.request, zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,18 +8,30 @@ from .config import GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, GRANTSGOV_XML_EXT
 class ApiError(RuntimeError):
     pass
 
+def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> bytes:
+    # A run makes hundreds of requests in a row, so one dropped connection or 5xx must not end it.
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == attempts:
+                raise
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == attempts or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
+                raise
+        time.sleep(2 ** (attempt - 1))
+    raise AssertionError("unreachable")
+
 def _post_json(url: str, payload: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1"}, method="POST")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        parsed = json.loads(response.read().decode("utf-8"))
+    parsed = json.loads(_read(request, timeout).decode("utf-8"))
     if isinstance(parsed, dict) and parsed.get("errorcode") not in (None, 0):
         raise ApiError(f"{url} returned errorcode={parsed.get('errorcode')}: {parsed.get('msg')}")
     return parsed
 
 def _get_bytes(url: str, timeout: int = 60) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "nih-grant-matcher/0.1"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    return _read(urllib.request.Request(url, headers={"User-Agent": "nih-grant-matcher/0.1"}), timeout)
 
 @dataclass
 class GrantsGovClient:
@@ -103,8 +115,7 @@ class NihGuideClient:
                 f"{self.api_url}/data?{query}",
                 headers={"Accept": "application/json", "Origin": "https://grants.nih.gov", "Referer": "https://grants.nih.gov/funding/nih-guide-for-grants-and-contracts", "User-Agent": "nih-grant-matcher/0.1"},
             )
-            with urllib.request.urlopen(request, timeout=30) as response:
-                parsed = json.loads(response.read().decode("utf-8"))
+            parsed = json.loads(_read(request, 30).decode("utf-8"))
             hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
             if not isinstance(hits, list):
                 raise ApiError("Unexpected NIH Guide response: hits is not a list")

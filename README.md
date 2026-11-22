@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue" alt="Python">
+  <img src="https://img.shields.io/badge/Python-3.11%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/Architecture-Agentic_AI-purple" alt="Agentic AI">
   <img src="https://img.shields.io/badge/Interface-Streamlit-red" alt="Streamlit">
   <img src="https://img.shields.io/badge/Database-SQLite-lightgrey" alt="SQLite">
@@ -284,9 +284,9 @@ This capability creates a foundation for future research intelligence tasks such
 
 ## Human-in-the-Loop Research Intelligence
 
-The system includes a **Review Feedback Agent** that records researcher assessments of opportunities.
+The package includes a **Review Feedback Agent** that can record whether an opportunity was useful, with a review note, in the SQLite store.
 
-Researchers can identify whether an opportunity was useful and preserve review notes.
+The dashboard and the command-line tool do not call it yet, so feedback can be recorded only from Python code.
 
 This creates the foundation for a future adaptive recommendation system in which researcher feedback can improve opportunity prioritization.
 
@@ -343,7 +343,7 @@ The research prototype currently supports:
 * Excel export
 * Interactive Streamlit analytics
 * NIH RePORTER research-context retrieval
-* Researcher feedback storage
+* Researcher feedback storage (Python API only)
 
 ---
 
@@ -352,7 +352,7 @@ The research prototype currently supports:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Quazi-07/Research-Grant-Finder-Agent.git
+git clone https://github.com/jrmatherly/Research-Grant-Finder-Agent.git
 cd Research-Grant-Finder-Agent/"NIH Extractor"
 ```
 
@@ -389,6 +389,38 @@ streamlit run streamlit_app.py
 ```
 
 The dashboard will open in your browser.
+
+### Run with Docker
+
+From the repository root, build the image and start the dashboard:
+
+```bash
+docker compose up --build -d
+```
+
+Open http://localhost:8501. The port is published on this machine only. The database, Excel files, and digests are written to `NIH Extractor/data`, `NIH Extractor/outputs`, and `NIH Extractor/digests`.
+
+Run the command-line tool in the same image:
+
+```bash
+docker compose run --rm app python -m nih_grant_matcher run --source nih-guide
+```
+
+Stop the dashboard with `docker compose down`.
+
+### Use the Command Line
+
+Run these commands from `NIH Extractor/`. They use the standard library only.
+
+| Command | Result |
+| --- | --- |
+| `python -m nih_grant_matcher run --source nih-guide` | Fetches, scores, and saves opportunities, then writes `digests/latest.md`. `--source` also accepts `grants.gov` and `both`. |
+| `python -m nih_grant_matcher digest` | Writes the digest again from the saved opportunities. |
+| `python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
+| `python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
+| `python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. This fails while `www.grants.gov` does not send its intermediate certificate. |
+
+Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.
 
 ---
 
