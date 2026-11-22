@@ -1,20 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits"],
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
   "description": "Scope: what this repository pins. Workflow actions by commit, the Docker base image by digest, and the Python packages in requirements.lock. Security fixes come from Dependabot security updates (a repository setting), which Renovate would raise a second time.",
-  "enabledManagers": ["github-actions", "dockerfile", "pip_requirements", "pip-compile"],
+  "enabledManagers": [
+    "github-actions",
+    "dockerfile",
+    "pip_requirements",
+    "pip-compile",
+    "custom.regex"
+  ],
   "forkProcessing": "enabled",
   "timezone": "America/New_York",
   "minimumReleaseAge": "7 days",
   "vulnerabilityAlerts": {
     "enabled": false
   },
-  "labels": ["dependencies"],
-  "schedule": ["before 7am on monday"],
+  "labels": [
+    "dependencies"
+  ],
+  "schedule": [
+    "before 7am on monday"
+  ],
   "prHourlyLimit": 3,
   "prConcurrentLimit": 5,
   "pip-compile": {
-    "managerFilePatterns": ["/(^|/)requirements\\.lock$/"]
+    "managerFilePatterns": [
+      "/(^|/)requirements\\.lock$/"
+    ]
   },
   "lockFileMaintenance": {
     "enabled": true
@@ -22,27 +38,61 @@
   "packageRules": [
     {
       "description": "Workflow actions: one PR, each pinned to a commit with its tag in a comment",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "GitHub Actions",
       "semanticCommitType": "ci",
       "automerge": false
     },
     {
       "description": "The image runs Python 3.13, which CI also tests. Only a rebuilt digest of that tag moves here. Raise the tag by hand together with the CI matrix.",
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": ["major", "minor", "patch"],
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
       "enabled": false
     },
     {
-      "matchManagers": ["dockerfile"],
+      "matchManagers": [
+        "dockerfile"
+      ],
       "groupName": "Docker base digest",
       "automerge": false
     },
     {
       "description": "streamlit and pandas, with the versions requirements.lock resolves for them, in one PR",
-      "matchManagers": ["pip_requirements", "pip-compile"],
+      "matchManagers": [
+        "pip_requirements",
+        "pip-compile"
+      ],
       "groupName": "Python dependencies",
       "automerge": false
+    },
+    {
+      "description": "The hadolint image, in the same PR as the workflow actions",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "groupName": "GitHub Actions",
+      "semanticCommitType": "ci"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The hadolint image docker-image.yml runs",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/docker-image\\.yml$/"
+      ],
+      "matchStrings": [
+        "HADOLINT_IMAGE: (?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker"
     }
   ]
 }
