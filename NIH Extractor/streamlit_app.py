@@ -107,18 +107,18 @@ with st.sidebar:
     keyword = st.text_input("Keyword", value="", placeholder="AI, machine learning, imaging...")
     limit = st.slider("Rows per source", min_value=25, max_value=500, value=250, step=25)
     db_path = st.text_input("Database", value=DEFAULT_DB)
-    run_clicked = st.button("Run Search", type="primary", use_container_width=True)
+    run_clicked = st.button("Run Search", type="primary", width="stretch")
 
     st.divider()
     st.header("Display")
     min_score = st.slider("Minimum score shown", 0.0, 100.0, 0.0, 5.0)
     max_saved = st.slider("Saved rows to load", 50, 1000, 500, 50)
-    load_clicked = st.button("Load Saved Results", use_container_width=True)
+    load_clicked = st.button("Load Saved Results", width="stretch")
 
     st.divider()
     st.header("Export")
     excel_path = st.text_input("Excel output", value=DEFAULT_EXCEL)
-    export_clicked = st.button("Export Current View", use_container_width=True)
+    export_clicked = st.button("Export Current View", width="stretch")
 
 
 if "scored_items" not in st.session_state:
@@ -178,7 +178,7 @@ tab_results, tab_visuals, tab_detail = st.tabs(["Results", "Visuals", "Details"]
 with tab_results:
     st.dataframe(
         filtered.drop(columns=["Source ID"], errors="ignore"),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
@@ -235,9 +235,9 @@ with tab_detail:
         st.write(row["Summary"] or "No summary available.")
         link_cols = st.columns(2)
         if row["Source URL"]:
-            link_cols[0].link_button("Open NIH Guide", row["Source URL"], use_container_width=True)
+            link_cols[0].link_button("Open NIH Guide", row["Source URL"], width="stretch")
         if row["Grants.gov URL"]:
-            link_cols[1].link_button("Open Grants.gov", row["Grants.gov URL"], use_container_width=True)
+            link_cols[1].link_button("Open Grants.gov", row["Grants.gov URL"], width="stretch")
 
 if export_clicked:
     visible_ids = set(filtered["Source ID"].tolist())

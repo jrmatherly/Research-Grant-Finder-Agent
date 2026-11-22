@@ -1,0 +1,12 @@
+services:
+  app:
+    build: ./NIH Extractor
+    image: nih-grant-matcher
+    ports:
+      # Loopback only: the dashboard has no login and takes file paths as input.
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - ./NIH Extractor/data:/app/data
+      - ./NIH Extractor/outputs:/app/outputs
+      - ./NIH Extractor/digests:/app/digests
+    restart: unless-stopped
