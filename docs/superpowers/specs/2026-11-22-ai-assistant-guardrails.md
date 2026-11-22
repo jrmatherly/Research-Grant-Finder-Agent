@@ -50,7 +50,7 @@ The next findings come from the second review, after the first push to `main`, a
 21. No test imported or compiled `cli.py`, `workflow.py`, `agents.py`, `digest.py`, `__main__.py`, or `streamlit_app.py`. On a copy with a syntax error in `streamlit_app.py` and in `agents.py` and a bad import in `workflow.py`, the 13 original tests still passed.
 22. Three of the five hook tests could not fail. With `CLAUDE_PROJECT_DIR` unset the old hook fell through to a `cd` that failed and exited with code 0, whatever the guards did.
 23. The old stop hook skipped a turn that committed its own work, because it ran only when the working tree held a changed `.py` file. It also skipped edits to non-Python files that the tests cover, such as `.claude/settings.json`.
-24. A session started in `NIH Extractor/` does not get the project settings. In a headless session started there, with a failing test in the tree, the stop hook did not run and a write to `data/x.txt` succeeded. Start the assistant at the repository root.
+24. A session started in `NIH Extractor/` does not get the project settings. In a headless session started there, with a failing test in the tree, the stop hook did not run and a write to `data/x.txt` succeeded. An `InstructionsLoaded` hook showed that the root `CLAUDE.md` and the path-scoped rules still load there, and that the imported `AGENTS.md` does not. For that reason `CLAUDE.md` itself says to start at the repository root.
 25. On the development machine `jq` and `uv` are mise shims. A shim does not run from a `PATH` that holds only the shim, so a hook test must put its stubs in front of the real `PATH` and not replace it.
 
 ## Decisions
@@ -88,7 +88,7 @@ Each line is the default that the plan uses. Change a line here before execution
 ## Unverified
 
 - How assistants other than Claude Code read `AGENTS.md` in this repository.
-- Whether `AGENTS.md` loads through the `CLAUDE.md` import in a session started in `NIH Extractor/`. One headless session reported that it saw `CLAUDE.md` and not the contents of `AGENTS.md`.
+- Whether an interactive session started in `NIH Extractor/` offers to approve the `AGENTS.md` import. The documentation says an import outside the working directory needs a one-time approval. The headless test cannot show a dialog.
 - How the stop hook behaves on Windows without Git Bash. The documentation says a failed `Stop` hook does not block, so the expected result is an error line and no check.
 
 ## Sources

@@ -21,12 +21,13 @@ def run_hook(tmp_path: Path, active: bool, stubs: dict[str, str], real_path: boo
         (tmp_path / name).chmod(0o755)
     path = f"{tmp_path}{os.pathsep}{os.environ['PATH']}" if real_path else str(tmp_path)
     payload = json.dumps({"stop_hook_active": active})
-    return subprocess.run([BASH, str(HOOK)], input=payload, capture_output=True, text=True, env={**os.environ, "PATH": path}, timeout=30).returncode
+    return subprocess.run([BASH, str(HOOK)], input=payload, capture_output=True, text=True, env={**os.environ, "PATH": path}, cwd=tmp_path, timeout=30).returncode
 
 
 @needs_shell
 def test_stop_hook_blocks_when_tests_fail(tmp_path: Path) -> None:
-    assert run_hook(tmp_path, active=False, stubs={"uv": "exit 1"}, real_path=True) == 2
+    # This stub fails only when the hook runs `uv run` from the directory that holds the dashboard.
+    assert run_hook(tmp_path, active=False, stubs={"uv": '[ -f streamlit_app.py ] && [ "$1" = run ] && exit 1; exit 0'}, real_path=True) == 2
 
 
 @needs_shell

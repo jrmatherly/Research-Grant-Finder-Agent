@@ -498,10 +498,20 @@ The whole-branch review found one defect and two inaccurate lines. The fixes are
 A second reviewer read `main` at `2fa0221`, and a headless session tested the committed files. The spec records the evidence as findings 18 to 25. The task text above still shows the first design.
 
 - `verify-on-stop.sh` now runs the suite on every stop. It no longer asks git whether a `.py` file changed, and it finds the tests relative to its own path, so it does not read `CLAUDE_PROJECT_DIR`. Review Focus items 3 and 4 and Task 5 Step 7 described the old trigger and no longer apply.
-- `test_claude_hooks.py` now has one test for each guard in the hook and one test that the hook blocks. Each test fails when its guard is deleted. Every test gives the hook a stub `uv`, so no test can start pytest inside pytest.
+- `test_claude_hooks.py` now has one test for each guard in the hook and one test that the hook blocks. Each test fails when its guard is deleted. Every test either puts a stub `uv` ahead of the real one or hides `uv`, so no test can start pytest inside pytest.
 - `tests/test_sources.py` is new. It compiles every source file and imports `nih_grant_matcher.cli` and `nih_grant_matcher.workflow`.
 - `AGENTS.md` now says to start the assistant at the repository root, names the fork as the only push target, and says that the CLI calls live APIs and writes files.
 - `.claude/rules/scoring.md` now also loads for `models.py` and `store.py`. It says where a new `ScoreBreakdown` field goes, and that the dashboard repeats the thresholds.
 - `.gitignore` now ignores `.claude/settings.local.json`.
 - The suite reports `37 passed`.
 - The constraint "Do not commit to `main`" was superseded. The operator chose a direct push to `main`.
+
+## Changes after the third review
+
+A third reviewer read commit `1c0644b`. It found one gap and several inaccurate lines.
+
+- `tests/test_sources.py` now also imports `nih_grant_matcher.__main__` and checks that every name the dashboard imports from the package exists. Before this change, renaming `run_and_save` in `workflow.py` or `main` in `cli.py` left the suite green while the dashboard or the CLI failed at startup.
+- The block test in `test_claude_hooks.py` now runs the hook from a temporary directory with a stub `uv` that fails only for `uv run` in the directory that holds `streamlit_app.py`. The test fails if the hook loses its `cd` line or stops calling `uv run`.
+- `CLAUDE.md` now says to start Claude Code at the repository root. Spec finding 24 records why.
+- `AGENTS.md` and `.claude/rules/scoring.md` each had one overstated sentence, now corrected.
+- The suite reports `39 passed`.

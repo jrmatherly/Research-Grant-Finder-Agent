@@ -9,7 +9,7 @@ Start your coding assistant at the repository root, so that it loads the project
 - Run all tests: `python -m pytest -q`. When pytest is not installed, use `uv run --no-project --with pytest pytest -q`.
 - Run one test file: `python -m pytest -q tests/test_scoring.py`
 - Run the dashboard: `streamlit run streamlit_app.py`
-- Run the CLI: `python -m nih_grant_matcher run --source nih-guide`. It calls the live NIH and Grants.gov APIs and writes `data/` and `digests/` under the current directory.
+- Run the CLI: `python -m nih_grant_matcher run --source nih-guide`. It calls live public APIs and writes `data/` and `digests/` under the current directory.
 
 ## Conventions
 
