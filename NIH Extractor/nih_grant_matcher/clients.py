@@ -74,7 +74,7 @@ class GrantsGovXmlClient:
         if not matches:
             raise ApiError("No GrantsDBExtract zip link found on Grants.gov XML extract page")
         latest = matches[-1]
-        return latest if latest.startswith("http") else urllib.request.urljoin(self.extract_page_url, latest)
+        return latest if latest.startswith("http") else urllib.parse.urljoin(self.extract_page_url, latest)
     def download_latest(self, destination: str | Path) -> Path:
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
