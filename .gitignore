@@ -238,3 +238,4 @@ NIH Extractor/data/
 NIH Extractor/digests/
 NIH Extractor/outputs/
 CLAUDE.local.md
+.claude/settings.local.json
