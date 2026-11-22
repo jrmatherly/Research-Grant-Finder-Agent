@@ -24,11 +24,13 @@ class OpportunityStore:
         with self.conn:
             if opp.opportunity_number:
                 # One row per opportunity number. The NIH Guide record wins, as in the workflow's dedupe.
-                if not opp.source_id.startswith("nih-guide:") and self.conn.execute("SELECT 1 FROM opportunities WHERE opportunity_number = ? AND source_id LIKE 'nih-guide:%'", (opp.opportunity_number,)).fetchone():
+                yields = not opp.source_id.startswith("nih-guide:") and self.conn.execute("SELECT 1 FROM opportunities WHERE opportunity_number = ? AND source_id LIKE 'nih-guide:%'", (opp.opportunity_number,)).fetchone() is not None
+                # A database written before this rule can hold several rows for one number, so clear them on either path.
+                others, args = ("opportunity_number = ? AND source_id NOT LIKE 'nih-guide:%'", (opp.opportunity_number,)) if yields else ("opportunity_number = ? AND source_id != ?", (opp.opportunity_number, opp.source_id))
+                self.conn.execute(f"DELETE FROM scores WHERE source_id IN (SELECT source_id FROM opportunities WHERE {others})", args)
+                self.conn.execute(f"DELETE FROM opportunities WHERE {others}", args)
+                if yields:
                     return False
-                others = "SELECT source_id FROM opportunities WHERE opportunity_number = ? AND source_id != ?"
-                self.conn.execute(f"DELETE FROM scores WHERE source_id IN ({others})", (opp.opportunity_number, opp.source_id))
-                self.conn.execute("DELETE FROM opportunities WHERE opportunity_number = ? AND source_id != ?", (opp.opportunity_number, opp.source_id))
             self.conn.execute("""INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source_id) DO UPDATE SET opportunity_number=excluded.opportunity_number, title=excluded.title, agency_code=excluded.agency_code, agency_name=excluded.agency_name, status=excluded.status, open_date=excluded.open_date, close_date=excluded.close_date, description=excluded.description, eligibility_json=excluded.eligibility_json, funding_instruments_json=excluded.funding_instruments_json, funding_categories_json=excluded.funding_categories_json, award_ceiling=excluded.award_ceiling, award_floor=excluded.award_floor, source_url=excluded.source_url, attachments_json=excluded.attachments_json, raw_json=excluded.raw_json""", (opp.source_id, opp.opportunity_number, opp.title, opp.agency_code, opp.agency_name, opp.status, opp.open_date.isoformat() if opp.open_date else None, opp.close_date.isoformat() if opp.close_date else None, opp.description, json.dumps(opp.eligibility), json.dumps(opp.funding_instruments), json.dumps(opp.funding_categories), opp.award_ceiling, opp.award_floor, opp.source_url, json.dumps(opp.attachments), json.dumps(opp.raw)))
             self.conn.execute("""INSERT INTO scores VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source_id) DO UPDATE SET score=excluded.score, classification=excluded.classification, reasons_json=excluded.reasons_json, matched_terms_json=excluded.matched_terms_json, breakdown_json=excluded.breakdown_json, scored_at=excluded.scored_at""", (opp.source_id, scored.score, scored.classification, json.dumps(scored.reasons), json.dumps(scored.matched_terms), json.dumps(scored.breakdown.__dict__), scored.scored_at.isoformat()))
         return True

@@ -394,6 +394,12 @@ docker compose run --rm app python -m nih_grant_matcher run --source nih-guide
 
 Stop the dashboard with `docker compose down`.
 
+On Linux, create the output folders before the first start, so that Docker does not create them as root. The container writes as user 1000:
+
+```bash
+mkdir -p "NIH Extractor"/{data,outputs,digests} && sudo chown -R 1000:1000 "NIH Extractor"/{data,outputs,digests}
+```
+
 CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To use the published image instead of building, run `docker compose pull` and then `docker compose up -d`.
 
 ### Use the Command Line

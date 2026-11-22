@@ -22,15 +22,36 @@ def test_grantsgov_search_all_paginates() -> None:
 
 
 def test_read_retries_a_dropped_connection(monkeypatch) -> None:
-    import io, urllib.error
+    import socket, threading, urllib.request
     from nih_grant_matcher import clients
-    responses = [urllib.error.URLError("reset"), urllib.error.HTTPError("u", 503, "busy", None, None), io.BytesIO(b"ok")]
-    def fake_urlopen(request, timeout):
-        response = responses.pop(0)
-        if isinstance(response, Exception):
-            raise response
-        return response
-    monkeypatch.setattr(clients.urllib.request, "urlopen", fake_urlopen)
+    server = socket.create_server(("127.0.0.1", 0))
+    def serve() -> None:
+        # The first connection closes with no reply, as a dropped connection does. The second answers.
+        first, _ = server.accept()
+        first.recv(65536)
+        first.close()
+        second, _ = server.accept()
+        second.recv(65536)
+        second.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+        second.close()
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
     monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
-    assert clients._read("request", timeout=1) == b"ok"
-    assert responses == []
+    try:
+        assert clients._read(urllib.request.Request(f"http://127.0.0.1:{server.getsockname()[1]}/"), timeout=5) == b"ok"
+    finally:
+        thread.join(timeout=5)
+        server.close()
+
+def test_read_does_not_retry_a_client_error(monkeypatch) -> None:
+    import urllib.error
+    import pytest
+    from nih_grant_matcher import clients
+    calls = []
+    def fake_urlopen(request, timeout):
+        calls.append(request)
+        raise urllib.error.HTTPError("u", 404, "missing", None, None)
+    monkeypatch.setattr(clients.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(urllib.error.HTTPError):
+        clients._read("request", timeout=1)
+    assert len(calls) == 1

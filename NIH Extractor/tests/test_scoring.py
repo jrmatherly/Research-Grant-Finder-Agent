@@ -33,6 +33,16 @@ def test_overlapping_keywords_count_once() -> None:
     assert scored.matched_terms == ("predictive modeling",)
     assert scored.breakdown.keyword_score == 16
 
+def test_title_credit_follows_the_overlap_rule() -> None:
+    scored = MLRelevanceScorer().score(_nih("Predictive modeling of outcomes", "A separate modeling aim."), today=date(2026, 7, 6))
+    assert scored.matched_terms == ("predictive modeling", "modeling")
+    assert scored.breakdown.centrality_score == 12 + 1.5
+
+def test_custom_keyword_with_symbols_matches() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    scored = MLRelevanceScorer(MatcherConfig(keywords={"c++": 5, ".net": 5})).score(_nih("Tools in C++ and .NET", "No other terms."), today=date(2026, 7, 6))
+    assert scored.matched_terms == ("c++", ".net")
+
 def test_common_words_do_not_count_as_similarity() -> None:
     scored = MLRelevanceScorer().score(_nih("Support for the care of patients", "Funds to support the use of tools to help patients and families from rural areas to get care and to learn from data."), today=date(2026, 7, 6))
     assert scored.breakdown.semantic_score < 8
