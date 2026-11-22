@@ -22,7 +22,7 @@ st.caption("Run NIH Guide and Grants.gov searches, rank computational opportunit
 
 
 def get_scored_items_from_session() -> list[ScoredOpportunity]:
-    # Older versions accidentally used st.session_state.items, which resolves
+    # Older versions accidentally used the items attribute of session state, which resolves
     # to a method. Clear that key and guard against any stale callable value.
     if "items" in st.session_state:
         del st.session_state["items"]

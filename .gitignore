@@ -232,3 +232,9 @@ $RECYCLE.BIN/
 .remember/
 .codegraph/
 private/
+
+### Project ###
+NIH Extractor/data/
+NIH Extractor/digests/
+NIH Extractor/outputs/
+CLAUDE.local.md
