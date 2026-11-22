@@ -5,12 +5,11 @@
     "helpers:pinGitHubActionDigests",
     ":semanticCommits"
   ],
-  "description": "Scope: what this repository pins. Workflow actions by commit, the Docker base image by digest, and the Python packages in requirements.lock. Security fixes come from Dependabot security updates (a repository setting), which Renovate would raise a second time.",
+  "description": "Scope: what this repository pins. Workflow actions by commit, the Docker images by digest, uv, and the Python packages in pyproject.toml and uv.lock. Security fixes come from Dependabot security updates (a repository setting), which Renovate would raise a second time.",
   "enabledManagers": [
     "github-actions",
     "dockerfile",
-    "pip_requirements",
-    "pip-compile",
+    "pep621",
     "custom.regex"
   ],
   "forkProcessing": "enabled",
@@ -27,11 +26,6 @@
   ],
   "prHourlyLimit": 3,
   "prConcurrentLimit": 5,
-  "pip-compile": {
-    "managerFilePatterns": [
-      "/(^|/)requirements\\.lock$/"
-    ]
-  },
   "lockFileMaintenance": {
     "enabled": true
   },
@@ -55,20 +49,23 @@
         "minor",
         "patch"
       ],
-      "enabled": false
+      "enabled": false,
+      "matchDepNames": [
+        "python"
+      ]
     },
     {
       "matchManagers": [
         "dockerfile"
       ],
       "groupName": "Docker base digest",
-      "automerge": false
+      "automerge": false,
+      "description": "A rebuilt digest of the Python base image"
     },
     {
-      "description": "streamlit and pandas, with the versions requirements.lock resolves for them, in one PR",
+      "description": "streamlit, pandas and pytest, with the versions uv.lock resolves for them, in one PR",
       "matchManagers": [
-        "pip_requirements",
-        "pip-compile"
+        "pep621"
       ],
       "groupName": "Python dependencies",
       "automerge": false
@@ -80,6 +77,16 @@
       ],
       "groupName": "GitHub Actions",
       "semanticCommitType": "ci"
+    },
+    {
+      "description": "uv is pinned in the Dockerfile and in tests.yml. Move both in one PR. Last, so that it overrides the groups above.",
+      "matchDepNames": [
+        "astral-sh/uv",
+        "ghcr.io/astral-sh/uv"
+      ],
+      "groupName": "uv",
+      "semanticCommitType": "ci",
+      "automerge": false
     }
   ],
   "customManagers": [

@@ -20,7 +20,8 @@ on:
     paths: &image-inputs
       - 'NIH Extractor/Dockerfile'
       - 'NIH Extractor/.dockerignore'
-      - 'NIH Extractor/requirements.lock'
+      - 'NIH Extractor/pyproject.toml'
+      - 'NIH Extractor/uv.lock'
       - 'NIH Extractor/streamlit_app.py'
       - 'NIH Extractor/nih_grant_matcher/**'
       - .github/workflows/docker-image.yml
