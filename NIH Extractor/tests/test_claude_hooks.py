@@ -27,6 +27,16 @@ def test_stop_hook_skips_when_tools_are_missing(tmp_path: Path) -> None:
     assert run_hook({"stop_hook_active": False}, env={"PATH": str(tmp_path)}).returncode == 0
 
 
+@needs_shell
+def test_stop_hook_skips_without_jq_even_when_tests_would_fail(tmp_path: Path) -> None:
+    (tmp_path / "uv").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    (tmp_path / "git").write_text("#!/bin/sh\necho ' M changed.py'\n", encoding="utf-8")
+    for stub in ("uv", "git"):
+        (tmp_path / stub).chmod(0o755)
+    env = {"PATH": str(tmp_path), "CLAUDE_PROJECT_DIR": str(REPO)}
+    assert run_hook({"stop_hook_active": True}, env=env).returncode == 0
+
+
 def test_settings_registers_stop_hook() -> None:
     stop = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]["Stop"][0]["hooks"][0]
     assert stop["type"] == "command"

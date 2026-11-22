@@ -4,7 +4,7 @@ The Python package `nih_grant_matcher` and a Streamlit dashboard live in `NIH Ex
 
 ## Commands
 
-Run every command from `NIH Extractor/`. Three tests open `streamlit_app.py` by relative path, and they fail from the repository root.
+Run every command from `NIH Extractor/`. The tests fail from the repository root, because pytest finds the package and `streamlit_app.py` relative to that directory.
 
 - Run all tests: `python -m pytest -q`. When pytest is not installed, use `uv run --no-project --with pytest pytest -q`.
 - Run one test file: `python -m pytest -q tests/test_scoring.py`

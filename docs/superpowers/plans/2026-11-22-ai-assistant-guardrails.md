@@ -484,3 +484,11 @@ If the operator approved the push in Task 2, run `git push` and then `gh pr chec
 ## Out of scope
 
 The spec lists what this plan leaves out and why: the duplicated pipeline in `cli.py`, `datetime.utcnow()`, the `pyright` and `ruff check` findings, a format hook, custom subagents, and the "add a data source" skill.
+
+## Changes after the final review
+
+The whole-branch review found one defect and two inaccurate lines. The fixes are in the commit after Task 5, and the code blocks above still show the text as first built.
+
+- `verify-on-stop.sh` gained `command -v jq >/dev/null || exit 0` as its second line. Without `jq` the hook could not read `stop_hook_active`, so a failing suite blocked every stop on a machine that has `uv` and no `jq`. The test `test_stop_hook_skips_without_jq_even_when_tests_would_fail` pins the fix. The suite now reports `18 passed`.
+- `AGENTS.md` now says that the tests fail from the repository root, without the count of three. A bare `python -m pytest -q` from the root fails at collection for more files than three.
+- `.claude/rules/scoring.md` now tells an assistant to give a new `ScoreBreakdown` field a default value, because `store.py` rebuilds `ScoreBreakdown` from saved rows.
