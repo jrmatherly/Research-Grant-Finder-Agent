@@ -8,6 +8,16 @@ dependencies = [
   "pandas>=2.0",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+# An application run from this directory, not a library: uv installs the dependencies and does not build the project.
+package = false
+required-version = ">=0.13"
+# Matches minimumReleaseAge in renovate.json.
+exclude-newer = "1 week"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

@@ -356,36 +356,22 @@ git clone https://github.com/jrmatherly/Research-Grant-Finder-Agent.git
 cd Research-Grant-Finder-Agent/"NIH Extractor"
 ```
 
-### 2. Create a Virtual Environment
+### 2. Install uv
+
+The project uses [uv](https://docs.astral.sh/uv/) to install Python and the dependencies. Follow the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+
+### 3. Install Dependencies
 
 ```bash
-python -m venv .venv
+uv sync
 ```
 
-### 3. Activate the Environment
+This creates `.venv` with the versions pinned in `uv.lock`.
 
-**Windows**
-
-```bash
-.venv\Scripts\activate
-```
-
-**macOS / Linux**
+### 4. Launch the Research Intelligence Dashboard
 
 ```bash
-source .venv/bin/activate
-```
-
-### 4. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Launch the Research Intelligence Dashboard
-
-```bash
-streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py
 ```
 
 The dashboard will open in your browser.
@@ -412,15 +398,15 @@ CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To use the pub
 
 ### Use the Command Line
 
-Run these commands from `NIH Extractor/`. They use the standard library only.
+Run these commands from `NIH Extractor/`. The package uses the standard library only, so plain `python` works too.
 
 | Command | Result |
 | --- | --- |
-| `python -m nih_grant_matcher run --source nih-guide` | Fetches, scores, and saves opportunities, then writes `digests/latest.md`. `--source` also accepts `grants.gov` and `both`. |
-| `python -m nih_grant_matcher digest` | Writes the digest again from the saved opportunities. |
-| `python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
-| `python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
-| `python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. This fails while `www.grants.gov` does not send its intermediate certificate. |
+| `uv run python -m nih_grant_matcher run --source nih-guide` | Fetches, scores, and saves opportunities, then writes `digests/latest.md`. `--source` also accepts `grants.gov` and `both`. |
+| `uv run python -m nih_grant_matcher digest` | Writes the digest again from the saved opportunities. |
+| `uv run python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
+| `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
+| `uv run python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. This fails while `www.grants.gov` does not send its intermediate certificate. |
 
 Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.
 

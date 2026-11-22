@@ -1,5 +1,6 @@
 *
-!requirements.lock
+!pyproject.toml
+!uv.lock
 !streamlit_app.py
 !nih_grant_matcher
 **/__pycache__
