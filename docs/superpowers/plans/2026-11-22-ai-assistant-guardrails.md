@@ -364,9 +364,9 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 HOOK = REPO / ".claude" / "hooks" / "verify-on-stop.sh"
 SETTINGS = REPO / ".claude" / "settings.json"
-BASH = shutil.which("bash")
+BASH = shutil.which("bash") or ""
 
-needs_shell = pytest.mark.skipif(BASH is None or shutil.which("jq") is None, reason="needs bash and jq")
+needs_shell = pytest.mark.skipif(not BASH or shutil.which("jq") is None, reason="needs bash and jq")
 
 
 def run_hook(payload: dict, env: dict | None = None) -> subprocess.CompletedProcess:
