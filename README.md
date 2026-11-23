@@ -435,6 +435,16 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher profile export --out profile.json` | Writes that profile to a file. |
 | `uv run python -m nih_grant_matcher profile import profile.json` | Saves the profile in the file, or refuses a file that is not a valid profile. |
 | `uv run python -m nih_grant_matcher profile reset` | Deletes the saved profile, so ranking uses the built-in one. |
+| `uv run python -m nih_grant_matcher apply start PAR-27-074 --type R03` | Starts an application for a saved opportunity and prints its number. Add `--resubmission` for a resubmission. |
+| `uv run python -m nih_grant_matcher apply list` | Lists the applications. |
+| `uv run python -m nih_grant_matcher apply fetch 1` | Fetches the full announcement of application 1. |
+| `uv run python -m nih_grant_matcher apply requirements 1` | Prints the standing rules and what the announcement adds. |
+| `uv run python -m nih_grant_matcher apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file PATH` reads the text from a UTF-8 file. |
+| `uv run python -m nih_grant_matcher apply write 1 project-narrative --file narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. |
+| `uv run python -m nih_grant_matcher apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
+| `uv run python -m nih_grant_matcher apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
+| `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, and the provenance log to the folder, and prints its full path. |
+| `uv run python -m nih_grant_matcher apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
 Add `--help` to a command to see its options. Saved opportunities whose expiration date has passed are left out of the dashboard, the digest, and the Excel file.
 
