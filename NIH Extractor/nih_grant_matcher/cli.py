@@ -8,7 +8,7 @@ from .excel import write_excel
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
 from .scoring import document_frequencies
-from .store import OpportunityStore
+from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Request failed: {exc}", file=sys.stderr)
         return 1
     except ProfileError as exc:
-        print(f"Profile not valid: {exc}", file=sys.stderr)
+        print(exc if isinstance(exc, ReadOnlyProfile) else f"Profile not valid: {exc}", file=sys.stderr)
         return 1
     except (OSError, UnicodeDecodeError) as exc:
         print(f"File error: {exc}", file=sys.stderr)

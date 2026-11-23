@@ -10,6 +10,8 @@ def attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[
     by_id = {r.id: r for r in revisions}
     chain = [by_id[revision_id]]
     while chain[-1].parent_id is not None:
+        if chain[-1].parent_id not in by_id:
+            raise ValueError(f"Revision {chain[-1].id} names parent {chain[-1].parent_id}, which is not in the log given.")
         chain.append(by_id[chain[-1].parent_id])
     words: list[tuple[str, str]] = []
     for revision in reversed(chain):
@@ -20,6 +22,8 @@ def attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[
 
 def share(words: Sequence[tuple[str, str]]) -> Attribution:
     origins = [origin for _, origin in words]
+    if unknown := set(origins) - {"applicant", "draft", "revise", "polish"}:
+        raise ValueError(f"Unknown word origin: {', '.join(sorted(unknown))}")
     return Attribution(origins.count("applicant"), origins.count("draft") + origins.count("revise"), origins.count("polish"))
 
 def section_state(revisions: Sequence[Revision], signoffs: Sequence[Signoff], section: str) -> Literal["empty", "draft", "final"]:

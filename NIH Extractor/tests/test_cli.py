@@ -234,3 +234,18 @@ def test_a_database_error_gets_one_line(tmp_path, capsys) -> None:
     assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "profile", "show"]) == 1
     err = capsys.readouterr().err
     assert err.startswith("Database error:") and err.count("\n") == 1 and "Traceback" not in err
+
+
+def test_a_read_only_database_from_before_says_what_to_do(tmp_path, capsys) -> None:
+    import os, sqlite3
+    path = tmp_path / "old.sqlite3"
+    sqlite3.connect(path).executescript("CREATE TABLE opportunities (source_id TEXT PRIMARY KEY, title TEXT NOT NULL);")
+    path.chmod(0o444)
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    try:
+        assert cli.main(["--db", str(path), "profile", "reset"]) == 1
+    finally:
+        path.chmod(0o644)
+    err = capsys.readouterr().err
+    assert "not valid" not in err and "read-only" in err and "copy" in err and err.count("\n") == 1

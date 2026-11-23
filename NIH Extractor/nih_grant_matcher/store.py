@@ -31,6 +31,8 @@ CREATE TRIGGER IF NOT EXISTS signoffs_stay BEFORE DELETE ON signoffs WHEN NOT EX
 """
 class ReadOnlyDatabase(sqlite3.DatabaseError):
     pass
+class ReadOnlyProfile(ProfileError):
+    pass
 def _now() -> str:
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 def _time(value: str | None) -> datetime | None:
@@ -59,7 +61,7 @@ class OpportunityStore:
     def _write(self, table: str, error: type[Exception] = ReadOnlyDatabase) -> Iterator[None]:
         # SCHEMA creates every table on open, so a table is missing only from a read-only database that an earlier version wrote.
         if not self._has(table):
-            raise error(f"{self.db_path} is read-only and was written by an earlier version, so it has no {table} table to save to.")
+            raise error(f"{self.db_path} was written by an earlier version and is read-only, so it has no {table} table to save to. Open a copy you can write to.")
         with self.conn:
             yield
     def profile(self) -> Profile:
@@ -69,7 +71,7 @@ class OpportunityStore:
         if profile is not None:
             text = to_export(profile)
             from_export(text)
-        with self._write("profile", ProfileError):
+        with self._write("profile", ReadOnlyProfile):
             if profile is None:
                 self.conn.execute("DELETE FROM profile")
             else:
@@ -146,7 +148,7 @@ class OpportunityStore:
     def replace_requirements(self, app_id: int, origin: str, items: Iterable[Requirement], call_id: int | None = None) -> list[Requirement]:
         with self._write("requirements"):
             self.conn.execute("DELETE FROM requirements WHERE application_id = ? AND origin = ?", (app_id, origin))
-            self.conn.executemany("INSERT INTO requirements (application_id, section, kind, text, quote, limit_json, origin, call_id, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [(app_id, r.section, r.kind, r.text, r.quote, json.dumps(asdict(r.limit)) if r.limit else None, origin, call_id, None if r.confirmed is None else int(r.confirmed)) for r in items])
+            self.conn.executemany("INSERT INTO requirements (application_id, section, kind, text, quote, limit_json, origin, call_id, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [(app_id, r.section, r.kind, r.text, r.quote, json.dumps(asdict(r.limit)) if r.limit else None, origin, r.call_id if r.call_id is not None else call_id, None if r.confirmed is None else int(r.confirmed)) for r in items])
         return [r for r in self.requirements(app_id) if r.origin == origin]
     def decide_requirement(self, requirement_id: int, confirmed: bool) -> None:
         with self._write("requirements"):
@@ -157,10 +159,15 @@ class OpportunityStore:
         with self._write("model_calls"):
             call_id = self.conn.execute("INSERT INTO model_calls (application_id, section, purpose, provider, model, system, prompt, response, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, purpose, provider, model, system, prompt, response, input_tokens, output_tokens, _now())).lastrowid
         return next(c for c in self.calls(app_id) if c.id == call_id)
+    def _own_revision(self, revision_id: int, app_id: int, section: str) -> None:
+        if self.conn.execute("SELECT 1 FROM revisions WHERE id = ? AND application_id = ? AND section = ?", (revision_id, app_id, section)).fetchone() is None:
+            raise ValueError(f"Revision {revision_id} is not a revision of application {app_id} in the section {section}.")
     def revisions(self, app_id: int) -> list[Revision]:
         return [Revision(row["id"], row["section"], row["parent_id"], row["author"], row["action"], row["text"], row["call_id"], datetime.fromisoformat(row["created_at"])) for row in self._rows("revisions", "SELECT * FROM revisions WHERE application_id = ? ORDER BY id", (app_id,))]
     def add_revision(self, app_id: int, section: str, parent_id: int | None, author: str, action: str, text: str, call_id: int | None = None) -> Revision:
         with self._write("revisions"):
+            if parent_id is not None:
+                self._own_revision(parent_id, app_id, section)
             revision_id = self.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, call_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, parent_id, author, action, text, call_id, _now())).lastrowid
         return next(r for r in self.revisions(app_id) if r.id == revision_id)
     def signoffs(self, app_id: int) -> list[Signoff]:
@@ -168,12 +175,15 @@ class OpportunityStore:
     def add_signoff(self, app_id: int, section: str, revision_id: int, signer: str, attestation: str, findings: Sequence[str], tool_version: str) -> Signoff:
         signed_at = _now()
         with self._write("signoffs"):
+            self._own_revision(revision_id, app_id, section)
             self.conn.execute("INSERT INTO signoffs (application_id, section, revision_id, signer, attestation, findings_json, tool_version, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, revision_id, signer, attestation, json.dumps(list(findings)), tool_version, signed_at))
         return Signoff(section, revision_id, signer, attestation, tuple(findings), tool_version, datetime.fromisoformat(signed_at))
     def setting(self, key: str) -> str | None:
         rows = self._rows("settings", "SELECT value FROM settings WHERE key = ?", (key,))
         return rows[0]["value"] if rows else None
     def set_setting(self, key: str, value: str) -> None:
+        if key == "deleting":
+            raise ValueError("The setting deleting belongs to delete_application.")
         with self._write("settings"):
             self.conn.execute("INSERT INTO settings VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
 
