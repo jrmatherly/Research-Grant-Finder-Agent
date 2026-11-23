@@ -74,3 +74,17 @@ def test_a_read_scores_saved_rows_again(tmp_path) -> None:
     [loaded] = load_saved(str(tmp_path / "grants.sqlite3"))
     assert (loaded.score, loaded.classification) == (fresh.score, fresh.classification) != (1.0, "Watchlist")
     assert loaded.opportunity.raw == {"docnum": "RFA-ABC"}
+
+def test_a_read_only_database_still_reads(tmp_path, capsys) -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.workflow import load_saved
+    path = tmp_path / "grants.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.upsert_scored(replace(MLRelevanceScorer().score(Opportunity(source_id="nih-guide:1", opportunity_number="RFA-ABC", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active")), score=1.0))
+    finally:
+        store.close()
+    path.chmod(0o444)
+    [loaded] = load_saved(str(path))
+    assert loaded.score == 1.0
+    assert "Could not update the saved scores" in capsys.readouterr().err

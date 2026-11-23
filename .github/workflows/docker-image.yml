@@ -13,8 +13,9 @@ name: "🐳 Docker image"
 # Every build is scanned before it is pushed. A HIGH or CRITICAL vulnerability
 # that has a fix fails the job. One with no fix yet does not.
 #
-# Tags: `latest` on main, `sha-<short>` on every build, and on a release tag
-# `vX.Y.Z` both `X.Y.Z` and `X.Y`.
+# Tags: `latest` on main, `sha-<short>` on every build but the weekly one, and on a release tag
+# `vX.Y.Z` both `X.Y.Z` and `X.Y`. The weekly run moves `latest` only, so that a
+# `sha-<short>` tag keeps naming one build.
 # The first push creates the package as private. Make it public in the package
 # settings once, or every pull needs a token.
 
@@ -89,7 +90,7 @@ jobs:
           TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
         run: |
           docker save nih-grant-matcher:scan -o "$RUNNER_TEMP/image.tar"
-          docker run --rm -v "$RUNNER_TEMP/image.tar:/image.tar:ro" "$TRIVY_IMAGE" image --input /image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          docker run --rm -v "$RUNNER_TEMP/image.tar:/image.tar:ro" "$TRIVY_IMAGE" image --input /image.tar --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
       - name: "🔐 Log in to GHCR"
         if: env.PUBLISH == 'true'
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -104,7 +105,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/nih-grant-matcher
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,enable=${{ github.event_name != 'schedule' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
       - name: "🚀 Build and push"

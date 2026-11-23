@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+import sys
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -53,8 +55,13 @@ def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str 
 
 def rescore_saved(store: OpportunityStore) -> None:
     # A saved score goes stale when the scoring rules change, and as a deadline nears. Scoring needs no network, so score the open rows again before every read.
+    # The default rules, as every caller of the scorer uses today. A caller that sets its own keywords must pass them here too.
     scorer = MLRelevanceScorer()
-    store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])
+    try:
+        store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])
+    except sqlite3.OperationalError as exc:
+        # A read-only or locked database can still be read, with the scores it holds.
+        print(f"Could not update the saved scores, so they are shown as last saved: {exc}", file=sys.stderr)
 
 
 def load_saved(db_path: str, min_score: float = 0.0, limit: int = 500) -> list[ScoredOpportunity]:

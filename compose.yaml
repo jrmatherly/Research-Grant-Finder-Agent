@@ -4,7 +4,7 @@ services:
     # Published by .github/workflows/docker-image.yml. `docker compose pull` fetches it and `--build` builds it here.
     image: ghcr.io/jrmatherly/nih-grant-matcher:latest
     # The image writes as user 1000. On Linux, a folder owned by another user needs that user's ID here:
-    # APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d, or the same two values in a .env file.
+    # APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d, or the same two values in a .env file beside this file.
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     ports:
       # Loopback only: the dashboard has no login and takes file paths as input.
