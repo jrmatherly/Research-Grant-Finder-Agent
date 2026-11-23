@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
 from .announcement import Announcement, Requirement
 from .models import Application, Fact, ModelCall, Opportunity, Revision, ScoreBreakdown, ScoredOpportunity, Signoff
-from .profile import BUILTIN_PROFILE, Profile, from_export, to_export
+from .profile import BUILTIN_PROFILE, Profile, ProfileError, from_export, to_export
 from .rules import Limit
 
 SCHEMA = """
@@ -69,7 +69,7 @@ class OpportunityStore:
         if profile is not None:
             text = to_export(profile)
             from_export(text)
-        with self.conn:
+        with self._write("profile", ProfileError):
             if profile is None:
                 self.conn.execute("DELETE FROM profile")
             else:

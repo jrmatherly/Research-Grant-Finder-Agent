@@ -227,3 +227,10 @@ def test_a_file_that_cannot_be_read_or_written_exits_1_with_one_line(tmp_path, m
     assert cli.main(["--db", "g.sqlite3", *argv]) == 1
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "Traceback" not in err
+
+
+def test_a_database_error_gets_one_line(tmp_path, capsys) -> None:
+    (tmp_path / "g.sqlite3").write_bytes(b"not a database" * 100)
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "profile", "show"]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Database error:") and err.count("\n") == 1 and "Traceback" not in err
