@@ -31,7 +31,7 @@ The image `ghcr.io/jrmatherly/nih-grant-matcher` holds the dashboard and the com
 
    In Windows PowerShell, write the command on one line and use `${PWD}` in place of `$PWD`.
 
-3. Open http://localhost:8501.
+3. Open http://localhost:8501. For the controls, see [Use the NIH Grant Matcher dashboard](dashboard.md).
 
 4. In the sidebar, select **Run Search**. The first search takes a few seconds for the NIH Guide. The **grants.gov** source makes one request for each opportunity, so the default of 500 rows takes about three minutes.
 
