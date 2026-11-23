@@ -76,6 +76,15 @@ These five conditions are the ones most likely to hurt a user and that the tasks
 
 Branch `feat/applicant-profile`, cut from `main`. A researcher outside machine learning can use the finder when this stage merges.
 
+**As built (2026-11-23).** Tasks 1 to 3 are done on the branch. The code differs from the task text below in these ways, and later stages build on the code.
+
+- Stage 1 ships alone, so two strings that name later features are held back. Wizard step 5 is titled "Your background", not "What the writer reuses". The export caption ends after "example sentences" and does not say "It holds no API key." Stage 3 restores both when the writer and the keys exist.
+- `save_profile` validates with the rules of `from_export`. `from_export` refuses a keyword that is not lower case or has outer spaces, and a `focus` or `examples_name` outside 1 to 60 letters, digits, spaces and `/ , ' -`. The wizard lower-cases and strips each term.
+- `Save profile` is a submit button inside each step's form. There is no `Finish` button. A save with no terms or no example sentences is refused.
+- The aims of step 2 split on line breaks and on sentence ends.
+- `config_for` ranks with the built-in profile and warns when the stored profile cannot be read. Both views show the error and keep `Reset to built-in`. So a later stage that adds a `Profile` field gives it a default, and a change of `EXPORT_FORMAT` keeps a read path for `/1` rows.
+- The Find sidebar widgets have `find_*` keys and keep their values across a view switch. Task 8 gives the Apply view's widgets keys in the same way.
+
 ### Task 1: Freeze today's scores
 
 **Files:**
