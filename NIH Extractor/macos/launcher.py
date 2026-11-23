@@ -46,7 +46,11 @@ def wait_and_load(window, child: subprocess.Popen, url: str, log: Path) -> None:
     while time.monotonic() < deadline and child.poll() is None:
         try:
             urllib.request.urlopen(url + "/_stcore/health", timeout=1)
-            return window.load_url(url)
+            # Another local process can take the port between the parent choosing it and the server binding it, so load the page only from our own child.
+            listeners = subprocess.run(["/usr/sbin/lsof", "-nP", f"-iTCP:{url.rsplit(':', 1)[1]}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True).stdout.split()
+            if str(child.pid) in listeners:
+                return window.load_url(url)
+            break
         except OSError:
             time.sleep(0.25)
     window.load_html(page(f"{NAME} could not start its server. See the log at {log}."))
