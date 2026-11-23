@@ -6,7 +6,8 @@ from .config import GENERIC_BIOMEDICAL_TERMS, KEYWORD_PATTERNS, TERM_RARITY_PATH
 from .models import Opportunity, ScoreBreakdown, ScoredOpportunity
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
-AI_WORD_RE = re.compile(r"\bai\b", re.IGNORECASE)
+# "AI/AN" is American Indian and Alaska Native, not artificial intelligence.
+AI_WORD_RE = re.compile(r"\bai\b(?!\s*/\s*ans?\b)", re.IGNORECASE)
 STOPWORDS = frozenset("a an and are as at be by for from in is it of on or that the this to use using will with".split())
 def _term_frequency(text: str) -> Counter[str]:
     return Counter(token for token in TOKEN_RE.findall(text.lower()) if token not in STOPWORDS)
