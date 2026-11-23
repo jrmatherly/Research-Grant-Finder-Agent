@@ -13,11 +13,11 @@ SECTION_TITLES: dict[str, str] = {"I": "Notice of Funding Opportunity Descriptio
 _NEXT_HEADING = re.compile(r".{0,4}Section")
 _FORMS_AFTER_RESEARCH_PLAN = ("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
 _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
-# "is not limited to" never names a section and a page count, so it cannot match.
+# The verb follows the title directly, so "is not limited to" does not match.
 _PAGE_LIMIT = re.compile(r"\b((?i:" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r")) (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
-# The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
-# A Grants.gov attachment can be a page that only redirects to the NIH Guide, as PA-25-253's was on 2026-11-23, and its text is then a title of a few characters.
+# A Grants.gov attachment can be a page that only redirects to the NIH Guide, and its text is then a title of a few characters.
 _SHORTEST_ANNOUNCEMENT = 1000
+# The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
 _SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
 
 @dataclass(frozen=True)
