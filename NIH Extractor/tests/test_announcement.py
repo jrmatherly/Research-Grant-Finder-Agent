@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import pytest
 from nih_grant_matcher import clients
-from nih_grant_matcher.announcement import Announcement, fetch_announcement, html_to_text, parse_requirements, quoted_in
+from nih_grant_matcher.announcement import Announcement, fetch_announcement, parse_requirements, quoted_in
 from nih_grant_matcher.models import Opportunity
 from helpers import Grants, Guide
 
