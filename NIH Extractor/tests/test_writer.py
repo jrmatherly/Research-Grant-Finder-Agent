@@ -244,13 +244,13 @@ def test_a_decision_moves_to_the_new_sentence_and_a_changed_limit_drops_it(tmp_p
     assert [r.text for r in dropped] == ["Research Strategy: at most 4 pages."]
     assert [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4.5 pages.", None)]
 
-def test_a_decision_carries_to_the_guide_text_of_the_same_sentence(tmp_path) -> None:
+def test_a_decision_made_on_the_guide_text_carries_to_the_grants_gov_text_of_the_same_sentence(tmp_path) -> None:
     ws = start(tmp_path)
-    ws.fetch_announcement(Guide(""), Grants(GRANTS_PAGE))
-    ws.decide(ws.view().requirements[0].id, True)
     # The Guide text drops the opening bracket that the Grants.gov text keeps.
     ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages.", "4 pages, as in NOT-OD-26-001).")), Grants(""))
-    assert ws.view().announcement.origin == "nih-guide" and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+    ws.decide(ws.view().requirements[0].id, True)
+    _, dropped = ws.fetch_announcement(Guide(""), Grants(GRANTS_PAGE))
+    assert dropped == [] and ws.view().announcement.origin == "grants.gov" and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
 
 def test_a_fetch_reports_the_decisions_it_dropped_for_this_application(tmp_path) -> None:
     a = start(tmp_path)
