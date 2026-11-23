@@ -36,6 +36,7 @@ class ScoreBreakdown:
     completeness_score: float
     centrality_score: float
     generic_penalty: float
+    institute_score: float = 0.0
 
 @dataclass(frozen=True)
 class ScoredOpportunity:

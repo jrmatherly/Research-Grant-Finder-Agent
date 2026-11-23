@@ -195,6 +195,8 @@ Text similarity provides an additional relevance signal when explicit computatio
 
 The scoring system considers whether the opportunity originates from an NIH or HHS source.
 
+A profile can name up to three NIH institutes. A record that one of them issued gets 8 more points, and its reasons say "Issued by NHLBI, an institute in your profile". A record issued by NIH for several institutes, or by the NIH Office of the Director, gets none. The built-in profile names no institute.
+
 ### 5. Expiration Awareness
 
 An opportunity that expires in 15 to 240 days ranks a little higher than one that expires sooner or later. For an NIH Guide notice, the date shown is the day the notice expires, and application due dates are in the announcement. For a Grants.gov opportunity, it is the closing date.

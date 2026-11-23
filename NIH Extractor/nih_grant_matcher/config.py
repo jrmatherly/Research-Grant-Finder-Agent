@@ -41,6 +41,20 @@ CURATED_COMPUTATIONAL_EXAMPLES = (
     "Use natural language processing to extract phenotypes from clinical text.",
     "Build artificial intelligence methods for biomedical data analysis.",
 )
+# The NIH institutes and centres that issue awards. NIH, OD, RMOD and FDA are left out: 22 percent of records carry such a code, and none of them is one institute.
+INSTITUTES = {
+    "FIC": "Fogarty International Center", "NCATS": "National Center for Advancing Translational Sciences", "NCCIH": "National Center for Complementary and Integrative Health",
+    "NCI": "National Cancer Institute", "NEI": "National Eye Institute", "NHGRI": "National Human Genome Research Institute", "NHLBI": "National Heart, Lung, and Blood Institute",
+    "NIA": "National Institute on Aging", "NIAAA": "National Institute on Alcohol Abuse and Alcoholism", "NIAID": "National Institute of Allergy and Infectious Diseases",
+    "NIAMS": "National Institute of Arthritis and Musculoskeletal and Skin Diseases", "NIBIB": "National Institute of Biomedical Imaging and Bioengineering",
+    "NICHD": "Eunice Kennedy Shriver National Institute of Child Health and Human Development", "NIDA": "National Institute on Drug Abuse",
+    "NIDCD": "National Institute on Deafness and Other Communication Disorders", "NIDCR": "National Institute of Dental and Craniofacial Research",
+    "NIDDK": "National Institute of Diabetes and Digestive and Kidney Diseases", "NIEHS": "National Institute of Environmental Health Sciences",
+    "NIGMS": "National Institute of General Medical Sciences", "NIMH": "National Institute of Mental Health", "NIMHD": "National Institute on Minority Health and Health Disparities",
+    "NINDS": "National Institute of Neurological Disorders and Stroke", "NINR": "National Institute of Nursing Research", "NLM": "National Library of Medicine",
+}
+# Measured on 369 records: 8 adds most of what 12 adds to the top tens, and no record without a topical signal reaches Medium on it alone.
+INSTITUTE_BONUS = 8.0
 GENERIC_BIOMEDICAL_TERMS = {"clinical trial", "health disparities", "community health", "training program", "capacity building", "implementation", "prevention", "therapeutic"}
 
 @dataclass(frozen=True)
@@ -54,3 +68,4 @@ class MatcherConfig:
     semantic_examples: tuple[str, ...] = CURATED_COMPUTATIONAL_EXAMPLES
     focus: str = "computational"
     examples_name: str = "curated ML/data-science grant examples"
+    institutes: tuple[str, ...] = ()

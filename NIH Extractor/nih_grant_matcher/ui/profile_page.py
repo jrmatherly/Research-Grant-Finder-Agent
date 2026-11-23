@@ -4,7 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 import pandas as pd
 import streamlit as st
-from ..profile import BUILTIN_PROFILE, Profile, ProfileError, Reference, from_export, suggest_terms, to_export
+from ..config import INSTITUTE_BONUS, INSTITUTES
+from ..profile import BUILTIN_PROFILE, MAX_INSTITUTES, Profile, ProfileError, Reference, from_export, ranks_like_builtin, suggest_terms, to_export
 from ..scoring import MLRelevanceScorer
 from ..store import OpportunityStore
 from ..workflow import config_for
@@ -12,6 +13,7 @@ from .markdown import escape_markdown
 
 STEPS = ("You", "Your research", "Your terms", "Preview", "Your background")
 CAREER_STAGES = ("early-stage investigator", "new investigator", "established")
+RANKINGS = ("Rank with my own research", "Keep the built-in ranking")
 BLANK = Profile(keywords={}, examples=(), focus="profile", examples_name="your example sentences")
 
 def saved_profile(db_path: str) -> Profile | None:
@@ -27,7 +29,10 @@ def saved_profile(db_path: str) -> Profile | None:
     return None if to_export(profile) == to_export(BUILTIN_PROFILE) else profile
 
 def profile_sentence(profile: Profile) -> str:
-    return f"Ranking uses the profile of {escape_markdown(profile.investigator) or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
+    name = escape_markdown(profile.investigator) or "an unnamed investigator"
+    if ranks_like_builtin(profile):
+        return f"Ranking uses the built-in profile (machine learning and data science) for {name}."
+    return f"Ranking uses the profile of {name}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
 
 def show_unreadable(exc: ProfileError) -> None:
     st.error(f"The saved profile cannot be read, so ranking uses the built-in profile. Reset to built-in under Profile deletes the saved profile, and the database file holds its only copy. {escape_markdown(str(exc))}")
@@ -84,6 +89,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
     st.subheader(f"{n + 1}. {STEPS[n]}")
     with st.form(f"profile_step_{n}"):
         if n == 0:
+            ranking = st.radio("Ranking", RANKINGS, index=int(st.session_state.get("profile_builtin", False)))
             investigator = st.text_input("Name", value=draft.investigator)
             institution = st.text_input("Institution", value=draft.institution)
             stage = st.selectbox("Career stage", CAREER_STAGES, index=CAREER_STAGES.index(draft.career_stage) if draft.career_stage in CAREER_STAGES else None, placeholder="Choose a stage")
@@ -93,6 +99,8 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         elif n == 2:
             st.caption("Terms proposed from your research text. Keep, remove, re-weight or add terms. A weight runs from 1 to 30.")
             terms = st.data_editor(pd.DataFrame({"Term": list(draft.keywords), "Weight": list(draft.keywords.values())}, columns=["Term", "Weight"]), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Weight": st.column_config.NumberColumn("Weight", min_value=1, max_value=30, step=1, default=10)})
+            institutes = st.multiselect("Your NIH institutes", list(INSTITUTES), default=draft.institutes, format_func=lambda code: f"{code}, {INSTITUTES[code]}", max_selections=MAX_INSTITUTES)
+            st.caption(f"A record issued by one of these institutes gets {INSTITUTE_BONUS:g} points. Choose up to three. It helps most when one institute funds your field. A record issued by NIH for several institutes gets no bonus.")
         elif n == 3:
             preview = _preview(db_path, draft)
             if preview is None:
@@ -116,6 +124,9 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         return
     if n == 0:
         draft = replace(draft, investigator=investigator.strip(), institution=institution.strip(), career_stage=stage or "")
+        st.session_state["profile_builtin"] = ranking == RANKINGS[1]
+        if st.session_state["profile_builtin"]:
+            draft = replace(draft, keywords=dict(BUILTIN_PROFILE.keywords), examples=BUILTIN_PROFILE.examples, focus=BUILTIN_PROFILE.focus, examples_name=BUILTIN_PROFILE.examples_name, institutes=BUILTIN_PROFILE.institutes)
     elif n == 1:
         examples = tuple(part.strip() for part in re.split(r"\n|(?<=[.?!])\s+", aims) if part.strip())
         if (forward or save) and not 3 <= len(examples) <= 6:
@@ -127,7 +138,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         draft = replace(draft, research_summary=summary.strip(), examples=examples)
     elif n == 2:
         keywords, dropped, merged = read_terms(terms)
-        draft = replace(draft, keywords=keywords)
+        draft = replace(draft, keywords=keywords, institutes=tuple(institutes))
         if notes := [f"{escape_markdown(t)} had no weight, so it was dropped." for t in dropped] + [f"{escape_markdown(a)} and {escape_markdown(b)} are one term, so the wizard kept it once with weight {w}." for a, b, w in merged]:
             st.session_state["profile_terms_warning"] = " ".join(notes)
     elif n == 4:
@@ -141,7 +152,9 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
     if save:
         _apply(db_path, lambda: draft, "Saved your profile. The Find view now ranks with it.")
     else:
-        st.session_state["profile_step"] = n - 1 if back else n + 1
+        # The built-in ranking skips steps 2 to 4, which set the ranking, in both directions.
+        skip = st.session_state.get("profile_builtin", False)
+        st.session_state["profile_step"] = (0 if skip and n == 4 else n - 1) if back else (4 if skip and n == 0 else n + 1)
     st.rerun()
 
 def profile_page(db_path: str) -> None:
@@ -166,7 +179,7 @@ def profile_page(db_path: str) -> None:
         st.caption(profile_sentence(saved))
     step = st.session_state.get("profile_step")
     if step is None:
-        st.button("Set up my profile" if saved is None else "Edit my profile", type="primary", on_click=lambda: st.session_state.update(profile_step=0, profile_draft=saved or BLANK))
+        st.button("Set up my profile" if saved is None else "Edit my profile", type="primary", on_click=lambda: st.session_state.update(profile_step=0, profile_draft=saved or BLANK, profile_builtin=saved is not None and ranks_like_builtin(saved)))
     else:
         _step(step, db_path, st.session_state["profile_draft"])
 
