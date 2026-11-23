@@ -18,7 +18,7 @@ The plan uses these defaults. Change one here before execution starts, and the t
 | --- | --- | --- |
 | Update key | A key of its own, in the Keychain account `net.matherly.grant-matcher` | Reuse the `claude-multipass` key. Sparkle's `generate_keys` help says one key serves every app. A shared key means one leak affects both apps. |
 | Feed location | A release asset, read from `releases/latest/download/appcast.xml` | A file in a second repository, as `claude-multipass` does. That gives a manual gate before users see a release, and it needs one more step per release. |
-| Automatic checks | Sparkle's default. It asks the user on the second launch, then checks once a day. | Set `SUEnableAutomaticChecks` to `true` and never ask. |
+| Automatic checks | `SUEnableAutomaticChecks` is `true`. The app checks once a day and asks nothing first. The cost is one request a day to github.com that the user did not agree to. A found update still needs the user's click. | Leave the key unset. Sparkle then shows a permission prompt on the second launch, and a user who answers "Don't Check" never gets an update prompt. |
 | First version with the updater | 0.2.0 | Any version above 0.1.1. |
 
 ## Global Constraints
@@ -32,6 +32,9 @@ The plan uses these defaults. Change one here before execution starts, and the t
 - The tests run on Linux in CI, on Python 3.11, 3.13 and 3.15, with no `webview`, no `objc`, no display and no `lsof`. A new test must pass there. `tests/test_macos_launcher.py` already loads the launcher with `webview` and `streamlit` blocked. Keep that.
 - `macos/build.sh` runs under bash 3.2 in CI and bash 5 on a developer's Mac. Test every script change with `/bin/bash`. No `mapfile`, and no expansion of an empty array under `set -u`.
 - A failed command inside an `EXIT` trap fails the script under bash 3.2. End each such command with `|| true`.
+- Under bash 3.2, a `[[ … ]]` that stands alone does not stop a script that runs with `set -e`. Write every check as `[ … ] || { echo "<what failed>" >&2; exit 1; }`. This was reproduced on 2026-11-23.
+- On macOS, `wc -c` pads its output with spaces. Take a file's size as `$(($(wc -c < "$file")))`.
+- Every new script is committed executable. After `git add`, `git ls-files -s <script>` must show mode `100755`.
 - Match the dense style of the existing code. Do not reformat a line that a task does not name. A comment gives a non-obvious reason in one line.
 - In a workflow, pin every action to a commit with its tag in a comment, and start every step name with an emoji. Check a workflow change with `actionlint` and `mise x zizmor@1.32.0 -- zizmor .github/workflows`.
 - The app stays Apple silicon only, macOS 14.0 or later, hardened runtime, no entitlements, not sandboxed.
@@ -50,10 +53,10 @@ The plan uses these defaults. Change one here before execution starts, and the t
 
 These five conditions are the ones most likely to hurt a user and that a unit test alone does not reach. Each names the task that pins it.
 
-1. **The feed cannot be read.** The Mac is offline, GitHub is down, or the newest release has no `appcast.xml`, as 0.1.1 does not. The app must open as usual with no alert. A manual check must show Sparkle's own error. Pinned in Task 1 (unit) and Task 5 (`--stop-feed`).
-2. **The app runs from the mounted disk image.** Sparkle cannot replace an app on a read-only volume. The user must be told to move the app, and the app on the image must stay as it is. Pinned in Task 5 (`--from-dmg`).
+1. **The new version's dashboard server does not start.** A bad release would then be the last one a user ever gets, unless the updater runs anyway. Sparkle must start whether or not the server does. Pinned in Task 1 (`test_updater_starts_even_when_the_server_does_not`).
+2. **The newest release carries no `appcast.xml`.** GitHub answers the feed URL with a 404. A scheduled check then fails with no message, every day, until a release with a feed is the newest. Version 0.1.1 is in that state now. The release must prove that its own feed is the one installed apps get. Pinned in Task 4 (the last step of the release job) and Task 5 (`--stop-feed`).
 3. **The `SPARKLE_ED_KEY` secret does not match the public key in the app.** Every installed app would refuse the update. The release must fail before anything is published. Pinned in Task 3 (`verify-appcast.sh`) and Task 4 (the workflow step).
-4. **Sparkle is absent.** A developer runs `launcher.py` unfrozen, or a build has no framework. The app must work, with no menu item and no error. Pinned in Task 1.
+4. **The app runs from the mounted disk image.** Sparkle cannot replace an app on a read-only volume. The user must be told to move the app, and the app on the image must stay as it is. Pinned in Task 5 (`--from-dmg`).
 5. **The update lands while the dashboard server runs.** The server is a child process of the app. After the swap, no process of the old copy may remain, and the relaunched app must have both its processes. Pinned in Task 5 (the default mode).
 
 ---
@@ -68,20 +71,22 @@ This task needs the owner's Keychain and GitHub account. An agent stops here and
 **Interfaces:**
 - Produces: `macos/sparkle-public-key.txt`, one line, the base64 public key. Task 2 reads it. The secret `SPARKLE_ED_KEY`, the base64 private seed. Task 4 reads it.
 
-- [ ] **Step 1: Get Sparkle's tools**
+- [ ] **Step 1: Get Sparkle's tools into a private folder**
 
-Run, from the repository root:
+Run these in one terminal. `$TMPDIR` on macOS is a folder only you can read, and `umask 077` keeps the seed file private.
 
 ```bash
-mkdir -p /tmp/sparkle && curl -fsSL https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz | tar -xJ -C /tmp/sparkle
+umask 077 && mkdir -p "$TMPDIR/sparkle" && cd "$TMPDIR/sparkle"
+curl -fsSLO https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz
+echo "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  Sparkle-2.10.1.tar.xz" | shasum -a 256 -c && tar -xJf Sparkle-2.10.1.tar.xz
 ```
 
-Expected: `/tmp/sparkle/bin/generate_keys` exists.
+Expected: `Sparkle-2.10.1.tar.xz: OK`, and `bin/generate_keys` exists.
 
 - [ ] **Step 2: Create the key and print its public half**
 
 ```bash
-/tmp/sparkle/bin/generate_keys --account net.matherly.grant-matcher
+bin/generate_keys --account net.matherly.grant-matcher
 ```
 
 Expected: the Keychain asks for permission, then the tool prints a `SUPublicEDKey` value of 44 characters.
@@ -89,21 +94,23 @@ Expected: the Keychain asks for permission, then the tool prints a `SUPublicEDKe
 - [ ] **Step 3: Save the public key in the repository**
 
 ```bash
-/tmp/sparkle/bin/generate_keys --account net.matherly.grant-matcher -p > "NIH Extractor/macos/sparkle-public-key.txt"
+bin/generate_keys --account net.matherly.grant-matcher -p > "/Users/jason/dev/Research-Grant-Finder-Agent/NIH Extractor/macos/sparkle-public-key.txt"
 ```
 
-Expected: `python3 -c "import base64; print(len(base64.b64decode(open('NIH Extractor/macos/sparkle-public-key.txt').read())))"` prints `32`.
+Expected: `python3 -c "import base64,sys; print(len(base64.b64decode(open(sys.argv[1]).read())))" "/Users/jason/dev/Research-Grant-Finder-Agent/NIH Extractor/macos/sparkle-public-key.txt"` prints `32`.
 
 - [ ] **Step 4: Store the private seed as a secret and in 1Password**
 
 ```bash
-/tmp/sparkle/bin/generate_keys --account net.matherly.grant-matcher -x /tmp/sparkle/seed.txt
-gh secret set SPARKLE_ED_KEY --repo jrmatherly/Research-Grant-Finder-Agent < /tmp/sparkle/seed.txt
+bin/generate_keys --account net.matherly.grant-matcher -x seed.txt
+gh secret set SPARKLE_ED_KEY --repo jrmatherly/Research-Grant-Finder-Agent < seed.txt
 ```
 
-Copy the contents of `/tmp/sparkle/seed.txt` into 1Password, then run `rm -rf /tmp/sparkle`.
+Copy the contents of `seed.txt` into 1Password, then run `cd ~ && rm -rf "$TMPDIR/sparkle"`.
 
 Expected: `gh secret list --repo jrmatherly/Research-Grant-Finder-Agent` lists `SPARKLE_ED_KEY`.
+
+A lost or leaked seed is replaced by a new key in a release that keeps the same Developer ID certificate. Installed apps accept that one release on the certificate alone.
 
 ---
 
@@ -159,12 +166,26 @@ def test_a_failed_updater_start_is_logged_and_never_raised(monkeypatch, tmp_path
 def test_checking_for_updates_without_an_updater_does_nothing(monkeypatch) -> None:
     launcher = _load(monkeypatch)
     launcher.check_for_updates()
+
+
+def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    scheduled = []
+    tools = types.ModuleType("PyObjCTools")
+    tools.AppHelper = types.SimpleNamespace(callAfter=lambda function, *args: scheduled.append((function, args)))
+    monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
+    framework, log = tmp_path / "Sparkle.framework", tmp_path / "server.log"
+    monkeypatch.setattr(launcher, "sparkle_framework", lambda: framework)
+    launcher.wait_and_load(_Window(), _Child(exit_code=1), "http://127.0.0.1:9", log)
+    assert scheduled == [(launcher.start_updater, (framework, log))]
 ```
+
+`_Window`, `_Child` and the `types` import are already in the file.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `uv run --locked pytest -q tests/test_macos_launcher.py`
-Expected: five failures, each `AttributeError` on a name from the Interfaces block.
+Expected: six failures. Five are an `AttributeError` on a name from the Interfaces block.
 
 - [ ] **Step 3: Implement the four functions and `UPDATER` in `macos/launcher.py`**
 
@@ -182,13 +203,13 @@ controller = objc.lookUpClass("SPUStandardUpdaterController").alloc().initWithSt
 
 - [ ] **Step 4: Wire both into the window**
 
-- In `wait_and_load`, on the success path and before `window.load_url(url)`, call `AppHelper.callAfter(start_updater, framework, log)` when `sparkle_framework()` returns a path.
+- In `wait_and_load`, as its first action and before `start_failure` runs, call `AppHelper.callAfter(start_updater, framework, log)` when `sparkle_framework()` returns a path. The updater must not wait for the server. A release whose server cannot start is the release that most needs an update, and this is Review Focus 1. Import `AppHelper` from `PyObjCTools` inside that branch. pyobjc is not installed on Linux, so an import at the top of the module would fail every CI leg.
 - In `run_window`, pass `menu=app_menu()` to `webview.start`.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run --locked pytest -q -W error::DeprecationWarning`
-Expected: every test passes, 141 in all.
+Expected: every test passes, six more than before this task.
 
 - [ ] **Step 6: Commit**
 
@@ -218,10 +239,12 @@ git commit -m "feat: start Sparkle from the macOS launcher and add Check for Upd
 In `grant_matcher.spec`, read the version from `GRANT_MATCHER_VERSION` when it is set, the bundle ID from `GRANT_MATCHER_BUNDLE_ID`, and the public key from `SPARKLE_PUBLIC_KEY` or else from `sparkle-public-key.txt` beside the spec, stripped. Add to `info_plist`:
 
 ```python
-"CFBundleVersion": version, "SUFeedURL": "https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases/latest/download/appcast.xml", "SUPublicEDKey": public_key,
+"CFBundleVersion": version, "SUFeedURL": "https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases/latest/download/appcast.xml", "SUPublicEDKey": public_key, "SUEnableAutomaticChecks": True, "SUVerifyUpdateBeforeExtraction": True,
 ```
 
-Do not set `SUEnableAutomaticChecks`. Unset, Sparkle asks the user on the second launch.
+- `SUEnableAutomaticChecks` follows the owner's decision at the top of this plan.
+- `SUVerifyUpdateBeforeExtraction` makes Sparkle check the EdDSA signature before it mounts a downloaded image. Sparkle reads this key from the installed app, so a later release cannot add it for the users of this one. It must be in the first version that has the updater.
+- Do not set `SUAutomaticallyUpdate`. The disk image is over 100 MB, and that key would download it without asking.
 
 - [ ] **Step 2: Fetch the pinned Sparkle in `build.sh`**
 
@@ -238,8 +261,9 @@ ditto macos/build/sparkle/Sparkle.framework "$framework"
 rm -rf "$framework/Versions/B/XPCServices" "$framework/XPCServices"
 mkdir -p "$app/Contents/Resources/licenses/sparkle"
 cp macos/build/sparkle/LICENSE "$app/Contents/Resources/licenses/sparkle/"
-sign=(codesign --force --options runtime --sign "${CODESIGN_IDENTITY:--}")
-if [[ -n ${CODESIGN_IDENTITY:-} ]]; then sign+=(--timestamp); fi
+sign=(codesign --force --sign "${CODESIGN_IDENTITY:--}")
+# PyInstaller adds the hardened runtime only with a real identity, and an ad hoc build must match it.
+if [[ -n ${CODESIGN_IDENTITY:-} ]]; then sign+=(--options runtime --timestamp); fi
 "${sign[@]}" "$framework/Versions/B/Autoupdate"
 "${sign[@]}" "$framework/Versions/B/Updater.app"
 "${sign[@]}" "$framework"
@@ -255,8 +279,10 @@ After the existing `test -s` line for the Streamlit notices, add checks that fai
 ```bash
 test -x "$framework/Versions/B/Autoupdate"
 test ! -e "$framework/Versions/B/XPCServices"
-[[ $(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist") == "$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")" ]]
-[[ $(plutil -extract SUPublicEDKey raw -o - "$app/Contents/Info.plist" | base64 --decode | wc -c | tr -d ' ') == 32 ]]
+[ "$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist")" = "$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")" ] || { echo "CFBundleVersion differs from CFBundleShortVersionString" >&2; exit 1; }
+# Sparkle orders "0.2.0-rc1" as equal to "0.2.0" and "0.2.0rc1" as older, so only plain numbers are allowed.
+plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "CFBundleVersion is not one to three numbers" >&2; exit 1; }
+[ "$(($(plutil -extract SUPublicEDKey raw -o - "$app/Contents/Info.plist" | base64 --decode | wc -c)))" = 32 ] || { echo "SUPublicEDKey is not a 32-byte key" >&2; exit 1; }
 ```
 
 Change the existing `codesign --verify --deep --strict` so that it runs with and without `CODESIGN_IDENTITY`.
@@ -377,7 +403,7 @@ signature=$(printf '%s' "$SPARKLE_ED_KEY" | "$sign_update" --ed-key-file - -p "$
 printf '%s' "$SPARKLE_ED_KEY" | "$sign_update" --verify --ed-key-file - "$dmg" "$signature" > /dev/null
 ```
 
-It takes the length from `wc -c`, which works on macOS and Linux. It prints nothing on standard output until every check has passed. The feed has one item:
+It takes the length as `length=$(($(wc -c < "$dmg")))`, which gives a bare number on macOS and Linux. It prints nothing on standard output until every check has passed. The feed has one item:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -415,7 +441,7 @@ let data = try Data(contentsOf: URL(fileURLWithPath: a[3]))
 exit(key.isValidSignature(Data(base64Encoded: a[2])!, for: data) ? 0 : 1)
 ```
 
-`verify-appcast.sh` runs `xmllint --noout` on the feed, compares the enclosure's `length` with `wc -c` of the disk image, reads `SUPublicEDKey` from the app with `plutil -extract SUPublicEDKey raw -o -`, and runs `swift macos/verify-signature.swift <public key> <signature> <dmg>`. Each failed check prints one line on standard error that says which check failed, and exits 1.
+`verify-appcast.sh` runs `xmllint --noout` on the feed. It reads an attribute of the enclosure with `xmllint --xpath "string(//*[local-name()='enclosure']/@*[local-name()='edSignature'])"`, and `length` the same way, because `sparkle:edSignature` is in a namespace. It compares `length` with `$(($(wc -c < "$dmg")))`, reads `SUPublicEDKey` from the app with `plutil -extract SUPublicEDKey raw -o -`, and runs `swift macos/verify-signature.swift <public key> <signature> <dmg>`. Each failed check prints one line on standard error that says which check failed, and exits 1.
 
 - [ ] **Step 6: Prove that a wrong key is caught**
 
@@ -439,9 +465,13 @@ Expected: a line that names the signature check, then `1`.
 - [ ] **Step 7: Commit**
 
 ```bash
+chmod +x "NIH Extractor/macos/make-appcast.sh" "NIH Extractor/macos/verify-appcast.sh"
 git add "NIH Extractor/macos/make-appcast.sh" "NIH Extractor/macos/verify-appcast.sh" "NIH Extractor/macos/verify-signature.swift" "NIH Extractor/tests/test_macos_appcast.py"
+git ls-files -s "NIH Extractor/macos/make-appcast.sh" "NIH Extractor/macos/verify-appcast.sh"
 git commit -m "feat: write and check the update feed for a macOS release"
 ```
+
+Expected from `git ls-files -s`: both lines start with `100755`. The workflow runs these scripts by path, and the tests would not notice a missing mode, because they call `/bin/bash <script>`.
 
 ---
 
@@ -477,21 +507,42 @@ Add one step after `📦 Name the disk image and write its checksum`. The signat
 
 The upload and release steps already take every file in that folder, so they need no change.
 
-- [ ] **Step 3: Lint the workflow**
+- [ ] **Step 3: Make the release job prove that installed apps see the release**
+
+Add one step at the end of the `release` job. `gh release create` makes a draft, uploads the assets, and then publishes, so the feed exists when the release becomes the newest. This step catches the other cases, such as a newer release that carries no feed.
+
+```yaml
+      - name: "🔎 Check that installed apps can see the release"
+        env:
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          feed="https://github.com/$GH_REPO/releases/latest/download/appcast.xml"
+          for _ in 1 2 3 4 5 6; do
+            if curl -fsSL "$feed" | grep -qF "<sparkle:version>${TAG#v}</sparkle:version>"; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::$feed does not offer ${TAG#v}. Installed apps will not see this release."
+          exit 1
+```
+
+- [ ] **Step 4: Lint the workflow**
 
 Run, from the repository root: `actionlint .github/workflows/macos-release.yml && mise x zizmor@1.32.0 -- zizmor .github/workflows`
 Expected: `No findings to report.`
 
-- [ ] **Step 4: Document updates**
+- [ ] **Step 5: Document updates**
 
 In `docs/macos-app.md`:
-- Add a section `## Updates` after `## Download`. It says that the app checks for a new release once a day after the user agrees, that `Check for Updates…` in the app menu checks at once, that an update needs the app to be in a folder it can write to and not on the disk image, and that version 0.1.1 has no updater, so its users install the next version by hand once.
+- Add a section `## Updates` after `## Download`. It says that the app checks for a new release once a day, that `Check for Updates…` in the app menu checks at once, that an update needs the app to be in a folder it can write to and not on the disk image, and that version 0.1.1 has no updater, so its users install the next version by hand once.
 - In `## Publish a release`, add `SPARKLE_ED_KEY` to the table of secrets, with the contents "The private seed of the Sparkle update key, base64. A copy is in 1Password." Change "five" to "six", and add `appcast.xml` to the list of what the release carries.
 - In `## Licences and the icon`, add one sentence. The build downloads Sparkle 2.10.1 and checks it against the checksum in `build.sh`.
 
-In `AGENTS.md`, extend the `macos-release.yml` bullet. It needs six secrets, and it publishes `appcast.xml`, which installed apps read from the newest release.
+- In `## Publish a release`, add two rules. A release that carries no `appcast.xml` must not become the newest release, so create it with `gh release create --latest=false` or as a pre-release. To withdraw a bad release, mark it as a pre-release, and the feed falls back to the release before it.
 
-- [ ] **Step 5: Commit**
+In `AGENTS.md`, extend the `macos-release.yml` bullet. It needs six secrets, and it publishes `appcast.xml`, which installed apps read from the newest release that is not a pre-release.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/macos-release.yml docs/macos-app.md AGENTS.md
@@ -513,18 +564,22 @@ git commit -m "feat: publish the update feed with each macOS release"
 
 It follows `scripts/rehearse-update.sh` in `claude-multipass`. It is bash 3.2 and clean under `shellcheck`. It does this:
 
-1. Makes a throwaway key pair with the `keypair` function from Task 3, Step 6. The real key and the Keychain are not used.
-2. Builds version 0.0.1 and then 0.0.2, each with `GRANT_MATCHER_VERSION` set to that version, `GRANT_MATCHER_BUNDLE_ID=net.matherly.gm-rehearsal`, `SPARKLE_PUBLIC_KEY` set to the throwaway public key, and `CODESIGN_IDENTITY` as the caller set it. It copies the 0.0.1 app to a temporary install folder and the 0.0.2 disk image to a temporary feed folder.
-3. Writes the feed with `make-appcast.sh`, with `APPCAST_DOWNLOAD_BASE=http://127.0.0.1:<port>`. In `--bad-signature` mode it signs with a second throwaway seed.
-4. Serves the feed folder with `python3 -m http.server` on a free port. In `--stop-feed` mode it serves nothing.
-5. Runs `defaults write net.matherly.gm-rehearsal SUFeedURL http://127.0.0.1:<port>/appcast.xml`. Sparkle reads this default in place of the key in `Info.plist`.
-6. Opens the 0.0.1 app. In `--from-dmg` mode it mounts the 0.0.1 disk image read-only and opens the app on it.
-7. Prints what the person must click: `Check for Updates…`, then `Install Update`, then `Install and Relaunch`. It waits up to `REHEARSE_SECONDS`, 180 by default.
-8. In the default mode it exits 0 only when all of these hold. `CFBundleShortVersionString` of the installed app reads `0.0.2`, two processes of that app are running within 30 seconds (the window and the server), `codesign --verify --deep --strict` passes on it, and `launchctl print gui/$(id -u)` shows no job whose name holds `gm-rehearsal-sparkle`.
-9. In each other mode it exits 0 only when the installed app still reads `0.0.1` at the deadline.
-10. On exit, in a trap whose commands each end with `|| true`, it stops the app and the server, detaches the image, runs `defaults delete net.matherly.gm-rehearsal`, and removes the temporary folders, `~/Library/Caches/net.matherly.gm-rehearsal` and `~/Library/HTTPStorages/net.matherly.gm-rehearsal`.
+1. Stops with a message unless `CODESIGN_IDENTITY` is set. An update between two ad hoc builds is unproven.
+2. Unsets `NOTARY_PROFILE`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID` and `APPLE_API_KEY_P8`. With one of them set, `build.sh` would send both throwaway builds to Apple.
+3. Makes a throwaway key pair with the `keypair` function from Task 3, Step 6. The real key and the Keychain are not used.
+4. Builds version 0.0.1 with `GRANT_MATCHER_VERSION=0.0.1`, `GRANT_MATCHER_BUNDLE_ID=net.matherly.gm-rehearsal` and `SPARKLE_PUBLIC_KEY` set to the throwaway public key. It copies the app to `$work/install/` and the disk image to `$work/old.dmg` before the next build, because `build.sh` writes both builds to the same paths in `macos/dist`.
+5. Builds version 0.0.2 the same way, and copies its disk image to `$work/feed/Grant-Matcher-0.0.2-arm64.dmg`. The name has no space, so the enclosure URL needs no encoding.
+6. Writes the feed with `make-appcast.sh` on that copy, with `APPCAST_DOWNLOAD_BASE=http://127.0.0.1:<port>`. In `--bad-signature` mode it signs with a second throwaway seed. In every other mode it then runs `verify-appcast.sh` on the installed app, the copy and the feed.
+7. Serves the feed folder with `python3 -m http.server` on a free port, and waits up to 10 seconds for `curl` to get `appcast.xml`. In `--stop-feed` mode it serves nothing.
+8. Notes the contents of `~/Library/LaunchAgents`, then runs `defaults write net.matherly.gm-rehearsal SUFeedURL http://127.0.0.1:<port>/appcast.xml`. Sparkle reads this default in place of the key in `Info.plist`.
+9. Opens the 0.0.1 app from `$work/install/`. In `--from-dmg` mode it mounts `$work/old.dmg` read-only and opens the app on it.
+10. Prints what the person must click, which is `Check for Updates…`, then `Install Update`, then `Install and Relaunch`. It waits up to `REHEARSE_SECONDS`, 180 by default.
+11. Finds its own processes with `pgrep -f "$app_path/Contents/MacOS/Grant Matcher"`, where `$app_path` is the full path of the copy it opened. A shorter pattern would also match a real Grant Matcher that is running.
+12. In the default mode it exits 0 only when all of these hold. `CFBundleShortVersionString` of the installed app reads `0.0.2`. Two processes of that copy are running within 30 seconds, the window and the server. `codesign --verify --deep --strict` passes on it. Within 30 seconds, `launchctl print gui/$(id -u)` shows no job whose name holds `gm-rehearsal-sparkle`. `~/Library/LaunchAgents` holds what it held before.
+13. In each other mode it exits 0 only when the app it opened still reads `0.0.1` at the deadline.
+14. On exit, in a trap whose commands each end with `|| true`, it stops its own processes and the server, detaches the image, runs `defaults delete net.matherly.gm-rehearsal`, and removes `$work`, `macos/dist/Grant Matcher.app`, `macos/dist/Grant Matcher.dmg`, `~/Library/Caches/net.matherly.gm-rehearsal`, `~/Library/HTTPStorages/net.matherly.gm-rehearsal` and `~/Library/Preferences/net.matherly.gm-rehearsal.plist`.
 
-The rehearsal app keeps the name Grant Matcher, so it reads and writes the real `~/Library/Application Support/Grant Matcher` and `~/Library/Logs/Grant Matcher`. The script says so when it starts.
+The rehearsal app keeps the name Grant Matcher, so it uses the real `~/Library/Application Support/Grant Matcher` and `~/Library/Logs/Grant Matcher`. It reads the database there. Each launch rotates `server.log`, so the two launches of a rehearsal push the real app's last log out of both files. The script says both things when it starts, and it removes the builds in `macos/dist` when it ends.
 
 - [ ] **Step 2: Run the default mode**
 
@@ -543,6 +598,7 @@ Save a screenshot of each of the four Sparkle windows under `docs/superpowers/pl
 - [ ] **Step 5: Commit**
 
 ```bash
+chmod +x "NIH Extractor/macos/rehearse-update.sh"
 git add "NIH Extractor/macos/rehearse-update.sh" docs/superpowers/plans/2026-11-23-in-app-updates-evidence
 git commit -m "test: rehearse a real in-app update of the macOS app"
 ```
@@ -571,7 +627,10 @@ Push `feat/in-app-updates`, open a pull request against `main` of `jrmatherly/Re
 
 - [ ] **Step 3: Tag and watch the release**
 
+A rebase merge gives the commits new hashes, and the workflow refuses a tag that is not on `main`. Tag the merged commit, not the branch.
+
 ```bash
+git switch main && git pull --ff-only
 git tag -a v0.2.0 -m "Grant Matcher 0.2.0" && git push origin v0.2.0
 ```
 
@@ -593,10 +652,12 @@ Expected: `The validate action worked!` and `source=Notarized Developer ID`.
 Drag the app from the disk image to `/Applications`, open it, and choose `Check for Updates…`.
 Expected: Sparkle says that 0.2.0 is the newest version.
 
-- [ ] **Step 6: Prove an update between two published versions**
+- [ ] **Step 6: Release 0.2.1 and update to it from 0.2.0**
 
-The next release, 0.2.1 or later, is the proof. With 0.2.0 installed, choose `Check for Updates…` after that release is published.
-Expected: the prompt offers the new version, and after `Install and Relaunch` the About window shows it. Record the result in `.remember/remember.md`.
+The rehearsal used a local feed over plain HTTP. Only a second published release proves the real path, which is GitHub's redirect, a notarized image and the real key. Repeat Steps 1 to 4 with version 0.2.1. A release with no other change is enough.
+
+With 0.2.0 still installed in `/Applications`, choose `Check for Updates…`.
+Expected: the prompt offers 0.2.1. After `Install Update` and `Install and Relaunch`, the About window shows 0.2.1. Record the result in `.remember/remember.md`.
 
 ---
 
@@ -633,10 +694,14 @@ The spike's files are in the session scratchpad and are not part of the reposito
 
 - Sparkle 2.10.1 was published on 2026-10-25, needs macOS 12 or later, and has the MIT licence.
 - A build outside Xcode needs `CFBundleVersion`, `CFBundleShortVersionString`, `SUFeedURL`, `SUPublicEDKey` and `LSMinimumSystemVersion`. Sparkle compares `CFBundleVersion`. The app set only the short version before this plan.
-- With `SUEnableAutomaticChecks` unset, Sparkle asks the user on the second launch. The check interval defaults to one day.
+- With `SUEnableAutomaticChecks` unset, Sparkle shows a permission prompt on the second launch, and "Don't Check" turns scheduled checks off for good. With the key set to `true`, it checks without asking. The check interval defaults to one day.
+- A scheduled check that fails shows nothing. A check the user starts shows the error. A 404 at the feed URL is such a failure.
+- `SUVerifyUpdateBeforeExtraction` makes Sparkle verify the EdDSA signature before it opens the archive. It is read from the installed app.
+- Sparkle's version comparator orders `0.2.0` below `0.10.0`, and `0.2.0rc1` below `0.2.0`. It treats `0.2.0-rc1` as equal to `0.2.0`. A reviewer ran these against the 2.10.1 framework on 2026-11-23.
 - The XPC services and the keys that enable them are for a sandboxed app only.
 - Sparkle accepts a `.dmg`. It finds the app inside by name, then by bundle ID, and skips symlinks, so the link to `/Applications` on the image does no harm.
-- An update is accepted when the EdDSA key validates it. For a Developer ID app, a lost key can be replaced in a release that keeps the same certificate.
+- When the old and the new app hold the same public key, Sparkle refuses an update whose EdDSA signature is wrong, even if the Developer ID matches. When the new app holds a different key, a matching Developer ID is enough, which is how a lost key is replaced.
+- `gh release create` with assets makes a draft, uploads each asset, and then publishes. Its own help text says so.
 - Before it swaps the app, Sparkle refuses a downgrade, releases the new copy from quarantine, and runs a Gatekeeper scan on macOS 14.4 and later.
 - `generate_keys` keeps the private key in the login Keychain. Its help says one key serves every app.
 
@@ -657,8 +722,11 @@ The spike's files are in the session scratchpad and are not part of the reposito
 | --- | --- | --- |
 | Apple has never notarized this app with Sparkle inside. | Task 6, Step 3 | The release run. `claude-multipass` notarizes the same layout. |
 | Only macOS 27.2 was tested. Sparkle has a pending change for mounting disk images on 27.2 and later. | Task 5 | A rehearsal on a Mac with macOS 14 or 15, if one is at hand. |
-| `gh release create` may publish the release before `appcast.xml` is attached. For a moment the feed URL would answer 404. | Task 6, Step 4 | The `curl` in that step. A 404 shows no prompt at launch, per Review Focus 1. |
+| A newer release with no `appcast.xml` silences every installed app's scheduled check. The orphan tag `v0.1.0` would do this if someone made a release of it. | Any later release | The last step of the release job, and the two rules in `docs/macos-app.md`. |
+| `SUVerifyUpdateBeforeExtraction` was not set in the spike. | Task 5 | The rehearsal's default mode, which runs with the key set. |
+| The ad hoc build has never been run, with or without Sparkle. | Task 2, Step 6 | That step. If the ad hoc app does not launch, stop and report. Do not add the hardened runtime to it. |
+| An update of a release whose server cannot start is covered by a unit test only. | Task 1 | A rehearsal mode with a broken server, if the owner wants more proof. |
 | A user who installed to `/Applications` without administrator rights gets a password prompt from Sparkle. | Not tested | A manual check on such an account. |
 | Sparkle is pinned by hand. Renovate cannot compute the new checksum. | `macos/build.sh` | A person changes `sparkle_version` and `sparkle_sha256` together, then runs Task 5. |
-| The rehearsal app shares the real app's data and log folders. | Task 5 | The script says so at the start. It only reads the database. |
+| The rehearsal app shares the real app's data and log folders. | Task 5 | The script says so at the start. It reads the database and rotates the log. |
 | Users of 0.1.1 get no prompt. | After Task 6 | The release notes of 0.2.0 say to install it by hand once. |
