@@ -175,3 +175,12 @@ def test_run_and_save_reports_a_capped_source(sources, tmp_path) -> None:
     from nih_grant_matcher.config import MatcherConfig
     assert workflow.run_and_save(MatcherConfig(rows=2, db_path=str(tmp_path / "a.sqlite3")))[1].capped is True
     assert workflow.run_and_save(MatcherConfig(rows=3, db_path=str(tmp_path / "b.sqlite3")))[1].capped is False
+
+
+def test_profile_export_then_import_round_trips(tmp_path, capsys) -> None:
+    db, out = str(tmp_path / "g.sqlite3"), tmp_path / "p.json"
+    assert cli.main(["--db", db, "profile", "export", "--out", str(out)]) == 0
+    assert cli.main(["--db", db, "profile", "import", str(out)]) == 0
+    out.write_text('{"format": "other/9"}', encoding="utf-8")
+    assert cli.main(["--db", db, "profile", "import", str(out)]) == 1
+    assert "format" in capsys.readouterr().err

@@ -10,6 +10,7 @@ from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.excel import write_excel
 from nih_grant_matcher.models import ScoredOpportunity
 from nih_grant_matcher.scoring import score_bin
+from nih_grant_matcher.ui.profile_page import profile_page, saved_profile
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
@@ -103,23 +104,25 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 
 
 with st.sidebar:
-    st.header("Run Search")
-    source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], index=0)
-    keyword = st.text_input("Keyword", value="", placeholder="AI, machine learning, imaging...")
-    limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25)
+    view = st.sidebar.radio("View", ["Find", "Profile"], key="view")
     db_path = st.text_input("Database", value=DEFAULT_DB)
-    run_clicked = st.button("Run Search", type="primary", width="stretch")
+    if view == "Find":
+        st.header("Run Search")
+        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], index=0)
+        keyword = st.text_input("Keyword", value="", placeholder="AI, machine learning, imaging...")
+        limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25)
+        run_clicked = st.button("Run Search", type="primary", width="stretch")
 
-    st.divider()
-    st.header("Display")
-    min_score = st.slider("Minimum score shown", 0.0, 100.0, 0.0, 5.0)
-    max_saved = st.slider("Saved rows to load", 50, 1000, 500, 50)
-    load_clicked = st.button("Load Saved Results", width="stretch")
+        st.divider()
+        st.header("Display")
+        min_score = st.slider("Minimum score shown", 0.0, 100.0, 0.0, 5.0)
+        max_saved = st.slider("Saved rows to load", 50, 1000, 500, 50)
+        load_clicked = st.button("Load Saved Results", width="stretch")
 
-    st.divider()
-    st.header("Export")
-    excel_path = st.text_input("Excel output", value=DEFAULT_EXCEL)
-    export_clicked = st.button("Export Current View", width="stretch")
+        st.divider()
+        st.header("Export")
+        excel_path = st.text_input("Excel output", value=DEFAULT_EXCEL)
+        export_clicked = st.button("Export Current View", width="stretch")
 
 
 if "scored_items" not in st.session_state:
@@ -128,6 +131,12 @@ if "items" in st.session_state:
     del st.session_state["items"]
 if "last_run" not in st.session_state:
     st.session_state["last_run"] = None
+
+if view == "Profile":
+    profile_page(db_path)
+    st.stop()
+if saved_profile(db_path) is None:
+    st.caption("Ranking uses the built-in profile (machine learning and data science). Set your own under Profile.")
 
 if run_clicked:
     config = MatcherConfig(rows=limit, db_path=db_path, min_digest_score=min_score)

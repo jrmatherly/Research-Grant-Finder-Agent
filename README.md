@@ -434,6 +434,10 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 
 Add `--help` to a command to see its options. Saved opportunities whose expiration date has passed are left out of the dashboard, the digest, and the Excel file.
 
+### Set your profile
+
+Ranking starts from a built-in profile for machine learning and data science. A researcher in another field sets a profile of their own. In the dashboard, select **Profile** in the sidebar, then **Set up my profile**. The wizard asks for your research aims, proposes terms from them, and previews how the saved opportunities would move before you save. The same view exports the profile to a JSON file and imports one. On the command line, `profile show`, `profile export --out PATH`, `profile import PATH`, and `profile reset` do the same. See [Set your profile](docs/dashboard.md#set-your-profile).
+
 ---
 
 ## Research Software Status

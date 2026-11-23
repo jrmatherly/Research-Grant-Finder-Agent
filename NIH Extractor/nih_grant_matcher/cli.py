@@ -6,6 +6,7 @@ from .clients import ApiError, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .normalizer import normalize_nih_guide
+from .profile import ProfileError, from_export, to_export
 from .scoring import document_frequencies
 from .store import OpportunityStore
 from .workflow import fetch_score_opportunities, rescore_saved
@@ -36,6 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
     rarity = sub.add_parser("rarity-table", help="Rebuild the word-rarity table that similarity scoring uses, from expired NIH Guide opportunities.")
     rarity.add_argument("--rows", type=int, default=3000, help="Expired opportunities to read.")
     rarity.add_argument("--out", default=str(TERM_RARITY_PATH))
+    profile = sub.add_parser("profile", help="Show, export, import, or reset the applicant profile that ranking uses.")
+    actions = profile.add_subparsers(dest="action", required=True)
+    actions.add_parser("show", help="Print the profile in use.")
+    actions.add_parser("export", help="Write the profile in use to a file.").add_argument("--out", required=True)
+    actions.add_parser("import", help="Save a profile from an exported file.").add_argument("path")
+    actions.add_parser("reset", help="Go back to the built-in profile.")
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +52,9 @@ def main(argv: list[str] | None = None) -> int:
     except ApiError as exc:
         # A failed request is not a bug, so it gets one line and no traceback.
         print(f"Request failed: {exc}", file=sys.stderr)
+        return 1
+    except ProfileError as exc:
+        print(f"Profile not valid: {exc}", file=sys.stderr)
         return 1
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -58,6 +68,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _reporter_context(args)
     if args.command == "rarity-table":
         return _rarity_table(args)
+    if args.command == "profile":
+        return _profile(args)
     raise ValueError(args.command)
 
 def _run(args: argparse.Namespace) -> int:
@@ -100,6 +112,24 @@ def _excel(args: argparse.Namespace) -> int:
 
 def _reporter_context(args: argparse.Namespace) -> int:
     print(json.dumps(NihContextAgent(NihReporterClient()).similar_funded_projects(args.term, limit=args.limit), indent=2))
+    return 0
+
+def _profile(args: argparse.Namespace) -> int:
+    store = OpportunityStore(args.db)
+    try:
+        if args.action == "show":
+            print(json.dumps(json.loads(to_export(store.profile()))["profile"], indent=2))
+        elif args.action == "export":
+            Path(args.out).write_text(to_export(store.profile()) + "\n", encoding="utf-8")
+            print(f"Wrote the profile to {args.out}.")
+        elif args.action == "import":
+            store.save_profile(from_export(Path(args.path).read_text(encoding="utf-8")))
+            print(f"Saved the profile from {args.path} to {args.db}.")
+        else:
+            store.save_profile(None)
+            print(f"Reset {args.db} to the built-in profile.")
+    finally:
+        store.close()
     return 0
 
 def _rarity_table(args: argparse.Namespace) -> int:
