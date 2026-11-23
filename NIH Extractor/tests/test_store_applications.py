@@ -84,6 +84,7 @@ def test_every_record_reads_back_as_it_was_written(store) -> None:
 
 def test_a_read_only_database_from_an_earlier_version_reads_as_empty(tmp_path) -> None:
     import os
+    from nih_grant_matcher.store import ReadOnlyDatabase
     path = tmp_path / "old.sqlite3"
     sqlite3.connect(path).executescript("CREATE TABLE opportunities (source_id TEXT PRIMARY KEY, title TEXT NOT NULL); CREATE TABLE scores (source_id TEXT PRIMARY KEY);")
     path.chmod(0o444)
@@ -94,6 +95,8 @@ def test_a_read_only_database_from_an_earlier_version_reads_as_empty(tmp_path) -
         try:
             assert store.applications() == store.facts(1) == store.requirements(1) == store.calls(1) == store.revisions(1) == store.signoffs(1) == []
             assert store.application(1) is None and store.announcement("PAR-1") is None and store.setting("deleting") is None
+            with pytest.raises(ReadOnlyDatabase, match="read-only"):
+                store.add_application(opportunity_number="PAR-1", grant_type="NIH:R21", title="t", resubmission=False)
         finally:
             store.close()
     finally:

@@ -58,6 +58,24 @@ def test_a_read_only_database_from_before_the_profile_still_opens(tmp_path) -> N
     finally:
         path.chmod(0o644)
 
+def test_saving_or_resetting_a_profile_in_a_read_only_database_from_before_says_so(tmp_path) -> None:
+    import os, sqlite3
+    path = tmp_path / "old.sqlite3"
+    sqlite3.connect(path).executescript(OLD_SCHEMA)
+    path.chmod(0o444)
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    try:
+        store = OpportunityStore(path)
+        try:
+            for profile in (WET_LAB, None):
+                with pytest.raises(ProfileError, match="read-only"):
+                    store.save_profile(profile)
+        finally:
+            store.close()
+    finally:
+        path.chmod(0o644)
+
 def test_an_export_keeps_the_order_of_the_keywords() -> None:
     assert list(from_export(to_export(Profile(keywords={"zebrafish": 5, "aorta": 9}))).keywords) == ["zebrafish", "aorta"]
 

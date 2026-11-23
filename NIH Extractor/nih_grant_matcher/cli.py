@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, json, sys
+import argparse, json, sqlite3, sys
 from pathlib import Path
 from .agents import DigestAgent, NihContextAgent
 from .clients import ApiError, NihGuideClient, NihReporterClient
@@ -58,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except (OSError, UnicodeDecodeError) as exc:
         print(f"File error: {exc}", file=sys.stderr)
+        return 1
+    except sqlite3.Error as exc:
+        print(f"Database error: {exc}", file=sys.stderr)
         return 1
 
 def _dispatch(args: argparse.Namespace) -> int:
