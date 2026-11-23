@@ -22,13 +22,18 @@ def saved_profile(db_path: str) -> Profile | None:
         profile = store.profile()
     finally:
         store.close()
-    return None if profile == BUILTIN_PROFILE else profile
+    # Equality ignores the order of the keywords, and the order is the order of matched_terms.
+    return None if to_export(profile) == to_export(BUILTIN_PROFILE) else profile
+
+def escape_markdown(text: str) -> str:
+    # Captions and alerts render as Markdown, and profile text comes from the user or from a pasted file.
+    return re.sub(r"([!-/:-@\[-`{-~])", r"\\\1", text)
 
 def profile_sentence(profile: Profile) -> str:
-    return f"Ranking uses the profile of {profile.investigator or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
+    return f"Ranking uses the profile of {escape_markdown(profile.investigator) or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
 
 def show_unreadable(exc: ProfileError) -> None:
-    st.error(f"The saved profile cannot be read, so ranking uses the built-in profile. Reset to built-in under Profile clears it. {exc}")
+    st.error(f"The saved profile cannot be read, so ranking uses the built-in profile. Reset to built-in under Profile deletes the saved profile, and the database file holds its only copy. {escape_markdown(str(exc))}")
 
 def _apply(db_path: str, make, done: str) -> None:
     try:
@@ -38,8 +43,8 @@ def _apply(db_path: str, make, done: str) -> None:
             store.save_profile(profile)
         finally:
             store.close()
-    except (ProfileError, sqlite3.OperationalError) as exc:
-        st.session_state["profile_notice"] = ("error", str(exc))
+    except (ProfileError, sqlite3.Error) as exc:
+        st.session_state["profile_notice"] = ("error", escape_markdown(str(exc)))
         return
     st.session_state["profile_notice"] = ("success", done)
     st.session_state["profile_step"] = None
@@ -102,7 +107,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         if (forward or save) and not 3 <= len(examples) <= 6:
             st.error(f"Write three to six sentences. You wrote {len(examples)}.")
             return
-        if (summary.strip(), examples) != (draft.research_summary, draft.examples) or not draft.keywords:
+        if forward and ((summary.strip(), examples) != (draft.research_summary, draft.examples) or not draft.keywords):
             scorer = MLRelevanceScorer()
             draft = replace(draft, keywords={**suggest_terms((*examples, summary), scorer.document_frequency, scorer.documents), **draft.keywords})
         draft = replace(draft, research_summary=summary.strip(), examples=examples)
@@ -118,7 +123,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         st.error(f"A profile needs {missing}. Nothing was saved.")
         return
     if save:
-        _apply(db_path, lambda: replace(draft, focus="profile", examples_name="your example sentences"), "Saved your profile. The Find view now ranks with it.")
+        _apply(db_path, lambda: draft, "Saved your profile. The Find view now ranks with it.")
     else:
         st.session_state["profile_step"] = n - 1 if back else n + 1
     st.rerun()
@@ -133,6 +138,9 @@ def profile_page(db_path: str) -> None:
     except ProfileError as exc:
         saved, unreadable = None, True
         show_unreadable(exc)
+    except sqlite3.Error as exc:
+        saved, unreadable = None, False
+        st.error(f"Could not open the database, so ranking uses the built-in profile. {escape_markdown(str(exc))}")
     if saved is None:
         st.info("Ranking uses the built-in profile (machine learning and data science).")
     else:
@@ -145,16 +153,16 @@ def profile_page(db_path: str) -> None:
 
     st.divider()
     st.subheader("Export and import")
-    st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json")
-    st.caption("The file holds your name and your example sentences.")
+    st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json", disabled=unreadable)
+    st.caption("The button downloads the profile in use, which is the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text and references.")
     pasted = st.text_area("Import a profile", key="profile_import_text", placeholder="Paste the contents of an exported profile file.")
     incoming = None
     if pasted.strip():
         try:
             incoming = from_export(pasted)
         except ProfileError as exc:
-            st.error(str(exc))
+            st.error(escape_markdown(str(exc)))
         else:
-            st.caption(f"This profile names {incoming.investigator or 'no investigator'} and holds {len(incoming.keywords)} terms.")
+            st.caption(f"This profile names {escape_markdown(incoming.investigator) or 'no investigator'} and holds {len(incoming.keywords)} terms.")
     st.button("Import profile", key="profile_import_save", disabled=incoming is None, on_click=_apply, args=(db_path, lambda: from_export(st.session_state.get("profile_import_text", "")), "Imported the profile. The Find view now ranks with it."))
     st.button("Reset to built-in", disabled=saved is None and not unreadable, on_click=_apply, args=(db_path, lambda: None, "Reset to the built-in profile."))

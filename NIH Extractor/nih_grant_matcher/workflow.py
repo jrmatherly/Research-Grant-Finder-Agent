@@ -27,7 +27,7 @@ def config_for(store: OpportunityStore, base: MatcherConfig | None = None) -> Ma
     try:
         profile = store.profile()
     except ProfileError as exc:
-        # A profile row from a later or an older build must not stop the ranking, and Reset to built-in clears it.
+        # A saved profile that this build cannot read must not stop the ranking.
         warnings.warn(f"Could not read the saved profile, so ranking uses the built-in profile: {exc}", RuntimeWarning, stacklevel=2)
         profile = BUILTIN_PROFILE
     return profile.matcher_config(base)
@@ -75,7 +75,7 @@ def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str 
 
 
 def rescore_saved(store: OpportunityStore) -> None:
-    # A saved score goes stale when the scoring rules change, and as the expiration date nears. Scoring needs no network, so score the open rows again before every read.
+    # A saved score goes stale when the scoring rules or the profile change, and as the expiration date nears. Scoring needs no network, so score the open rows again before every read.
     scorer = MLRelevanceScorer(config_for(store))
     try:
         store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])

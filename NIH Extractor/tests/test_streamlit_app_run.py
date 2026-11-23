@@ -120,6 +120,7 @@ def test_the_wizard_saves_every_step_and_resets(tmp_path, monkeypatch) -> None:
     try:
         profile = store.profile()
         assert len(profile.examples) == 3 and profile.expertise == "Cardiac imaging" and profile.keywords
+        assert (profile.investigator, profile.research_summary, profile.focus) == ("Ada Lovelace", "Mitochondria in the heart.", "profile")
         assert all(term == term.strip().lower() for term in profile.keywords)
     finally:
         store.close()
@@ -141,6 +142,13 @@ def test_saving_on_the_first_step_saves_nothing(tmp_path, monkeypatch) -> None:
     next(button for button in app.button if button.label == "Save profile").click().run(timeout=30)
     assert not app.exception
     assert any("example sentences under step 2" in error.value for error in app.error)
+    # A Save on step 2 does not merge in suggested terms that the user has not seen under step 3.
+    next(button for button in app.button if button.label == "Next").click().run(timeout=30)
+    app.text_area[0].set_value("Mitochondria in the heart.")
+    app.text_area[1].set_value("Measure mitochondrial fission in heart failure. Map cardiac muscle energetics. Test mitophagy in cardiomyocytes.")
+    next(button for button in app.button if button.label == "Save profile").click().run(timeout=30)
+    assert not app.exception
+    assert any("terms under step 3" in error.value for error in app.error)
     store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
     try:
         assert store.profile() == BUILTIN_PROFILE
@@ -161,11 +169,13 @@ def test_an_unreadable_profile_ranks_with_the_builtin_one_and_can_be_reset(tmp_p
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert not app.exception
-    assert any("grant-matcher-profile/1" in error.value for error in app.error)
+    assert any("grant-matcher-profile/1" in error.value.replace("\\", "") for error in app.error)
     assert app.dataframe[0].value["Opportunity Number"].iloc[0] == "RFA-TEST-1"
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     assert not app.exception
-    assert any("grant-matcher-profile/1" in error.value for error in app.error)
+    banner = next(error.value.replace("\\", "") for error in app.error if "grant-matcher-profile/1" in error.value.replace("\\", ""))
+    assert "Reset to built-in under Profile deletes the saved profile" in banner and "only copy" in banner
+    assert app.get("download_button")[0].disabled
     next(button for button in app.button if button.label == "Reset to built-in").click().run(timeout=30)
     assert not app.exception
     store = OpportunityStore(path)
@@ -173,3 +183,87 @@ def test_an_unreadable_profile_ranks_with_the_builtin_one_and_can_be_reset(tmp_p
         assert store.profile() == BUILTIN_PROFILE
     finally:
         store.close()
+
+
+def _opp(n, title):
+    return Opportunity(source_id=f"nih-guide:{n}", opportunity_number=f"PA-{n}", title=title, agency_code="NHLBI", agency_name="NIH NHLBI", status="active", close_date=date.today() + timedelta(days=60), description=title)
+
+
+def _press(app, label):
+    next(button for button in app.button if button.label == label).click().run(timeout=30)
+
+
+def test_a_saved_profile_with_the_builtin_keywords_reordered_is_not_the_builtin_one(tmp_path) -> None:
+    from nih_grant_matcher.profile import BUILTIN_PROFILE, Profile
+    from nih_grant_matcher.ui.profile_page import saved_profile
+    reordered, path = Profile(keywords=dict(reversed(BUILTIN_PROFILE.keywords.items()))), tmp_path / "g.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.save_profile(reordered)
+    finally:
+        store.close()
+    saved = saved_profile(str(path))
+    assert saved is not None and list(saved.keywords) == list(reordered.keywords)
+
+
+def test_the_preview_shows_what_the_draft_raises_and_lowers(tmp_path, monkeypatch) -> None:
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(1, "Machine learning for imaging")), MLRelevanceScorer().score(_opp(2, "Mitochondria in cardiac muscle"))])
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    _press(app, "Next")
+    app.text_area[0].set_value("Mitochondria in cardiac muscle.")
+    app.text_area[1].set_value("Measure mitochondria in cardiac muscle. Map cardiac muscle energetics. Test mitochondria in cardiomyocytes.")
+    _press(app, "Next")
+    _press(app, "Next")
+    assert not app.exception
+    preview = app.dataframe[0].value.set_index("Opportunity Number")
+    assert preview.loc["PA-2", "Change"] > 0 and preview.loc["PA-1", "Change"] < 0
+
+
+def test_editing_an_imported_profile_keeps_its_focus(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import Profile, to_export
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    app.text_area(key="profile_import_text").set_value(to_export(Profile(keywords={"tumor imaging": 12}, examples=("Image tumors.", "Grade tumors.", "Track tumors."), focus="oncology imaging"))).run(timeout=30)
+    app.button(key="profile_import_save").click().run(timeout=30)
+    _press(app, "Edit my profile")
+    for _ in range(4):
+        _press(app, "Next")
+    _press(app, "Save profile")
+    assert not app.exception
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        assert store.profile().focus == "oncology imaging"
+    finally:
+        store.close()
+
+
+def test_a_pasted_profile_cannot_put_a_link_in_the_page(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import Profile, to_export
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    app.text_area(key="profile_import_text").set_value(to_export(Profile(investigator="[Click to verify](https://example.invalid)"))).run(timeout=30)
+    captions = [caption.value for caption in app.caption]
+    assert any("\\[Click to verify\\]\\(https" in caption for caption in captions)
+    assert not any("[Click to verify](" in caption for caption in captions)
+
+
+@pytest.mark.parametrize("make", [lambda path: path.write_text("not a database", encoding="utf-8"), lambda path: path.mkdir()])
+def test_a_database_path_that_is_not_a_database_gives_a_message(tmp_path, monkeypatch, make) -> None:
+    make(tmp_path / "notes.txt")
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.text_input[0].set_value("notes.txt").run(timeout=30)
+    assert not app.exception
+    assert app.warning
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    assert not app.exception
+    assert app.error

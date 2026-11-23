@@ -83,7 +83,7 @@ The system separates major grant intelligence tasks into specialized AI agents.
 | **NIH Guide Ingestion Agent**  | Discovers and normalizes NIH Guide funding announcements               |
 | **Grants.gov Ingestion Agent** | Searches and enriches federal opportunity records                      |
 | **Grant Parser Agent**         | Converts heterogeneous funding records into a common opportunity model |
-| **ML Relevance Agent**         | Evaluates computational and data-science relevance                     |
+| **ML Relevance Agent**         | Evaluates relevance to the profile, computational in the built-in one |
 | **NIH Context Agent**          | Retrieves related funded-project context from NIH RePORTER             |
 | **Digest Agent**               | Produces prioritized funding intelligence reports                      |
 | **Review Feedback Agent**      | Captures researcher feedback for future relevance tuning               |
@@ -160,7 +160,7 @@ Each funding opportunity is evaluated using multiple computational signals.
 
 ### 1. Computational Keyword Intelligence
 
-The engine searches for signals associated with:
+With the built-in profile, the engine searches for signals associated with:
 
 * Artificial intelligence
 * Machine learning
@@ -179,13 +179,13 @@ The engine searches for signals associated with:
 
 ### 2. Title Centrality Analysis
 
-Computational concepts appearing directly in the opportunity title receive stronger relevance weighting.
+Profile terms appearing directly in the opportunity title receive stronger relevance weighting.
 
-The assumption is that a computational concept appearing in the title is more likely to represent a central scientific theme.
+The assumption is that a term appearing in the title is more likely to represent a central scientific theme.
 
 ### 3. Grant Similarity Analysis
 
-Opportunity descriptions are compared with curated AI and data-science grant examples.
+Opportunity descriptions are compared with the example sentences of the profile, curated AI and data-science grant examples in the built-in one.
 
 Each word is weighted by how rare it is in NIH Guide text, so a shared word such as "phenotypes" counts for far more than "health". The weights come from a table in the repository, built from 3,000 expired opportunities, so an opportunity gets the same score whatever else a run fetched. The match reason names the shared words.
 
@@ -262,7 +262,7 @@ For each opportunity, this tool  preserves:
 
 * Relevance score
 * Priority classification
-* Matched computational terms
+* Matched profile terms
 * Reasons for the match
 * NIH institute
 * Opportunity status
@@ -431,12 +431,16 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
 | `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores computed after a rebuild change. |
+| `uv run python -m nih_grant_matcher profile show` | Prints the saved profile, or the built-in one when none is saved. |
+| `uv run python -m nih_grant_matcher profile export --out profile.json` | Writes that profile to a file. |
+| `uv run python -m nih_grant_matcher profile import profile.json` | Saves the profile in the file, or refuses a file that is not a valid profile. |
+| `uv run python -m nih_grant_matcher profile reset` | Deletes the saved profile, so ranking uses the built-in one. |
 
 Add `--help` to a command to see its options. Saved opportunities whose expiration date has passed are left out of the dashboard, the digest, and the Excel file.
 
 ### Set your profile
 
-Ranking starts from a built-in profile for machine learning and data science. A researcher in another field sets a profile of their own. In the dashboard, select **Profile** in the sidebar, then **Set up my profile**. The wizard asks for your research aims, proposes terms from them, and previews how the saved opportunities would move before you save. The same view exports the profile to a JSON file and imports one. On the command line, `profile show`, `profile export --out PATH`, `profile import PATH`, and `profile reset` do the same. See [Set your profile](docs/dashboard.md#set-your-profile).
+Ranking starts from a built-in profile for machine learning and data science. A researcher in another field sets a profile of their own. In the dashboard, select **Profile** in the sidebar, then **Set up my profile**. The wizard asks for your research aims, proposes terms from them, and previews how the saved opportunities would move before you save. The same view exports the profile to a JSON file and imports one. On the command line, `profile show`, `profile export --out PATH`, `profile import PATH`, and `profile reset` print, export, import, and reset the profile. See [Set your profile](docs/dashboard.md#set-your-profile).
 
 ---
 
