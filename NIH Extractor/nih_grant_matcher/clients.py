@@ -17,19 +17,24 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
             failure, final = exc, exc.code < 500 and exc.code != 429
         # urllib wraps only a failed send in URLError. A connection that drops while the response is read raises OSError or HTTPException.
         except (OSError, http.client.HTTPException) as exc:
-            # A certificate that fails once fails every time.
-            if isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
-                raise
-            failure, final = exc, False
+            # A certificate that fails once fails every time, so do not retry it.
+            failure, final = exc, isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
         if final or attempt == attempts:
             # Name the address: the dashboard shows only this message, and a run talks to three services.
             raise ApiError(f"{getattr(request, 'full_url', request)} failed after {attempt} attempt(s): {failure}") from failure
         time.sleep(2 ** (attempt - 1))
     raise AssertionError("unreachable")
 
+def _read_json(request: urllib.request.Request, timeout: int) -> Any:
+    try:
+        return json.loads(_read(request, timeout).decode("utf-8"))
+    except ValueError as exc:
+        # A proxy or a block page answers 200 with HTML.
+        raise ApiError(f"{request.full_url} did not return JSON: {exc}") from exc
+
 def _post_json(url: str, payload: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1"}, method="POST")
-    parsed = json.loads(_read(request, timeout).decode("utf-8"))
+    parsed = _read_json(request, timeout)
     if isinstance(parsed, dict) and parsed.get("errorcode") not in (None, 0):
         raise ApiError(f"{url} returned errorcode={parsed.get('errorcode')}: {parsed.get('msg')}")
     return parsed
@@ -98,7 +103,7 @@ class NihGuideClient:
                 f"{self.api_url}/data?{query}",
                 headers={"Accept": "application/json", "Origin": "https://grants.nih.gov", "Referer": "https://grants.nih.gov/funding/nih-guide-for-grants-and-contracts", "User-Agent": "nih-grant-matcher/0.1"},
             )
-            parsed = json.loads(_read(request, 30).decode("utf-8"))
+            parsed = _read_json(request, 30)
             hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
             if not isinstance(hits, list):
                 raise ApiError("Unexpected NIH Guide response: hits is not a list")

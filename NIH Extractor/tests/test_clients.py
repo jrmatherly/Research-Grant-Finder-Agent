@@ -93,12 +93,20 @@ def test_read_does_not_retry_a_client_error(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("wrapped", [True, False], ids=["in-urlerror", "bare"])
-def test_read_does_not_retry_a_certificate_error(monkeypatch, wrapped) -> None:
+def test_read_reports_a_certificate_error_once_without_a_retry(monkeypatch, wrapped) -> None:
     certificate = ssl.SSLCertVerificationError("unable to get local issuer certificate")
     calls = _fail_then(monkeypatch, [urllib.error.URLError(certificate) if wrapped else certificate] * 3)
-    with pytest.raises((urllib.error.URLError, ssl.SSLCertVerificationError)):
+    with pytest.raises(clients.ApiError, match=r"https://example\.invalid/data failed after 1 attempt\(s\): .*unable to get local issuer certificate"):
         clients._read(REQUEST, timeout=1)
     assert len(calls) == 1
+
+
+def test_a_reply_that_is_not_json_is_an_api_error(monkeypatch) -> None:
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: b"<html>blocked</html>")
+    with pytest.raises(clients.ApiError, match=r"https://example\.invalid/search did not return JSON"):
+        clients._post_json("https://example.invalid/search", {})
+    with pytest.raises(clients.ApiError, match="did not return JSON"):
+        clients.NihGuideClient().search(rows=1)
 
 
 def test_nih_guide_default_run_reads_every_page(monkeypatch) -> None:
