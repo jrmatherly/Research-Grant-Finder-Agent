@@ -11,8 +11,7 @@ class ProseRule:
     hint: str
     pattern: re.Pattern[str] | None
 
-# No closing boundary, so an inflection matches. Rule 7 closes it, so that enhancer is not enhance.
-def _words(*words: str, end: str = "") -> re.Pattern[str]:
+def _words(*words: str, end: str = r"\b") -> re.Pattern[str]:
     return re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + ")" + end, re.I)
 
 # The month May is not a hedge.
@@ -21,7 +20,7 @@ _HEDGES = r"(?:(?-i:may)|might|could|possibly|potentially|perhaps|arguably|somew
 PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(3, "-ing opener", "A clause after a comma opens with a word like highlighting or ensuring and adds no fact. Cut it or state the fact.", re.compile(r", (?:highlighting|ensuring|reflecting|showcasing|fostering)\b", re.I)),
     ProseRule(5, "vague attribution", "A claim rests on unnamed experts or studies. Name the source or cut the claim.", None),
-    ProseRule(7, "marked word", "This word marks text as written by a model. Use a plain word in its place.", _words("additionally", "crucial", "delve", "enduring", "enhance", "fostering", "garner", "interplay", "intricate", "landscape", "pivotal", "showcase", "tapestry", "testament", "underscore", "vibrant", end=r"\b")),
+    ProseRule(7, "marked word", "This word marks text as written by a model. Use a plain word in its place.", _words("additionally", "crucial", "delve", "enduring", "enhance", "fostering", "garner", "interplay", "intricate", "landscape", "pivotal", "showcase", "tapestry", "testament", "underscore", "vibrant")),
     ProseRule(8, "grand verb", "A grand verb stands in for a plain is or has. Write is or has.", _words("serves as", "stands as", "boasts")),
     ProseRule(9, "denied claim", "The sentence denies a claim nobody made before it makes its own. State the claim directly.", re.compile(r"\bnot (?:just|only) .{1,60}, but\b", re.I)),
     ProseRule(10, "forced triple", "A list of three is there for rhythm and not for content. Keep only the items that carry a fact.", None),
@@ -40,7 +39,8 @@ PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(28, "dense sentence", "The sentence carries more ideas than a reader can hold at once. Split it.", None),
     ProseRule(29, "passive voice", "A passive verb hides who acts. Name the actor.", None),
     ProseRule(30, "adverb", "An adverb props up a weak verb or claim. Cut it or use a stronger verb.", None),
-    ProseRule(31, "inflated word", "A long word stands where a short one would do. Write use, help, many or if.", _words("utilise", "utilize", "leverage", "facilitate", "numerous", "in the event that")),
+    # Rule 31 has no closing boundary, so utilized and leveraged match.
+    ProseRule(31, "inflated word", "A long word stands where a short one would do. Write use, help, many or if.", _words("utilise", "utilize", "leverage", "facilitate", "numerous", "in the event that", end="")),
     ProseRule(32, "mannered prose", "The phrasing reaches for style over sense. Say it plainly.", None),
     ProseRule(33, "over-compression", "Words a reader needs to follow the sentence are missing. Write the full sentence.", None))
 

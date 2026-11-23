@@ -44,3 +44,8 @@ def test_a_long_run_of_letters_scans_quickly() -> None:
     started = perf_counter()
     scan("a" * 20000 + " " + "A" * 20000)
     assert perf_counter() - started < 1
+
+def test_rules_8_and_23_match_whole_phrases_only() -> None:
+    for text in ("The kit serves assays across sites.", "The tube stands aside for ten minutes.", "The boastsman left.", "We sorted the list in order toward the end."):
+        assert scan(text) == (), text
+    assert "prose-8" in {finding.code for finding in scan("The assay serves as a control.")}

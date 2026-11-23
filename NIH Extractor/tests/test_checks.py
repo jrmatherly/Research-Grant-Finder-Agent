@@ -109,3 +109,21 @@ def test_the_mostly_drafted_message_is_two_sentences() -> None:
     (finding,) = [f for f in check_section("one two", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", (("one", "draft"), ("two", "draft"))) if f.code == "mostly-drafted"]
     assert estimate(finding.message, "sentences", R21.page) == 2
     assert all(part in finding.message for part in ("NOT-OD-25-132", "not NIH's", "AI detector", "polished"))
+
+def _known_to(reference: Fact, text: str) -> bool:
+    words = tuple((word, "draft") for word in text.split())
+    return not any(f.code == "unknown-citation" for f in check_section(text, RULE["specific-aims"], Limit(1, "pages"), R21.page, (reference,), "", words))
+
+def test_a_real_citation_is_known_in_the_forms_an_applicant_stores_it() -> None:
+    mcdonald = Fact(4, "reference", "McDonald M. 2021.", label="mcdonald")
+    assert _known_to(mcdonald, "McDonald et al. 2021 held.") and _known_to(Fact(5, "reference", "DiMaggio J. 2019."), "DiMaggio et al. (2019) held.")
+    assert not _known_to(mcdonald, "Donald et al. 2021 held.") and not _known_to(GOLDSMITH, "Smith et al. 2021 held.")
+    for doi in ("https://doi.org/10.1000/xyz", "doi:10.1000/xyz"):
+        assert _known_to(Fact(6, "reference", "Lee K.", detail={"doi": doi}), "See 10.1000/xyz for it.")
+    for pmid in (" 41234567 ", "PMID: 41234567"):
+        assert _known_to(Fact(7, "reference", "Lee K.", detail={"pmid": pmid}), "PMID: 41234567 held.")
+    assert _known_to(Fact(8, "reference", "Lee K. pmid: 41234567"), "PMID: 41234567 held.") and _known_to(GOLDSMITH, "pmid 41234567 held.")
+    assert not _known_to(GOLDSMITH, "pmid 123 held.")
+    suffixed = Fact(9, "reference", "Goldsmith A. 2021a.")
+    assert _known_to(suffixed, "Goldsmith et al. (2021a) held.") and _known_to(suffixed, "Goldsmith et al. 2021 held.")
+    assert not _known_to(GOLDSMITH, "Goldsmith et al. (2021b) held.") and not _known_to(suffixed, "Goldsmith et al. (2021b) held.")
