@@ -143,3 +143,14 @@ def test_digest_replaces_a_saved_deadline_reason(tmp_path) -> None:
         store.close()
     assert cli.main(["--db", str(db), "digest", "--out", str(out)]) == 0
     assert "eadline" not in out.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("argv, target", [(["run"], (NihGuideClient, "search")), (["reporter-context", "--term", "x"], (NihReporterClient, "search_projects"))])
+def test_a_failed_request_exits_1_with_one_line(monkeypatch, tmp_path, capsys, argv, target) -> None:
+    from nih_grant_matcher.clients import ApiError
+    def fail(self, *args, **kwargs):
+        raise ApiError("https://example.invalid/data failed after 3 attempt(s): HTTP Error 503")
+    monkeypatch.setattr(*target, fail)
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), *argv]) == 1
+    assert capsys.readouterr().err == "Request failed: https://example.invalid/data failed after 3 attempt(s): HTTP Error 503\n"
+    assert not (tmp_path / "g.sqlite3").exists()

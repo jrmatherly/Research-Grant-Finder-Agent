@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path
 from .agents import DigestAgent, NihContextAgent
-from .clients import NihGuideClient, NihReporterClient
+from .clients import ApiError, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .normalizer import normalize_nih_guide
@@ -40,6 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    try:
+        return _dispatch(args)
+    except ApiError as exc:
+        # A service that does not answer is not a bug, so it gets one line and no traceback.
+        print(f"Request failed: {exc}", file=sys.stderr)
+        return 1
+
+def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "run":
         return _run(args)
     if args.command == "digest":
