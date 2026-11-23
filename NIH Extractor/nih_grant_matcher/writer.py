@@ -71,6 +71,11 @@ def _profile(store: OpportunityStore) -> Profile:
     except ProfileError:
         return BUILTIN_PROFILE
 
+def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> None:
+    kept = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None and quoted_in(r.quote, announcement.text)]
+    same = {(r.kind, r.section, r.text, r.quote) for r in kept}
+    store.replace_requirements(app_id, "parsed", [*kept, *(r for r in parse_requirements(announcement) if (r.kind, r.section, r.text, r.quote) not in same)])
+
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
 
@@ -141,9 +146,10 @@ class Workspace:
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
         self.store.save_announcement(announcement)
-        kept = [r for r in self.store.requirements(app.id) if r.origin == "parsed" and r.confirmed is not None and quoted_in(r.quote, announcement.text)]
-        same = {(r.kind, r.section, r.text, r.quote) for r in kept}
-        self.store.replace_requirements(app.id, "parsed", [*kept, *(r for r in parse_requirements(announcement) if (r.kind, r.section, r.text, r.quote) not in same)])
+        # The announcement is saved once for its number, so every application for that number reads it again.
+        for other in self.store.applications():
+            if other.opportunity_number == app.opportunity_number:
+                _reparse(self.store, other.id, announcement)
         return announcement
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
