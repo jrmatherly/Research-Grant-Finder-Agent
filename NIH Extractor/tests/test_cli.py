@@ -1,11 +1,9 @@
-import ssl
-import urllib.error
 from datetime import date, timedelta
 
 import pytest
 
 from nih_grant_matcher import cli, workflow
-from nih_grant_matcher.clients import GrantsGovClient, GrantsGovXmlClient, NihGuideClient, NihReporterClient
+from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient, NihReporterClient
 
 CLOSE = date.today() + timedelta(days=60)
 GUIDE_ITEM = {"rowid": "1", "type": "active", "title": "Machine learning for imaging", "docnum": "RFA-XX-27-001", "primaryIC": "NIBIB", "expdate": f"{CLOSE.isoformat()}T00:00:00.000Z", "doctype": "RFA", "purpose": "Deep learning for biomedical imaging data."}
@@ -93,33 +91,10 @@ def test_rarity_table_keeps_the_old_table_when_the_fetch_is_short(monkeypatch, t
     assert "was not replaced" in capsys.readouterr().err
 
 
-def test_backfill_xml_reports_a_failed_download(monkeypatch, tmp_path, capsys) -> None:
-    from nih_grant_matcher.clients import ApiError
-    def fail(self, destination):
-        raise ApiError("https://www.grants.gov/xml-extract failed after 3 attempt(s): HTTP Error 503")
-    monkeypatch.setattr(GrantsGovXmlClient, "download_latest", fail)
-    assert cli.main(["backfill-xml", "--out", str(tmp_path / "x.zip")]) == 1
-    assert "HTTP Error 503" in capsys.readouterr().err
-
-
 def test_reporter_context_prints_projects(monkeypatch, capsys) -> None:
     monkeypatch.setattr(NihReporterClient, "search_projects", lambda self, term, limit=25: [{"project_num": "R01", "term": term, "limit": limit}])
     assert cli.main(["reporter-context", "--term", "imaging", "--limit", "3"]) == 0
     assert '"term": "imaging"' in capsys.readouterr().out
-
-
-def test_backfill_xml_reports_a_certificate_error(monkeypatch, tmp_path, capsys) -> None:
-    def fail(self, destination):
-        raise urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate"))
-    monkeypatch.setattr(GrantsGovXmlClient, "download_latest", fail)
-    assert cli.main(["backfill-xml", "--out", str(tmp_path / "x.zip")]) == 1
-    assert "unable to get local issuer certificate" in capsys.readouterr().err
-
-
-def test_xml_extract_url_is_resolved_against_the_page(monkeypatch) -> None:
-    from nih_grant_matcher import clients
-    monkeypatch.setattr(clients, "_get_bytes", lambda url, timeout=60: b'<a href="/extract/GrantsDBExtract20261122v2.zip">zip</a>')
-    assert GrantsGovXmlClient().latest_extract_url() == "https://www.grants.gov/extract/GrantsDBExtract20261122v2.zip"
 
 
 def test_rarity_table_counts_documents_per_term_and_drops_singletons(monkeypatch, tmp_path, capsys) -> None:

@@ -4,7 +4,6 @@ from pathlib import Path
 
 GRANTSGOV_SEARCH_URL = "https://api.grants.gov/v1/api/search2"
 GRANTSGOV_FETCH_URL = "https://api.grants.gov/v1/api/fetchOpportunity"
-GRANTSGOV_XML_EXTRACT_URL = "https://www.grants.gov/xml-extract"
 NIH_REPORTER_SEARCH_URL = "https://api.reporter.nih.gov/v2/projects/search"
 NIH_GUIDE_API_URL = "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod"
 
