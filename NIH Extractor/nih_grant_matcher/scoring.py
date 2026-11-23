@@ -103,7 +103,7 @@ class MLRelevanceScorer:
         return max(0.0, generic_hits * 2.0 - len(matched_terms)) if matched_terms else generic_hits * 5.0
     @staticmethod
     def _classification(score: float) -> str:
-        return "High" if score >= 70 else "Medium" if score >= 45 else "Watchlist"
+        return "High" if score >= 70 else "Medium" if score >= 35 else "Watchlist"
     @staticmethod
     def _reasons(opportunity: Opportunity, matched_terms: list[str], semantic_score: float, urgency_score: float, generic_penalty: float, shared_terms: list[str]) -> list[str]:
         reasons = []

@@ -59,3 +59,18 @@ def test_store_keeps_rows_without_a_number_or_a_deadline(tmp_path) -> None:
 def test_store_keeps_one_row_per_opportunity_number(tmp_path) -> None:
     close = date(2026, 12, 1)
     assert _saved_ids(tmp_path, [_scored("123", "RFA-1", close), _scored("nih-guide:9", "RFA-1", close), _scored("456", "RFA-1", close)], 2) == ["nih-guide:9"]
+
+def test_a_read_scores_saved_rows_again(tmp_path) -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.workflow import load_saved
+    # No deadline, so the score does not depend on the day the test runs.
+    opportunity = Opportunity(source_id="nih-guide:1", opportunity_number="RFA-ABC", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="Machine learning and predictive models for health data.", raw={"docnum": "RFA-ABC"})
+    fresh = MLRelevanceScorer().score(opportunity)
+    store = OpportunityStore(tmp_path / "grants.sqlite3")
+    try:
+        store.upsert_scored(replace(fresh, score=1.0, classification="Watchlist"))
+    finally:
+        store.close()
+    [loaded] = load_saved(str(tmp_path / "grants.sqlite3"))
+    assert (loaded.score, loaded.classification) == (fresh.score, fresh.classification) != (1.0, "Watchlist")
+    assert loaded.opportunity.raw == {"docnum": "RFA-ABC"}

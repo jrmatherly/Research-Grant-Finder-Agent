@@ -51,9 +51,16 @@ def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str 
     return scored, RunSummary(fetched=fetched, saved=saved, source=source)
 
 
+def rescore_saved(store: OpportunityStore) -> None:
+    # A saved score goes stale when the scoring rules change, and as a deadline nears. Scoring needs no network, so score the open rows again before every read.
+    scorer = MLRelevanceScorer()
+    store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])
+
+
 def load_saved(db_path: str, min_score: float = 0.0, limit: int = 500) -> list[ScoredOpportunity]:
     store = OpportunityStore(db_path)
     try:
+        rescore_saved(store)
         return store.top_scored(min_score=min_score, limit=limit)
     finally:
         store.close()

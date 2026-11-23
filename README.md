@@ -221,6 +221,8 @@ Each opportunity receives a relevance score from **0–100**.
 | 🟠 **MEDIUM**      | Potential opportunity for interdisciplinary data-science collaboration                                |
 | 🟡 **WATCHLIST**   | Weak or emerging computational signals; retained for monitoring                                       |
 
+A score of 70 or more is High, 35 to 69 is Medium, and below 35 is Watchlist. Saved opportunities are scored again each time they are read, so the dashboard, the digest, and the Excel file always use the current rules and today's date.
+
 The score is designed to **prioritize expert review—not replace scientific judgment**.
 
 ---
@@ -422,7 +424,7 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher digest` | Writes the digest again from the saved opportunities. |
 | `uv run python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
-| `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores computed after a rebuild change. Saved results keep their old scores until the next `run`. |
+| `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores computed after a rebuild change. |
 | `uv run python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. With the project's Python this fails while `www.grants.gov` does not send its intermediate certificate. |
 
 Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.

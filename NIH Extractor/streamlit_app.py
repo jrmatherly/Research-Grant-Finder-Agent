@@ -200,10 +200,10 @@ with tab_visuals:
     chart_col3, chart_col4 = st.columns(2)
     with chart_col3:
         st.subheader("Score Distribution")
-        score_labels = ["0-25", "25-45", "45-70", "70-100"]
+        score_labels = ["0-25", "25-35", "35-70", "70-100"]
         score_bins = pd.cut(
             filtered["Score"],
-            bins=[0, 25, 45, 70, 100],
+            bins=[0, 25, 35, 70, 100],
             labels=score_labels,
             include_lowest=True,
         )
