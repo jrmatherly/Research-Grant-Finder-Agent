@@ -62,6 +62,8 @@ The app carries the licence texts of the packages it bundles, in `Grant Matcher.
 
 The updater is [Sparkle](https://sparkle-project.org). The build downloads Sparkle 2.10.1 and checks it against the checksum in `build.sh`. To move to a newer Sparkle, change `sparkle_version` and `sparkle_sha256` there together, then run `NIH Extractor/macos/rehearse-update.sh`.
 
+The rehearsal updates a throwaway version 0.0.1 to 0.0.2 with a key of its own. It needs `CODESIGN_IDENTITY`, and someone to choose `Check for Updates…`, then `Install Update`, then `Install and Relaunch`. Its app is also named Grant Matcher, so it reads the real database and rotates the real `server.log`. When it ends, it deletes `Grant Matcher.app` and `Grant Matcher.dmg` from `NIH Extractor/macos/dist`.
+
 The icon is `NIH Extractor/macos/icon.png`, a 1024-pixel render of `icon.svg` beside it. After a change to the SVG, render it again with a browser, for example:
 
 ```bash
@@ -81,7 +83,7 @@ The build notarizes the `.dmg` and staples the ticket to it when `CODESIGN_IDENT
 CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=grant-matcher "NIH Extractor/macos/build.sh"
 ```
 
-The notarization step is untested on a developer's Mac. The first release run is its first test.
+The notarization step has run only in the release workflow, not on a developer's Mac.
 
 Use a Developer ID Application certificate issued by the Developer ID G2 Sub-CA. The older Developer ID Certification Authority expires on 2027-02-01, and the certificates it issued expire with it. `security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -issuer -enddate` shows the issuer and the end date of your certificate.
 
@@ -104,9 +106,10 @@ The repository needs six Actions secrets:
 
 The public half of that key is `NIH Extractor/macos/sparkle-public-key.txt`, which the build writes into the app. The workflow stops before it publishes when the secret does not match that file, because every installed app would refuse the update.
 
-To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml`, run `uv lock` there, merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.
+To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml` and `__version__` in `NIH Extractor/nih_grant_matcher/__init__.py`, run `uv lock` in `NIH Extractor/`, merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.
 
-Two rules keep installed apps able to update:
+Three rules keep installed apps able to update:
 
 - A release that carries no `appcast.xml` must not become the newest release. Create such a release with `gh release create --latest=false`, or as a pre-release.
-- To withdraw a bad release, mark it as a pre-release. The feed then falls back to the release before it.
+- To withdraw a bad release, mark it as a pre-release. The feed then falls back to the release before it. Users who already installed the bad release stay on it, because Sparkle does not downgrade, so publish a fixed version with a higher number. Version 0.1.1 has no feed, so do not fall back to it.
+- Change the update key or the Developer ID certificate in separate releases, never both in one. An installed app accepts a release with a new key only when the disk image is signed with the same Developer ID certificate, and the workflow checks the feed against the new build's key only. A lost seed is replaced this way: create a new key, commit its public half, set the secret, and release.
