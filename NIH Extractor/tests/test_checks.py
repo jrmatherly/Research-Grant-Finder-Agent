@@ -1,4 +1,5 @@
 from time import perf_counter
+import pytest
 from nih_grant_matcher.checks import check_section, estimate
 from nih_grant_matcher.models import Fact
 from nih_grant_matcher.prose import scan
@@ -94,11 +95,11 @@ def test_a_model_wrote_citation_is_known_only_when_it_matches_a_reference_exactl
     for known in ("Goldsmith et al. (2021) held.", "PMID 41234567 held.", "See 10.1000/xyz.", "PMID: 998877 held.", "See 10.5555/ABC for it."):
         assert not _model_cited(known), known
 
-def test_a_section_full_of_model_citations_checks_quickly() -> None:
-    text = " ".join(f"PMID: {n}" for n in range(4000))
+@pytest.mark.parametrize("text, seconds", [(" ".join(f"PMID: {n}" for n in range(4000)), 1), ("-".join(["Ab"] * 7000), 0.1)])
+def test_a_section_full_of_model_citations_checks_quickly(text, seconds) -> None:
     started = perf_counter()
     check_section(text, RULE["specific-aims"], Limit(1, "pages"), R21.page, (GOLDSMITH,), "", tuple((word, "draft") for word in text.split()))
-    assert perf_counter() - started < 1
+    assert perf_counter() - started < seconds
 
 def test_a_roman_numeral_is_not_the_first_person() -> None:
     for text in ("The Phase I trial ends.", "Patients with type I diabetes enrol.", "MHC class I binds.", "Aim I tests the dose."):
@@ -127,3 +128,25 @@ def test_a_real_citation_is_known_in_the_forms_an_applicant_stores_it() -> None:
     suffixed = Fact(9, "reference", "Goldsmith A. 2021a.")
     assert _known_to(suffixed, "Goldsmith et al. (2021a) held.") and _known_to(suffixed, "Goldsmith et al. 2021 held.")
     assert not _known_to(GOLDSMITH, "Goldsmith et al. (2021b) held.") and not _known_to(suffixed, "Goldsmith et al. (2021b) held.")
+
+NARRATIVE = (RULE["project-narrative"], Limit(3, "sentences"))
+
+@pytest.mark.parametrize("text, low, code", [
+    ("Led by Prof. Smith we work. Two. Three.", 3, None), ("Work at St. Jude helps. Two. Three.", 3, None), ("Mr. Lee, Mrs. Lee, Ms. Ray, Jr. and Sr. staff at Mt. Sinai, Acme Inc. and lab No. 4 agree. Two. Three.", 3, None),
+    ("We study hepatitis B. We test mice. We treat them. We count them.", 3, "sentence-count-unsure"), ("We use group A. Then we test. Two. Three.", 3, "sentence-count-unsure"),
+    ('He said "stop." Then we left. Two. Three.', 3, "sentence-count-unsure"), ("We test it (in mice.) Then we stop. Two. Three.", 3, "sentence-count-unsure"),
+    ("One. p53 is two. mTOR is three. 5 mice is four.", 1, "sentence-count-unsure"), ("One. Two. Three. Four.", 4, "over-limit")])
+def test_the_sentence_count_reads_titles_initials_quotes_and_lower_case_starts(text, low, code) -> None:
+    found = {f.code: f for f in check_section(text, *NARRATIVE, R21.page, (), "", tuple((w, "applicant") for w in text.split()))}
+    assert estimate(text, "sentences", R21.page) == low
+    assert {"over-limit", "sentence-count-unsure"} & set(found) == ({code} if code else set())
+    if code:
+        assert found[code].severity == ("error" if code == "over-limit" else "warning")
+
+def test_an_unsure_sentence_count_gives_both_counts_and_says_to_count_by_hand() -> None:
+    (finding,) = [f for f in check_section("One. p53 is two. mTOR is three. 5 mice is four.", *NARRATIVE, R21.page, (), "", ()) if f.code == "sentence-count-unsure"]
+    assert all(part in finding.message for part in ("1", "4", "abbreviation", "by hand")) and scan(finding.message) == ()
+
+def test_a_citation_names_your_inputs() -> None:
+    found = check_section("Aim [NEEDS INPUT: dose] as shown [@jones2020].", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", ())
+    assert all("fact" not in f.message and ("input" in f.message) for f in found if f.code in ("unknown-citation", "placeholder"))
