@@ -258,7 +258,7 @@ def test_a_decision_whose_sentence_stays_but_is_no_longer_read_as_a_requirement_
     ws = start(tmp_path)
     ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
     ws.decide(ws.view().requirements[0].id, True)
-    _, notes = ws.fetch_announcement(Guide("A notice with no headings. The Research Strategy is limited to 4 pages. " + "More text. " * 100), Grants(""))
+    _, notes = ws.fetch_announcement(Guide(FOUR_PAGES.replace("Section IV. ", "Part 4. ")), Grants(""))
     assert notes == ['Your decision on "Research Strategy: at most 4 pages." was dropped, because Grant Matcher no longer reads that requirement from the new text.'] and ws.view().requirements == ()
 
 def test_a_decision_moves_to_the_new_sentence_and_a_changed_limit_drops_it(tmp_path) -> None:

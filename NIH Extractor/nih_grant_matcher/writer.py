@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from . import __version__
-from .announcement import Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
+from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
 from .checks import check_section
 from .clients import ApiError
 from .models import Application, Attribution, Fact, Finding, Model, Opportunity, Revision, Signoff
@@ -17,7 +17,6 @@ from .store import OpportunityStore
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
 ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
-DROPPED = "Your decision on {} was dropped, because the new text no longer has the sentence it came from."
 
 class NotReady(Exception):
     def __init__(self, reason: str, findings: tuple[Finding, ...] = ()) -> None:
@@ -73,14 +72,14 @@ def _profile(store: OpportunityStore) -> Profile:
     except ProfileError:
         return BUILTIN_PROFILE
 
-def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[Requirement]:
+def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[tuple[Requirement, str]]:
     same = lambda r: (r.kind, r.section, r.text)
     decided = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None]
     # A decision moves to the newly parsed requirement that says the same thing, while the sentence it was made on is still in the text.
     carried = {same(r): r.confirmed for r in decided if quoted_in(r.quote, announcement.text)}
     parsed = {same(r): r for r in parse_requirements(announcement)}
     store.replace_requirements(app_id, "parsed", [replace(r, confirmed=carried.get(key)) for key, r in parsed.items()])
-    return [r for r in decided if same(r) not in carried or same(r) not in parsed]
+    return [(r, "Grant Matcher no longer reads that requirement from the new text" if same(r) in carried else "the new text no longer has the sentence it came from") for r in decided if same(r) not in carried or same(r) not in parsed]
 
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
@@ -146,18 +145,22 @@ class Workspace:
             notices.append(f"This is application {n} that Grant Matcher has started in {year}. NIH accepts six per investigator per calendar year (NOT-OD-25-132). Grant Matcher counts only its own.")
         return ApplicationView(app, grant_type, announcement, requirements, facts, tuple(sections), tuple(revisions), tuple(notices), "")
 
-    def fetch_announcement(self, guide: Any = None, grants: Any = None) -> tuple[Announcement, list[Requirement]]:
+    def fetch_announcement(self, guide: Any = None, grants: Any = None) -> tuple[Announcement, list[str]]:
         app = self._application()
         # Without a saved record the fetch goes by the number saved with the application.
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
         # Grants.gov is the official source, and the Guide can serve an older text when Grants.gov does not answer.
         if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "grants.gov" and announcement.origin == "nih-guide":
-            raise ApiError(f"Grant Matcher could not get the announcement for {app.opportunity_number} from Grants.gov this time, so it kept the copy it saved from there on {saved.fetched_at:%Y-%m-%d}. The NIH Guide's text can be older.")
+            raise ApiError(f"{announcement.grants_says} Grant Matcher kept the copy it saved from Grants.gov on {saved.fetched_at:%Y-%m-%d}, because the NIH Guide's text can be older.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
+        notes = [f"{announcement.grants_says} So this text is from the NIH Guide and may not be the official one. Fetch again later."] if announcement.grants_says.startswith(GRANTS_FAILED) else []
         dropped = {other.id: _reparse(self.store, other.id, announcement) for other in self.store.applications() if other.opportunity_number == app.opportunity_number}
-        return announcement, dropped[app.id]
+        # This application's own losses come first.
+        for app_id in sorted(dropped, key=lambda app_id: app_id != app.id):
+            notes += [("Your decision on" if app_id == app.id else f"Application {app_id} lost its decision on") + f' "{r.text}"' + (" was dropped" if app_id == app.id else "") + f", because {why}." for r, why in dropped[app_id]]
+        return announcement, notes
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
         if requirement_id not in {r.id for r in self.store.requirements(self.application_id)}:
