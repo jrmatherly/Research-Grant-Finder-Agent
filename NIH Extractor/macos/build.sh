@@ -13,7 +13,8 @@ port=$(uv run --locked python -c 'import socket; s = socket.socket(); s.bind(("1
 smoke_home=$(mktemp -d)
 stage=$(mktemp -d)
 server=
-trap '[[ -n $server ]] && kill "$server" 2>/dev/null; rm -rf "$smoke_home" "$stage"' EXIT
+# || true: under set -e, bash 3.2 (the runner's) exits 1 from the trap when the server is already gone.
+trap '[[ -n $server ]] && kill "$server" 2>/dev/null || true; rm -rf "$smoke_home" "$stage"' EXIT
 # A temporary HOME keeps the test out of the real data folder.
 HOME="$smoke_home" STREAMLIT_SERVER_SCRIPT_HEALTH_CHECK_ENABLED=true "$app/Contents/MacOS/Grant Matcher" --serve "$port" >"$smoke_home/server.log" 2>&1 &
 server=$!
