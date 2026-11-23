@@ -1,4 +1,6 @@
-import os, sys, tomllib
+import os, re, sys, tomllib
+from importlib import metadata
+from packaging.requirements import Requirement
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 root = os.path.dirname(SPECPATH)
@@ -6,12 +8,42 @@ sys.path.insert(0, root)
 version = tomllib.load(open(os.path.join(root, "pyproject.toml"), "rb"))["project"]["version"]
 st_datas, st_binaries, st_hidden = collect_all("streamlit")
 
+
+def licence_files() -> list[tuple[str, str]]:
+    # Every package the app ships, found by walking the requirements of the three it imports.
+    found, todo = {}, ["streamlit", "pandas", "pywebview"]
+    while todo:
+        name = re.sub(r"[-_.]+", "-", todo.pop()).lower()
+        if name in found:
+            continue
+        try:
+            found[name] = metadata.distribution(name)
+        except metadata.PackageNotFoundError:
+            continue
+        for line in found[name].requires or []:
+            requirement = Requirement(line)
+            if requirement.marker is None or requirement.marker.evaluate():
+                todo.append(requirement.name)
+    datas = []
+    for name, dist in found.items():
+        for file in dist.files or []:
+            parts = str(file).split(".dist-info/", 1)
+            if len(parts) == 2 and re.search(r"LICEN[CS]E|NOTICE|COPYING|AUTHORS", parts[1], re.I):
+                datas.append((str(dist.locate_file(file)), os.path.join("licenses", name, os.path.dirname(parts[1]))))
+    # Streamlit's wheel carries neither file, so build.sh fetches both from its repository.
+    fetched = os.path.join(SPECPATH, "build", "licenses", "streamlit")
+    for file in ("LICENSE", "NOTICES"):
+        if not os.path.isfile(os.path.join(fetched, file)):
+            raise SystemExit(f"{fetched}/{file} is missing. Build with macos/build.sh, which fetches it.")
+        datas.append((os.path.join(fetched, file), os.path.join("licenses", "streamlit")))
+    return datas
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[root],
     binaries=st_binaries,
     # collect_submodules gathers code only, so the term_rarity.json that config.py reads beside itself is listed by hand.
-    datas=st_datas + copy_metadata("streamlit") + [(os.path.join(root, "nih_grant_matcher", "term_rarity.json"), "nih_grant_matcher"), (os.path.join(root, "streamlit_app.py"), ".")],
+    datas=st_datas + copy_metadata("streamlit") + [(os.path.join(root, "nih_grant_matcher", "term_rarity.json"), "nih_grant_matcher"), (os.path.join(root, "streamlit_app.py"), ".")] + licence_files(),
     hiddenimports=st_hidden + collect_submodules("nih_grant_matcher") + ["pandas"],
 )
 pyz = PYZ(a.pure)
@@ -20,6 +52,8 @@ coll = COLLECT(exe, a.binaries, a.datas, name="Grant Matcher")
 app = BUNDLE(
     coll,
     name="Grant Matcher.app",
+    # Rendered from icon.svg. PyInstaller turns the PNG into an .icns file with Pillow, which Streamlit installs.
+    icon=os.path.join(SPECPATH, "icon.png"),
     bundle_identifier="net.matherly.grant-matcher",
     version=version,
     info_plist={"CFBundleShortVersionString": version, "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True},
