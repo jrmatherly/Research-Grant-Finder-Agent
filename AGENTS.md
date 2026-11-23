@@ -19,6 +19,7 @@ Start your coding assistant at the repository root, so that it loads the project
 
 - `.github/workflows/tests.yml` runs pytest on Python 3.11, 3.13, and 3.15. Require the check `✅ Required checks passed`, not the matrix legs.
 - `.github/workflows/docker-image.yml` lints the Dockerfile, builds the image, and pushes `ghcr.io/jrmatherly/nih-grant-matcher` on a `v*` tag and on a push to `main` that changes a file in its `paths` list. A pull request that changes one of those files builds without pushing. A weekly run rebuilds and pushes, so that the image takes Debian's security fixes. Every build is scanned with Trivy first, and a HIGH or CRITICAL vulnerability that has a fix fails the job.
+- `.github/workflows/macos-release.yml` runs on a `v*` tag. It builds, signs and notarizes the macOS app on an Apple silicon runner and attaches the disk image to the tag's release. It needs the five secrets that `docs/macos-app.md` lists, and the tag must equal `v` plus the `version` in `pyproject.toml`. Nothing else in CI builds the app.
 - Pin every action to a commit with its tag in a comment, and start every step name with an emoji. Check a workflow change with `actionlint` and `zizmor .github/workflows`, and the Dockerfile with `hadolint`.
 - `renovate.json` moves the action pins, the image digests, uv, and the packages in `pyproject.toml` and `uv.lock`. A raise of the Python version is a manual change to the Dockerfile tag, the CI matrix, and `pyproject.toml` together.
 
