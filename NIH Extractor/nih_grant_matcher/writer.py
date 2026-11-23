@@ -1,13 +1,12 @@
 from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from . import __version__
-from .announcement import Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
+from .announcement import Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
 from .checks import check_section
-from .clients import ApiError
 from .models import Application, Attribution, Fact, Finding, Model, Opportunity, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import attribution, head, section_state, share
@@ -17,6 +16,7 @@ from .store import OpportunityStore
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
 ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
+DROPPED = "Your decision on {} was dropped, because the new text no longer has the sentence it came from."
 
 class NotReady(Exception):
     def __init__(self, reason: str, findings: tuple[Finding, ...] = ()) -> None:
@@ -72,10 +72,12 @@ def _profile(store: OpportunityStore) -> Profile:
     except ProfileError:
         return BUILTIN_PROFILE
 
-def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> None:
-    kept = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None and quoted_in(r.quote, announcement.text)]
-    same = {(r.kind, r.section, r.text, r.quote) for r in kept}
-    store.replace_requirements(app_id, "parsed", [*kept, *(r for r in parse_requirements(announcement) if (r.kind, r.section, r.text, r.quote) not in same)])
+def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[Requirement]:
+    decided = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None]
+    kept = [r for r in decided if quoted_in(r.quote, announcement.text)]
+    same = {(r.kind, r.section, r.text, letters(r.quote)) for r in kept}
+    store.replace_requirements(app_id, "parsed", [*kept, *(r for r in parse_requirements(announcement) if (r.kind, r.section, r.text, letters(r.quote)) not in same)])
+    return [r for r in decided if r not in kept]
 
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
@@ -86,8 +88,8 @@ class Workspace:
         if app is None:
             raise ValueError(f"{store.db_path} has no application {application_id}.")
         self.store, self.application_id, self.model = store, application_id, model
-        # top_scored leaves out a notice that has closed.
-        self.opportunity = next((s.opportunity for s in store.top_scored(limit=-1) if s.opportunity.opportunity_number == app.opportunity_number), None)
+        # A close date is never before date.min, so a notice that has closed is found too, with its Grants.gov id.
+        self.opportunity = next((s.opportunity for s in store.top_scored(limit=-1, today=date.min) if s.opportunity.opportunity_number == app.opportunity_number), None)
 
     @classmethod
     def start(cls, store: OpportunityStore, opportunity: Opportunity, grant_type: str, resubmission: bool = False, model: Model | None = None) -> Workspace:
@@ -141,19 +143,15 @@ class Workspace:
             notices.append(f"This is application {n} that Grant Matcher has started in {year}. NIH accepts six per investigator per calendar year (NOT-OD-25-132). Grant Matcher counts only its own.")
         return ApplicationView(app, grant_type, announcement, requirements, facts, tuple(sections), tuple(revisions), tuple(notices), "")
 
-    def fetch_announcement(self, guide: Any = None, grants: Any = None) -> Announcement:
+    def fetch_announcement(self, guide: Any = None, grants: Any = None) -> tuple[Announcement, list[Requirement]]:
         app = self._application()
-        # top_scored leaves out a closed notice, so the fetch goes by the number saved with the application.
+        # Without a saved record the fetch goes by the number saved with the application.
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
-        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "nih-guide" and announcement.origin == "grants.gov":
-            raise ApiError(f"The NIH Guide gave no text for {app.opportunity_number} this time, so Grant Matcher kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}. A later try may get the text.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
-        for other in self.store.applications():
-            if other.opportunity_number == app.opportunity_number:
-                _reparse(self.store, other.id, announcement)
-        return announcement
+        dropped = {other.id: _reparse(self.store, other.id, announcement) for other in self.store.applications() if other.opportunity_number == app.opportunity_number}
+        return announcement, dropped[app.id]
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
         if requirement_id not in {r.id for r in self.store.requirements(self.application_id)}:

@@ -15,7 +15,7 @@ _FORMS_AFTER_RESEARCH_PLAN = ("PHS Human Subjects and Clinical Trials Informatio
 _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
 # The verb follows the title directly, so "is not limited to" does not match.
 _PAGE_LIMIT = re.compile(r"\b((?i:" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r")) (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
-# A Grants.gov attachment can be a page that only redirects to the NIH Guide, and its text is then a title of a few characters.
+# A Grants.gov attachment can be a page that only redirects to the NIH Guide, and the Guide can answer with a few hundred bytes of a PDF.
 _SHORTEST_ANNOUNCEMENT = 1000
 # The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
 _SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
@@ -102,22 +102,30 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
     except ApiError as exc:
         text, guide_ggid, guide_says = "", "", f"The request to the NIH Guide failed ({exc})."
     # The Guide serves its text with HTML entities and no tags.
-    if (text := html.unescape(text).replace("\xa0", " ")).strip():
-        return _announcement(opportunity, text, "nih-guide", _nih_guide_url(number))
+    text = html.unescape(text).replace("\xa0", " ")
     ggid = str((opportunity.raw.get("guide_item") or {}).get("ggid") or guide_ggid or ("" if opportunity.source_id.startswith("nih-guide:") else opportunity.source_id))
     try:
         page = grants.full_announcement(ggid) if ggid else ""
         grants_says = "Grants.gov has no full announcement attached." if ggid else "Grants.gov was not asked, because the record has no Grants.gov id."
     except ApiError as exc:
         page, grants_says = "", f"The request to Grants.gov failed ({exc})."
-    if page and len(text := html_to_text(page)) >= _SHORTEST_ANNOUNCEMENT:
-        return _announcement(opportunity, text, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
+    # Grants.gov is the official source from fiscal 2026 (NOT-OD-25-143), and its attachment can be newer than the Guide text.
+    if page and len(official := html_to_text(page)) >= _SHORTEST_ANNOUNCEMENT:
+        return _announcement(opportunity, official, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
+    if len(text.strip()) >= _SHORTEST_ANNOUNCEMENT:
+        return _announcement(opportunity, text, "nih-guide", _nih_guide_url(number))
     if page:
         grants_says = "Grants.gov has only a link to the announcement."
+    if text.strip():
+        guide_says = f"The NIH Guide answered with only {len(text.strip())} characters, too few to be the announcement."
     raise ApiError(f"No announcement text for {number}. {guide_says} {grants_says}")
 
+def letters(text: str) -> str:
+    return re.sub(r"[\W_]", "", text)
+
+# The Guide text drops spaces, opening brackets and curly quotes that the Grants.gov text keeps.
 def quoted_in(quote: str, text: str) -> bool:
-    return " ".join(quote.split()) in " ".join(text.split())
+    return letters(quote) in letters(text)
 
 def _sentence_around(text: str, start: int, end: int) -> str:
     before = [m.end() for m in _SENTENCE_END.finditer(text, 0, start)]

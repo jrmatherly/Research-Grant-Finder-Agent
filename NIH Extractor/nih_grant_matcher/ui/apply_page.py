@@ -8,7 +8,7 @@ from ..clients import ApiError
 from ..models import Finding, Opportunity
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
+from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
 from .profile_page import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
@@ -87,10 +87,10 @@ def _sign(ws: Workspace, section: str, title: str) -> str:
 
 def _fetch(ws: Workspace) -> str:
     try:
-        origin = ORIGINS[ws.fetch_announcement().origin]
+        announcement, dropped = ws.fetch_announcement()
     except ApiError as exc:
         raise ApiError(f"{exc} " + ("The announcement saved earlier still applies, with what you decided from it." if ws.view().announcement else "The standing rules of the grant type still apply.")) from exc
-    return f"Saved the announcement from {origin}. " + (NO_SECTION_IV if ws.view().no_section_iv else "Confirm or reject what it adds under Requirements.")
+    return f"Saved the announcement from {ORIGINS[announcement.origin]}. " + (NO_SECTION_IV if ws.view().no_section_iv else "Confirm or reject what it adds under Requirements.") + "".join(" " + DROPPED.format(escape_markdown(r.text)) for r in dropped)
 
 def _restore(ws: Workspace, section: str, revision_id: int) -> str:
     restored = ws.restore(section, revision_id)
