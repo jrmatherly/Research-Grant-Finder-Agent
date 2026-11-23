@@ -81,3 +81,7 @@ def test_a_grants_gov_id_that_is_not_a_number_ends_in_the_error_that_names_both(
 def test_a_grants_gov_page_that_only_links_to_the_announcement_is_not_one() -> None:
     with pytest.raises(clients.ApiError, match="NIH Guide.*Grants.gov has only a link to the announcement"):
         fetch_announcement(OPP, Guide(""), Grants(LINK_ONLY))
+
+def test_a_section_title_in_lower_case_still_names_its_limit() -> None:
+    sentence = "The research strategy is limited to 12 pages."
+    assert [(r.text, r.section, r.limit.amount, r.quote) for r in parse_requirements(_announcement(_in_section_iv(sentence)))] == [("Research Strategy: at most 12 pages.", "research-strategy", 12, sentence)]

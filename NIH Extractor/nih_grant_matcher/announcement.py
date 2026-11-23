@@ -14,7 +14,7 @@ _NEXT_HEADING = re.compile(r".{0,4}Section")
 _FORMS_AFTER_RESEARCH_PLAN = ("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
 _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
 # "is not limited to" never names a section and a page count, so it cannot match.
-_PAGE_LIMIT = re.compile(r"\b(" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r") (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
+_PAGE_LIMIT = re.compile(r"\b((?i:" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r")) (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
 # The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
 # A Grants.gov attachment can be a page that only redirects to the NIH Guide, as PA-25-253's was on 2026-11-23, and its text is then a title of a few characters.
 _SHORTEST_ANNOUNCEMENT = 1000
@@ -134,6 +134,6 @@ def parse_requirements(announcement: Announcement) -> tuple[Requirement, ...]:
             quote = instructions[marker + len("additional instructions:"):].strip()[:1500].strip()
             found.append(Requirement("must", "Follow the announcement's additional instructions for the Research Plan.", quote, "parsed", "research-strategy"))
     for match in _PAGE_LIMIT.finditer(part):
-        title, pages = match.group(1), float(match.group(2))
+        title, pages = next(t for t in _SECTION_KEYS if t.lower() == match.group(1).lower()), float(match.group(2))
         found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", _sentence_around(part, match.start(), match.end()), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
     return tuple(found)
