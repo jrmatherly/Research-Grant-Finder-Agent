@@ -6,6 +6,12 @@
 
 Each release on the [releases page](https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases) carries `Grant-Matcher-<version>-arm64.dmg`, signed with a Developer ID certificate and notarized by Apple, and a `.sha256` file to check it against. It needs a Mac with Apple silicon and macOS 14 or later. Open the disk image and drag `Grant Matcher` to `Applications`.
 
+## Updates
+
+The app checks for a new release once a day and offers to install it. `Check for Updates…` in the `Grant Matcher` menu checks at once. An update replaces the app where it is, so the app must be in a folder it can write to, such as `Applications`, and not on the disk image.
+
+Version 0.1.1 has no updater. Install the next version by hand once, as in [Download](#download).
+
 The rest of this page is for building the app yourself with `NIH Extractor/macos/build.sh`.
 
 ## Before you begin
@@ -30,7 +36,7 @@ To sign with your Developer ID certificate, set `CODESIGN_IDENTITY` to its name.
 CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" "NIH Extractor/macos/build.sh"
 ```
 
-The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. With `CODESIGN_IDENTITY` set, it also checks the app's signature and signs the disk image.
+The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. It checks the app's signature and the update settings in its `Info.plist`. With `CODESIGN_IDENTITY` set, it also signs the disk image.
 
 The results are in `NIH Extractor/macos/dist`:
 
@@ -53,6 +59,8 @@ The app does not read the database in your clone. To keep earlier results, copy 
 ## Licences and the icon
 
 The app carries the licence texts of the packages it bundles, in `Grant Matcher.app/Contents/Resources/licenses`, one folder per package. The build copies them from the installed packages. Streamlit's package holds none, so the build fetches Streamlit's `LICENSE` and `NOTICES` files for the installed version from its repository and checks them against `NIH Extractor/macos/streamlit-licenses.sha256`. When a new Streamlit changes either file, the build stops and names the folder to read. Update the checksums with `shasum -a 256 LICENSE NOTICES` in that folder.
+
+The updater is [Sparkle](https://sparkle-project.org). The build downloads Sparkle 2.10.1 and checks it against the checksum in `build.sh`. To move to a newer Sparkle, change `sparkle_version` and `sparkle_sha256` there together, then run `NIH Extractor/macos/rehearse-update.sh`.
 
 The icon is `NIH Extractor/macos/icon.png`, a 1024-pixel render of `icon.svg` beside it. After a change to the SVG, render it again with a browser, for example:
 
@@ -79,11 +87,11 @@ Use a Developer ID Application certificate issued by the Developer ID G2 Sub-CA.
 
 ## Publish a release
 
-`.github/workflows/macos-release.yml` runs on a `v*` tag. It builds, signs and notarizes the disk image on an Apple silicon runner, then attaches `Grant-Matcher-<version>-arm64.dmg` and its checksum to the tag's GitHub release. The same tag also publishes the Docker image.
+`.github/workflows/macos-release.yml` runs on a `v*` tag. It builds, signs and notarizes the disk image on an Apple silicon runner, then attaches `Grant-Matcher-<version>-arm64.dmg`, its checksum and the update feed `appcast.xml` to the tag's GitHub release. Installed apps read the feed from the newest release that is not a pre-release. The same tag also publishes the Docker image.
 
 The workflow stops before it builds when the tag does not equal `v` plus the `version` in `NIH Extractor/pyproject.toml`, when the tagged commit is not on `main`, or when a secret is missing. It never replaces an asset on an existing release.
 
-The repository needs five Actions secrets:
+The repository needs six Actions secrets:
 
 | Secret | Contents |
 | --- | --- |
@@ -92,5 +100,13 @@ The repository needs five Actions secrets:
 | `APPLE_API_KEY_ID` | The Key ID of an App Store Connect API key |
 | `APPLE_API_ISSUER_ID` | The Issuer ID shown above the keys in App Store Connect |
 | `APPLE_API_KEY_P8` | The text of the key's `AuthKey_<Key ID>.p8` file |
+| `SPARKLE_ED_KEY` | The private seed of the Sparkle update key, base64. A copy is in 1Password. |
+
+The public half of that key is `NIH Extractor/macos/sparkle-public-key.txt`, which the build writes into the app. The workflow stops before it publishes when the secret does not match that file, because every installed app would refuse the update.
 
 To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml`, run `uv lock` there, merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.
+
+Two rules keep installed apps able to update:
+
+- A release that carries no `appcast.xml` must not become the newest release. Create such a release with `gh release create --latest=false`, or as a pre-release.
+- To withdraw a bad release, mark it as a pre-release. The feed then falls back to the release before it.
