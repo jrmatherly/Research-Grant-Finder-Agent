@@ -660,7 +660,7 @@ def test_a_fetch_that_both_sources_fail_says_the_standing_rules_apply(tmp_path, 
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
-    assert not app.exception and any("The standing rules of the grant type still apply." in error.value for error in app.error)
+    assert not app.exception and any("The standing rules of the grant type still apply." in error.value.replace("\\", "") for error in app.error)
 
 
 def test_a_save_that_leaves_a_finding_shows_it_on_the_sections_tab(tmp_path, monkeypatch) -> None:
@@ -684,3 +684,17 @@ def test_a_workspace_notice_is_on_the_page(tmp_path, monkeypatch) -> None:
         store.close()
     app = _apply_view(tmp_path, monkeypatch)
     assert not app.exception and any("is a draft again" in warning.value for warning in app.warning)
+
+
+def test_a_refused_fetch_over_a_saved_guide_copy_says_the_saved_one_still_applies(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
+    _r21_database(tmp_path, start=True)
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("Section IV. Application and Submission Information x", "360675"))
+    app = _apply_view(tmp_path, monkeypatch)
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("", "360675"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "<p>" + "From Grants.gov. " * 100 + "</p>")
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    shown = [error.value.replace("\\", "") for error in app.error]
+    assert not app.exception and any("kept the copy" in text and "The announcement saved earlier still applies" in text for text in shown)
+    assert not any("standing rules of the grant type still apply" in text for text in shown)
