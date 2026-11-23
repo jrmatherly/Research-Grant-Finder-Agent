@@ -74,20 +74,24 @@ def sparkle_framework() -> Path | None:
     return framework if getattr(sys, "frozen", False) and framework.is_dir() else None
 
 
+def sparkle_class(framework: Path | None):
+    import objc
+    objc.loadBundle("Sparkle", {}, bundle_path=str(framework))
+    return objc.lookUpClass("SPUStandardUpdaterController")
+
+
 def start_updater(framework: Path, log: Path) -> None:
     # Runs on the main thread. An app that cannot update must still open.
     try:
-        import objc
-        objc.loadBundle("Sparkle", {}, bundle_path=str(framework))
-        controller = objc.lookUpClass("SPUStandardUpdaterController").alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None)
-        UPDATER.append(controller)
+        UPDATER.append(sparkle_class(framework).alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None))
     except Exception:
         with log.open("a") as out:
             out.write(f"{NAME} updater did not start:\n{traceback.format_exc()}")
 
 
 def check_for_updates() -> None:
-    if not UPDATER: return
+    if not UPDATER:
+        return alert(f"{NAME} cannot check for updates. See the log at {log_path(Path.home())}.")
     # pywebview runs a menu action off the main thread.
     from PyObjCTools import AppHelper
     AppHelper.callAfter(lambda: UPDATER[0].checkForUpdates_(None))
@@ -127,6 +131,10 @@ def main() -> int:
     multiprocessing.freeze_support()
     if "--serve" in sys.argv:
         return serve(int(sys.argv[sys.argv.index("--serve") + 1]))
+    if "--check-updater" in sys.argv:
+        # build.sh runs this. Nothing else fails a build whose updater cannot load, and such a release would be the last one its users get.
+        sparkle_class(sparkle_framework())
+        return 0
     # A windowed app has no console, so an error here would otherwise close the app with nothing shown.
     try:
         run_window()

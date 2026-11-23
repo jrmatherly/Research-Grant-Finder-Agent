@@ -217,9 +217,42 @@ def test_a_failed_updater_start_is_logged_and_never_raised(monkeypatch, tmp_path
     assert launcher.UPDATER == [] and "updater did not start" in log.read_text()
 
 
-def test_checking_for_updates_without_an_updater_does_nothing(monkeypatch) -> None:
+def test_checking_for_updates_without_an_updater_tells_the_user(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
+    shown = []
+    monkeypatch.setattr(launcher, "alert", shown.append)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     launcher.check_for_updates()
+    assert len(shown) == 1 and "cannot check for updates" in shown[0] and str(launcher.log_path(tmp_path)) in shown[0]
+
+
+def _fake_objc(monkeypatch) -> list:
+    calls = []
+    objc = types.ModuleType("objc")
+    objc.loadBundle = lambda name, namespace, bundle_path: calls.append(("load", bundle_path))
+    objc.lookUpClass = lambda name: calls.append(("class", name))
+    monkeypatch.setitem(sys.modules, "objc", objc)
+    return calls
+
+
+def test_check_updater_flag_loads_sparkle_and_never_opens_a_window(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    calls = _fake_objc(monkeypatch)
+    monkeypatch.setattr(launcher, "sparkle_framework", lambda: tmp_path / "Sparkle.framework")
+    monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("the check must not open a window"))
+    monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--check-updater"])
+    assert launcher.main() == 0
+    assert calls == [("load", str(tmp_path / "Sparkle.framework")), ("class", "SPUStandardUpdaterController")]
+
+
+def test_check_updater_flag_fails_when_sparkle_cannot_load(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setitem(sys.modules, "objc", None)
+    monkeypatch.setattr(launcher, "sparkle_framework", lambda: tmp_path / "Sparkle.framework")
+    monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("the check must not open a window"))
+    monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--check-updater"])
+    with pytest.raises(ImportError):
+        launcher.main()
 
 
 def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:
