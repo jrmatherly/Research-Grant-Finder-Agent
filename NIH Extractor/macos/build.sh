@@ -76,6 +76,7 @@ echo "Smoke test passed"
 test -s "$app/Contents/Resources/licenses/streamlit/NOTICES"
 test -x "$framework/Versions/B/Autoupdate"
 test ! -e "$framework/Versions/B/XPCServices"
+"$app/Contents/MacOS/Grant Matcher" --check-updater || { echo "The built app cannot load Sparkle, so it could never update." >&2; exit 1; }
 [ "$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist")" = "$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")" ] || { echo "CFBundleVersion differs from CFBundleShortVersionString" >&2; exit 1; }
 # Sparkle orders "0.2.0-rc1" as equal to "0.2.0" and "0.2.0rc1" as older, so only plain numbers are allowed.
 plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "CFBundleVersion is not one to three numbers" >&2; exit 1; }

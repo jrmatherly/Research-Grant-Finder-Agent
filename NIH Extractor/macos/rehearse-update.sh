@@ -122,7 +122,8 @@ fi
 # The new bundle on disk does not prove the relaunch. The window and the server are two processes of this copy.
 running=0
 for _ in $(seq 30); do
-  running=$(($(pgrep -f "$app_path/Contents/MacOS/Grant Matcher" | wc -l)))
+  # || true: pgrep finds nothing between the old app's exit and the relaunch, and pipefail would end the script there.
+  running=$(($({ pgrep -f "$app_path/Contents/MacOS/Grant Matcher" || true; } | wc -l)))
   if [ "$running" -ge 2 ]; then break; fi
   sleep 1
 done
