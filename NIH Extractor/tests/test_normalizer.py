@@ -18,3 +18,8 @@ def test_clean_text_decodes_entities_after_it_strips_tags() -> None:
 def test_nih_guide_title_loses_its_nonbreaking_space() -> None:
     from nih_grant_matcher.normalizer import normalize_nih_guide
     assert normalize_nih_guide({"rowid": "1", "docnum": "PAR-27-001", "title": "Machine&nbsp;learning for imaging", "type": "active"}).title == "Machine learning for imaging"
+
+
+def test_clean_text_keeps_text_between_decoded_angle_brackets() -> None:
+    from nih_grant_matcher.normalizer import _clean_text
+    assert _clean_text("p&lt;0.05 and n&gt;30") == "p<0.05 and n>30"

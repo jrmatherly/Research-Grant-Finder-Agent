@@ -7,6 +7,10 @@ from .config import GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL
 class ApiError(RuntimeError):
     pass
 
+def _certificate_failed(exc: BaseException) -> bool:
+    # urllib wraps a failure on connect in URLError and leaves a later one bare.
+    return isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+
 def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> bytes:
     # A run makes hundreds of requests in a row, so one dropped connection or 5xx must not end it.
     for attempt in range(1, attempts + 1):
@@ -18,24 +22,33 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
         # urllib wraps only a failed send in URLError. A connection that drops while the response is read raises OSError or HTTPException.
         except (OSError, http.client.HTTPException) as exc:
             # A certificate that fails once fails every time, so do not retry it.
-            failure, final = exc, isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+            failure, final = exc, _certificate_failed(exc)
         if final or attempt == attempts:
-            # Name the address: the dashboard shows only this message, and a run talks to three services.
-            raise ApiError(f"{getattr(request, 'full_url', request)} failed after {attempt} attempt(s): {failure}") from failure
+            hint = ". Python does not trust the server's certificate. Behind a proxy that inspects TLS, set SSL_CERT_FILE to the proxy's CA bundle." if _certificate_failed(failure) else ""
+            # Name the address: the dashboard shows only this message, and a run can talk to two services.
+            raise ApiError(f"{_address(request)} failed after {attempt} attempt(s): {failure}{hint}") from failure
         time.sleep(2 ** (attempt - 1))
     raise AssertionError("unreachable")
 
-def _read_json(request: urllib.request.Request, timeout: int) -> Any:
+def _address(request: urllib.request.Request) -> str:
+    # The NIH Guide query string is over 300 characters, and it would push the reason off the line.
+    return request.full_url.split("?")[0]
+
+def _read_json(request: urllib.request.Request, timeout: int) -> dict[str, Any]:
+    body = _read(request, timeout)
     try:
-        return json.loads(_read(request, timeout).decode("utf-8"))
+        parsed = json.loads(body.decode("utf-8"))
     except ValueError as exc:
         # A proxy or a block page answers 200 with HTML.
-        raise ApiError(f"{request.full_url} did not return JSON: {exc}") from exc
+        raise ApiError(f"{_address(request)} did not return JSON. The reply starts with {body[:80]!r}") from exc
+    if not isinstance(parsed, dict):
+        raise ApiError(f"{_address(request)} returned JSON that is not an object")
+    return parsed
 
 def _post_json(url: str, payload: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1"}, method="POST")
     parsed = _read_json(request, timeout)
-    if isinstance(parsed, dict) and parsed.get("errorcode") not in (None, 0):
+    if parsed.get("errorcode") not in (None, 0):
         raise ApiError(f"{url} returned errorcode={parsed.get('errorcode')}: {parsed.get('msg')}")
     return parsed
 

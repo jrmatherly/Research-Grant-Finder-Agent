@@ -197,7 +197,7 @@ The scoring system considers whether the opportunity originates from an NIH or H
 
 ### 5. Expiration Awareness
 
-An opportunity that expires soon ranks a little higher. The date shown is the day the notice expires. Application due dates are in the announcement.
+An opportunity that expires in 15 to 240 days ranks a little higher than one that expires sooner or later. For an NIH Guide notice, the date shown is the day the notice expires, and application due dates are in the announcement. For a Grants.gov opportunity, it is the closing date.
 
 ### 6. Record Completeness
 

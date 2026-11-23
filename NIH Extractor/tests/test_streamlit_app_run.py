@@ -27,7 +27,12 @@ def test_dashboard_renders_saved_open_results(tmp_path, monkeypatch) -> None:
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert not app.exception
     assert app.metric[0].value == "1"
-    assert [metric.label for metric in app.metric][:4] == ["Visible Opportunities", "High Matches", "Median Score", "Next Expiration"]
+    labels = [metric.label for metric in app.metric]
+    assert labels[:4] == ["Visible Opportunities", "High Matches", "Median Score", "Next Expiration"]
+    assert "Expires" in labels and not any("Deadline" in label for label in labels)
+    assert "Expirations by Month" in [subheader.value for subheader in app.subheader]
+    assert "Close Month" not in app.dataframe[0].value.columns
+    assert any("Expires is the day the notice expires" in caption.value for caption in app.caption)
 
 
 def test_dashboard_says_when_it_shows_scores_as_last_saved(tmp_path, monkeypatch) -> None:

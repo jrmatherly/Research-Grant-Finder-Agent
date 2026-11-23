@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _dispatch(args)
     except ApiError as exc:
-        # A service that does not answer is not a bug, so it gets one line and no traceback.
+        # A failed request is not a bug, so it gets one line and no traceback.
         print(f"Request failed: {exc}", file=sys.stderr)
         return 1
 

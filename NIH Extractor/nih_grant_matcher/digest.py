@@ -10,7 +10,7 @@ def render_digest(items: list[ScoredOpportunity], min_score: float = 35.0) -> st
         return "\n".join(lines + ["No opportunities met the current threshold.", "", "Try lowering --min-score or running a broader agency/status search."]).rstrip() + "\n"
     for index, scored in enumerate(included, start=1):
         opp = scored.opportunity
-        lines += [f"## {index}. {_no_tags(opp.title)}", "", f"- Score: {scored.score:g} ({scored.classification})", f"- Opportunity number: {opp.opportunity_number or 'Not listed'}", f"- Agency: {opp.agency_name or opp.agency_code or 'Not listed'}", f"- Status: {opp.status or 'Not listed'}", f"- Expires: {opp.close_date.isoformat() if opp.close_date else 'Not listed'}", f"- Link: {opp.source_url or 'Not listed'}"]
+        lines += [f"## {index}. {opp.title}", "", f"- Score: {scored.score:g} ({scored.classification})", f"- Opportunity number: {opp.opportunity_number or 'Not listed'}", f"- Agency: {opp.agency_name or opp.agency_code or 'Not listed'}", f"- Status: {opp.status or 'Not listed'}", f"- Expires: {opp.close_date.isoformat() if opp.close_date else 'Not listed'}", f"- Link: {opp.source_url or 'Not listed'}"]
         if opp.award_ceiling is not None:
             lines.append(f"- Award ceiling: USD {opp.award_ceiling:,.0f}")
         if scored.matched_terms:
@@ -21,7 +21,7 @@ def render_digest(items: list[ScoredOpportunity], min_score: float = 35.0) -> st
         if summary:
             lines += ["", summary]
         lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+    return _no_tags("\n".join(lines).rstrip() + "\n")
 
 def write_digest(items: list[ScoredOpportunity], path: str | Path, min_score: float = 35.0) -> Path:
     path = Path(path)
@@ -30,9 +30,10 @@ def write_digest(items: list[ScoredOpportunity], path: str | Path, min_score: fl
     return path
 
 def _summary(description: str, max_chars: int = 650) -> str:
-    clean = _no_tags(" ".join(description.split()))
+    clean = " ".join(description.split())
     return clean if len(clean) <= max_chars else clean[:max_chars].rsplit(" ", 1)[0] + "..."
 
 def _no_tags(text: str) -> str:
     # A Markdown viewer reads "<" as the start of an HTML tag, and then hides or runs what follows. Without "<", no tag can start.
+    # The digest's own lines hold no "<", so every field is covered by one pass over the whole text.
     return text.replace("<", "&lt;")
