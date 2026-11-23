@@ -495,6 +495,14 @@ using the official funding opportunity announcement.
 
 ---
 
+## License
+
+This repository is a fork of [Quazi-07/Research-Grant-Finder-Agent](https://github.com/Quazi-07/Research-Grant-Finder-Agent) by Md. Saifur Rahman. The original work was published without a license, so it remains his and all rights to it are reserved.
+
+The changes made in this fork are by Jason Matherly and are released under the [MIT License](LICENSE). The license does not cover the original work. To reuse the project as a whole, ask the original author for permission.
+
+---
+
 ⭐ **If this research tool is useful to you, consider starring the repository.**
 
 💡 **Ideas, issues, and research collaborations are welcome.**
