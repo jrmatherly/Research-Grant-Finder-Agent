@@ -52,6 +52,8 @@ Open http://localhost:8501. The results are written to `NIH Extractor/data`, `NI
 
 To build the image from the source in the clone, run `docker compose up --build -d`.
 
+On Linux, if your user ID is not 1000, start it as yourself: `APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d --no-build`. To keep the two values, write them as `APP_UID=...` and `APP_GID=...` in a file named `.env` beside `compose.yaml`.
+
 ## Run the command-line tool
 
 Run a command in the container that serves the dashboard:
@@ -96,7 +98,7 @@ On Linux, the container writes as user 1000. If your user has a different ID, cr
 mkdir -p data outputs digests
 ```
 
-If Docker already created the folders as root, give them to your user first:
+If the folders belong to someone else, give them to your user first. This is the case when Docker created them as root, and when an earlier version of this guide had you give them to user 1000:
 
 ```bash
 sudo chown -R "$(id -u):$(id -g)" data outputs digests
@@ -120,7 +122,7 @@ Docker Desktop on macOS and Windows does not need this step.
 - **Remove.** `docker rm -f nih-grant-matcher` removes the container. `docker rmi ghcr.io/jrmatherly/nih-grant-matcher:latest` removes the image.
 - **Read the log.** `docker logs nih-grant-matcher`.
 
-After an update that changes scoring, saved opportunities keep their old scores until the next search rescores them.
+Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is rebuilt every week with Debian's security fixes.
 
 ## Troubleshooting
 
@@ -130,5 +132,5 @@ After an update that changes scoring, saved opportunities keep their old scores 
 | `Conflict. The container name "/nih-grant-matcher" is already in use` | A container from an earlier start still exists. | `docker rm -f nih-grant-matcher`, then start again. |
 | The page does not load in the first seconds | The dashboard is still starting. | Wait until `docker ps` shows `(healthy)`. This took 10 to 30 seconds in testing. |
 | `Search failed` with a web address in the message | The named service did not answer after three attempts. | Check your internet connection and try again. |
-| `unable to open database file` or `Permission denied` on Linux | The folders belong to another user. | Run the `chown` command in "Where the results are saved". |
+| `unable to open database file`, `attempt to write a readonly database`, or `Permission denied` on Linux | The folders or the files in them belong to another user. | Run the `chown` command in "Where the results are saved", and start the container with the `--user` option shown there. |
 | `no matching manifest` | The computer's processor is not `amd64` or `arm64`. | Build from source on that computer: `docker compose up --build -d`. |

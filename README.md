@@ -383,7 +383,7 @@ uv run streamlit run streamlit_app.py
 
 The dashboard will open in your browser.
 
-To start it with a double-click instead, use `launch_ui.command` on macOS, or `launch_ui.bat` on Windows (`launch_ui.vbs` hides the console window). The Windows scripts have not been tested.
+To start it with a double-click instead, use `launch_ui.command` on macOS, or `launch_ui.bat` on Windows (`launch_ui.vbs` hides the console window). The Windows scripts have not been tested. If macOS refuses to open `launch_ui.command`, which can happen after a ZIP download, right-click it and choose Open.
 
 ### Run with Docker
 
@@ -410,7 +410,11 @@ mkdir -p "NIH Extractor"/{data,outputs,digests}
 APP_UID=$(id -u) APP_GID=$(id -g) docker compose up --build -d
 ```
 
-Without `APP_UID` and `APP_GID`, the container writes as user 1000.
+Without `APP_UID` and `APP_GID`, the container writes as user 1000. To keep the two values, write them in a file named `.env` beside `compose.yaml`. If the folders already hold results that another user owns, such as user 1000 from an earlier start, give them to yourself first:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" "NIH Extractor"/{data,outputs,digests}
+```
 
 CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To run it without a clone of this repository, or to update, pin, and troubleshoot it, see [Run NIH Grant Matcher from the published Docker image](docs/docker.md).
 
