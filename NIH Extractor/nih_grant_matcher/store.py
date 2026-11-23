@@ -21,7 +21,7 @@ class OpportunityStore:
             self.conn.executescript(SCHEMA)
             self.conn.commit()
         except sqlite3.OperationalError as exc:
-            # A read-only database from an earlier version lacks the newer tables, and reads them as empty.
+            # A read-only database from an earlier version has no profile table, and profile() then returns the built-in profile.
             if exc.sqlite_errorcode & 0xFF != sqlite3.SQLITE_READONLY:
                 raise
     def close(self) -> None:

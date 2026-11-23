@@ -191,10 +191,39 @@ def test_run_and_save_ranks_with_the_saved_profile(sources, tmp_path) -> None:
     assert any(reason.startswith("Matched profile terms") for item in items for reason in item.reasons)
 
 
-def test_profile_export_then_import_round_trips(tmp_path, capsys) -> None:
-    db, out = str(tmp_path / "g.sqlite3"), tmp_path / "p.json"
-    assert cli.main(["--db", db, "profile", "export", "--out", str(out)]) == 0
-    assert cli.main(["--db", db, "profile", "import", str(out)]) == 0
-    out.write_text('{"format": "other/9"}', encoding="utf-8")
-    assert cli.main(["--db", db, "profile", "import", str(out)]) == 1
+def test_profile_import_show_export_and_reset(tmp_path, capsys) -> None:
+    import json
+    from nih_grant_matcher.profile import BUILTIN_PROFILE, Profile, to_export
+    from nih_grant_matcher.store import OpportunityStore
+    db, path = str(tmp_path / "g.sqlite3"), tmp_path / "p.json"
+    profile = Profile(investigator="Ada Lovelace", keywords={"mitochondria": 18}, examples=("Study mitochondria.",), focus="profile", examples_name="your example sentences")
+    path.write_text(to_export(profile), encoding="utf-8")
+    assert cli.main(["--db", db, "profile", "import", str(path)]) == 0
+    store = OpportunityStore(db)
+    try:
+        assert store.profile() == profile
+    finally:
+        store.close()
+    capsys.readouterr()
+    assert cli.main(["--db", db, "profile", "show"]) == 0
+    assert json.loads(capsys.readouterr().out) == json.loads(to_export(profile))["profile"]
+    assert cli.main(["--db", db, "profile", "export", "--out", str(tmp_path / "out.json")]) == 0
+    assert (tmp_path / "out.json").read_text(encoding="utf-8") == to_export(profile) + "\n"
+    assert cli.main(["--db", db, "profile", "reset"]) == 0
+    store = OpportunityStore(db)
+    try:
+        assert store.profile() == BUILTIN_PROFILE
+    finally:
+        store.close()
+    path.write_text('{"format": "other/9"}', encoding="utf-8")
+    assert cli.main(["--db", db, "profile", "import", str(path)]) == 1
     assert "format" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", [["profile", "import", "missing.json"], ["profile", "import", "latin1.json"], ["profile", "export", "--out", "nodir/x.json"]])
+def test_a_file_that_cannot_be_read_or_written_exits_1_with_one_line(tmp_path, monkeypatch, capsys, argv) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "latin1.json").write_bytes(b"\xff\xfe caf\xe9")
+    assert cli.main(["--db", "g.sqlite3", *argv]) == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "Traceback" not in err

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import warnings
 from pathlib import Path
 
@@ -136,15 +137,20 @@ if "items" in st.session_state:
 if "last_run" not in st.session_state:
     st.session_state["last_run"] = None
 
+db_error = None
 try:
     saved, unreadable = saved_profile(db_path), None
 except ProfileError as exc:
     saved, unreadable = None, exc
+except sqlite3.Error as exc:
+    saved, unreadable, db_error = None, None, exc
 st.caption(f"Run NIH Guide and Grants.gov searches, rank {'computational ' if saved is None else ''}opportunities, and explore the results interactively.")
 
 if view == "Profile":
     profile_page(db_path)
     st.stop()
+if db_error:
+    st.warning(f"Could not open the database, so ranking uses the built-in profile. {db_error}")
 if unreadable:
     show_unreadable(unreadable)
 elif saved is None:

@@ -26,6 +26,8 @@ KEYWORD_PATTERNS = {
     "data harmonization": r"\bdata harmoni[sz]\w*", "secondary analysis": r"\bsecondary (?:data )?analys\w*",
     # Not "statistically significant", and not the "Data Management and Sharing Plan" that every application carries.
     "statistical": r"\bstatistic(?:al|s|ians?)\b", "data management": r"\bdata management(?! and sharing)",
+    # "AI/AN" is American Indian and Alaska Native, not artificial intelligence.
+    "ai": r"\bai\b(?!\s*/\s*ans?\b)",
 }
 # Built by `python -m nih_grant_matcher rarity-table` from expired NIH Guide opportunities.
 TERM_RARITY_PATH = Path(__file__).with_name("term_rarity.json")

@@ -1,6 +1,6 @@
 # Use the NIH Grant Matcher dashboard
 
-The dashboard searches the NIH Guide and Grants.gov, scores each funding opportunity for AI and data-science relevance, and shows the ranked results. This guide explains each control and the common tasks.
+The dashboard searches the NIH Guide and Grants.gov, scores each funding opportunity for AI and data-science relevance, or for your own profile, and shows the ranked results. This guide explains each control and the common tasks.
 
 To start the dashboard, see the [README](../README.md#getting-started) for a local start or [Run NIH Grant Matcher from the published Docker image](docker.md) for Docker. Then open http://localhost:8501.
 
@@ -38,7 +38,7 @@ After a search, the page shows the results of that search only. Results from ear
 
 ## Read the score and the level
 
-Each opportunity has a score from 0 to 100 and a level.
+Each opportunity has a score from 0 to 100 and a level. The meanings below are those of the built-in profile.
 
 | Level | Score | Meaning |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ Each opportunity has a score from 0 to 100 and a level.
 | Medium | 35 to 69 | The opportunity has room for a data-science contribution. |
 | Watchlist | Below 35 | The computational signal is weak. The row is kept so that you can watch it. |
 
-The score comes from fixed rules and uses no language model. It rises when the title or the description names computational terms, when the text is close to example AI and data-science grants, and when the record is complete. The [README](../README.md#how-the-intelligence-engine-thinks) describes each part.
+The score comes from fixed rules and uses no language model. It rises when the title or the description names terms of the profile, when the text is close to its example sentences, and when the record is complete. The [README](../README.md#how-the-intelligence-engine-thinks) describes each part.
 
 The score ranks opportunities for a first look. It does not judge scientific fit. Read the announcement before you decide.
 
@@ -93,7 +93,7 @@ The table lists the visible rows, highest score first. Select a column heading t
 | **NIH Institute**, **Agency**, **Status** | The institute code, the agency name, and the status in the source. |
 | **Open Date**, **Expires** | See "Read the dates". |
 | **Activity**, **Category** | The activity codes, such as R01, and the notice type, such as RFA or PAR. |
-| **Matched Terms**, **Why It Matched** | The computational terms found in the text, and the reasons for the score. |
+| **Matched Terms**, **Why It Matched** | The profile terms found in the text, and the reasons for the score. |
 | **Summary** | The purpose statement from the source. |
 | **NIH Guide URL**, **Grants.gov URL** | Links to the official records. |
 
@@ -127,27 +127,27 @@ The export holds the visible rows. It also writes the file to the path in **Exce
 
 ## Come back later
 
-The database keeps every opportunity that a search saved. Each time the dashboard reads the database, it scores the saved rows again with the current rules and today's date, and it leaves out the rows that have expired.
+The database keeps every opportunity that a search saved. Each time the dashboard reads the database, it scores the saved rows again with the current rules, the current profile, and today's date, and it leaves out the rows that have expired.
 
 To refresh the list, select **Run Search** with an empty keyword. The NIH Guide publishes new notices through the week, so search again whenever you want the current list.
 
 ## Set your profile
 
-Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
+Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. Once a profile is saved, the button reads **Edit my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
 
 1. **You.** Your name, institution, and career stage.
 2. **Your research.** A summary, then three to six sentences, as a paragraph or one per line, that state the aims of recent or planned work. Ranking compares each opportunity with these sentences.
 3. **Your terms.** Terms proposed from the text of step 2, each with a weight from 1 to 30. Keep, remove, re-weight, or add terms. A term is saved in lower case.
 4. **Preview.** The saved opportunities scored with your draft beside the current profile. The table shows the ten largest rises and the ten largest falls, each with its reasons. Nothing is saved yet.
-5. **Your background.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and a PMID or DOI. A key holds only letters, digits, and hyphens.
+5. **Your background.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and an optional PMID and DOI. A key holds only letters, digits, and hyphens.
 
 Select **Save profile** on any step to keep the draft, the step on screen included. A profile needs the example sentences of step 2 and the terms of step 3, and a red message names a step that is still missing. The Find view then scores the saved opportunities again with your profile.
 
 | Control | What it does |
 | --- | --- |
-| **Export profile** | Downloads the saved profile as a JSON file. The file holds your name and your example sentences. |
+| **Export profile** | Downloads the profile in use as a JSON file, the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text, and references. |
 | **Import a profile** | Paste the contents of an exported file. A line names the investigator and the number of terms, or a red message says what is wrong. Select **Import profile** to save it. |
-| **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. When a saved profile cannot be read, a red message says so, ranking uses the built-in profile, and this button clears it. |
+| **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. When a saved profile cannot be read, a red message says so, ranking uses the built-in profile, and **Export profile** is turned off. This button then deletes the saved profile, and the database file holds its only copy. |
 
 ## Use the command line
 
@@ -160,7 +160,7 @@ The same search and exports run without the dashboard. Run the commands from `NI
 | `uv run python -m nih_grant_matcher digest --min-score 35` | Writes the digest again from the saved results, Medium and High only. |
 | `uv run python -m nih_grant_matcher excel --min-score 35` | Writes the saved results to `outputs/nih_grant_opportunities.xlsx`. |
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
-| `uv run python -m nih_grant_matcher profile show` | Prints the profile that ranking uses. |
+| `uv run python -m nih_grant_matcher profile show` | Prints the saved profile, or the built-in one when none is saved. |
 | `uv run python -m nih_grant_matcher profile export --out profile.json` | Writes that profile to a file. |
 | `uv run python -m nih_grant_matcher profile import profile.json` | Saves the profile in the file. A file that is not a valid profile is refused with a message, and nothing is saved. |
 | `uv run python -m nih_grant_matcher profile reset` | Goes back to the built-in profile. |
@@ -176,4 +176,4 @@ Add `--help` to a command to see its options. To use another database, put `--db
 | A message that names `SSL_CERT_FILE` | A proxy on your network inspects secure connections, and Python does not trust its certificate. | Ask your IT staff for the proxy's certificate file, and set `SSL_CERT_FILE` to its path. |
 | A yellow message that a source reached the row limit | The source holds more rows than **Rows per source**. | Raise **Rows per source** and search again. |
 | A yellow message that the scores are "shown as last saved" | The database file cannot be written to. | Check the permissions of the `data` folder. In Docker on Linux, see "Where the results are saved" in the [Docker guide](docker.md). |
-| A relevant opportunity has a low score | The text names none of the computational terms that the scoring looks for. | Lower **Minimum score shown**, or use **Filter within results** with your own term. |
+| A relevant opportunity has a low score | The text names none of the terms of the profile in use. | Lower **Minimum score shown**, or use **Filter within results** with your own term. |

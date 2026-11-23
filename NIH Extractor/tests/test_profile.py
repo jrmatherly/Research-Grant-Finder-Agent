@@ -74,3 +74,22 @@ def test_a_profile_that_would_not_load_is_not_saved(tmp_path) -> None:
         assert store.profile() == WET_LAB
     finally:
         store.close()
+
+@pytest.mark.parametrize("change, field", [({"keywords": {}}, "keywords"), ({"examples": []}, "examples"), ({"keywords": None}, "keywords"), ({"examples": None}, "examples"), ({"prior_work": [{"key": "a", "citation": "One."}, {"key": "a", "citation": "Two."}]}, "prior_work"), ({"prior_work": [{"key": "a", "citation": "  "}]}, "prior_work")])
+def test_an_import_that_ranks_nothing_or_cites_badly_is_refused(change, field) -> None:
+    # None leaves the field out of the file.
+    data = json.loads(to_export(WET_LAB))
+    data["profile"] = {name: value for name, value in {**data["profile"], **change}.items() if value is not None}
+    with pytest.raises(ProfileError, match=f"^{field}"):
+        from_export(json.dumps(data))
+
+def test_a_profile_with_references_round_trips_through_the_file_and_the_store(tmp_path) -> None:
+    from nih_grant_matcher.profile import Reference
+    profile = Profile(keywords={"mitochondria": 18}, examples=("Study mitochondria.",), prior_work=(Reference("smith-2024", "Smith J. Mitochondria. 2024.", pmid="123"), Reference("lee-2025", "Lee K. Muscle. 2025.", doi="10.1/x")))
+    assert from_export(to_export(profile)) == profile
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    try:
+        store.save_profile(profile)
+        assert store.profile() == profile
+    finally:
+        store.close()

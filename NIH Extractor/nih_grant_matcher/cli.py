@@ -12,7 +12,7 @@ from .store import OpportunityStore
 from .workflow import fetch_score_opportunities, rescore_saved
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Find NIH grant opportunities relevant to ML/data analysis.")
+    parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
     parser.add_argument("--db", default="data/grants.sqlite3", help="SQLite database path.")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Fetch, score, save, and write a digest.")
@@ -55,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except ProfileError as exc:
         print(f"Profile not valid: {exc}", file=sys.stderr)
+        return 1
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"File error: {exc}", file=sys.stderr)
         return 1
 
 def _dispatch(args: argparse.Namespace) -> int:

@@ -124,3 +124,14 @@ def test_score_bin_edges_follow_the_levels() -> None:
     from nih_grant_matcher.scoring import score_bin
     assert [score_bin(score) for score in (0, 24.9, 25, 34.9, 35, 69.9, 70, 100)] == ["0-25", "0-25", "25-35", "25-35", "35-70", "35-70", "70-100", "70-100"]
     assert (MLRelevanceScorer._classification(35.0), MLRelevanceScorer._classification(70.0)) == ("Medium", "High")
+
+def test_a_profile_term_ai_skips_ai_an() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    scorer = MLRelevanceScorer(MatcherConfig(keywords={"mri": 15, "ai": 9}))
+    assert "ai" not in scorer.score(_nih("Health research with AI/AN communities", ""), today=date(2026, 7, 6)).matched_terms
+    assert "ai" in scorer.score(_nih("AI for imaging", ""), today=date(2026, 7, 6)).matched_terms
+
+def test_ai_counts_for_a_profile_with_artificial_intelligence() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    scored = MLRelevanceScorer(MatcherConfig(keywords={"artificial intelligence": 5})).score(_nih("AI for imaging", ""), today=date(2026, 7, 6))
+    assert (scored.matched_terms, scored.breakdown.keyword_score, scored.breakdown.centrality_score) == (("AI",), 5, 4.0)
