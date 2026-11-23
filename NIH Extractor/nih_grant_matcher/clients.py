@@ -1,6 +1,7 @@
 from __future__ import annotations
 import http.client, json, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from .config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_GUIDE_DOCTEXT_URL, NIH_REPORTER_SEARCH_URL
 
@@ -92,11 +93,17 @@ class GrantsGovClient:
         folders = self.fetch_opportunity(opportunity_id).get("synopsisAttachmentFolders") or []
         if not isinstance(folders, list) or any(isinstance(f, dict) and not isinstance(f.get("synopsisAttachments") or [], list) for f in folders):
             raise ApiError(f"Unexpected Grants.gov fetch response for {opportunity_id}: an attachment list is not a list")
-        found = next((a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")), None)
-        if found is None:
+        found = [a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")]
+        if not found:
             return ""
+        latest = found[-1]
+        # A revised announcement is a second attachment, and the list need not be in date order.
+        try:
+            latest = max(found, key=lambda a: datetime.strptime(str(a.get("createdDate"))[:-4], "%b %d, %Y %I:%M:%S %p"))
+        except ValueError:
+            pass
         # The id goes into the URL path, so only a number may reach it.
-        return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{_number(found.get('id'), f'Grants.gov full announcement attachment id for {opportunity_id}')}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
+        return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{_number(latest.get('id'), f'Grants.gov full announcement attachment id for {opportunity_id}')}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
 
 @dataclass
 class NihGuideClient:

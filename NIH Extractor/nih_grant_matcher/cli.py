@@ -11,7 +11,7 @@ from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
-from .writer import DECISIONS, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
+from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -206,9 +206,11 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         return 0
     ws = Workspace(store, args.id)
     if args.action == "fetch":
-        announcement, view = ws.fetch_announcement(), ws.view()
+        (announcement, dropped), view = ws.fetch_announcement(), ws.view()
         added = sum(r.confirmed is None for r in view.requirements)
         print(f"Saved the announcement from {ORIGINS[announcement.origin]}. " + (NO_SECTION_IV if view.no_section_iv else f"It adds {added} requirement{'' if added == 1 else 's'} to confirm or reject in the dashboard."))
+        for r in dropped:
+            print(DROPPED.format(r.text))
     elif args.action == "requirements":
         view = ws.view()
         for s in view.sections:
