@@ -1,33 +1,69 @@
 from __future__ import annotations
 import json, sqlite3
+from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Iterable
-from .models import Opportunity, ScoreBreakdown, ScoredOpportunity
+from typing import Any, Iterable, Iterator, Sequence
+from .announcement import Announcement, Requirement
+from .models import Application, Fact, ModelCall, Opportunity, Revision, ScoreBreakdown, ScoredOpportunity, Signoff
 from .profile import BUILTIN_PROFILE, Profile, from_export, to_export
+from .rules import Limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS opportunities (source_id TEXT PRIMARY KEY, opportunity_number TEXT, title TEXT NOT NULL, agency_code TEXT, agency_name TEXT, status TEXT, open_date TEXT, close_date TEXT, description TEXT, eligibility_json TEXT, funding_instruments_json TEXT, funding_categories_json TEXT, award_ceiling REAL, award_floor REAL, source_url TEXT, attachments_json TEXT, raw_json TEXT);
 CREATE TABLE IF NOT EXISTS scores (source_id TEXT PRIMARY KEY, score REAL NOT NULL, classification TEXT NOT NULL, reasons_json TEXT NOT NULL, matched_terms_json TEXT NOT NULL, breakdown_json TEXT NOT NULL, scored_at TEXT NOT NULL, FOREIGN KEY(source_id) REFERENCES opportunities(source_id));
 CREATE TABLE IF NOT EXISTS profile (id INTEGER PRIMARY KEY CHECK (id = 1), profile_json TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS announcements (opportunity_number TEXT PRIMARY KEY, text TEXT NOT NULL, origin TEXT NOT NULL, url TEXT NOT NULL, sha256 TEXT NOT NULL, fetched_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY, opportunity_number TEXT NOT NULL, grant_type TEXT NOT NULL, title TEXT NOT NULL, resubmission INTEGER NOT NULL DEFAULT 0, disclosure_on INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, UNIQUE (opportunity_number, grant_type, resubmission));
+CREATE TABLE IF NOT EXISTS facts (id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL REFERENCES applications(id), kind TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', text TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, retired_at TEXT);
+CREATE TABLE IF NOT EXISTS model_calls (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL REFERENCES applications(id), section TEXT NOT NULL DEFAULT '', purpose TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, system TEXT NOT NULL, prompt TEXT NOT NULL, response TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL REFERENCES applications(id), section TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, text TEXT NOT NULL, quote TEXT NOT NULL, limit_json TEXT, origin TEXT NOT NULL CHECK (origin IN ('parsed', 'model')), call_id INTEGER REFERENCES model_calls(id), confirmed INTEGER, CHECK ((origin = 'model') = (call_id IS NOT NULL)));
+CREATE TABLE IF NOT EXISTS revisions (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL REFERENCES applications(id), section TEXT NOT NULL, parent_id INTEGER REFERENCES revisions(id), author TEXT NOT NULL CHECK (author IN ('applicant', 'model')), action TEXT NOT NULL CHECK (action IN ('write', 'polish', 'revise', 'draft')), text TEXT NOT NULL, call_id INTEGER UNIQUE REFERENCES model_calls(id), created_at TEXT NOT NULL, CHECK ((author = 'model') = (call_id IS NOT NULL)), CHECK ((author = 'applicant') = (action = 'write')));
+CREATE TABLE IF NOT EXISTS signoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, application_id INTEGER NOT NULL REFERENCES applications(id), section TEXT NOT NULL, revision_id INTEGER NOT NULL REFERENCES revisions(id), signer TEXT NOT NULL, attestation TEXT NOT NULL, findings_json TEXT NOT NULL, tool_version TEXT NOT NULL, signed_at TEXT NOT NULL);
+CREATE TRIGGER IF NOT EXISTS revisions_fixed BEFORE UPDATE ON revisions BEGIN SELECT RAISE(ABORT, 'revisions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS revisions_stay BEFORE DELETE ON revisions WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'revisions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS model_calls_fixed BEFORE UPDATE ON model_calls BEGIN SELECT RAISE(ABORT, 'model_calls is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS model_calls_stay BEFORE DELETE ON model_calls WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'model_calls is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS signoffs_fixed BEFORE UPDATE ON signoffs BEGIN SELECT RAISE(ABORT, 'signoffs is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS signoffs_stay BEFORE DELETE ON signoffs WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'signoffs is append-only'); END;
 """
+class ReadOnlyDatabase(sqlite3.DatabaseError):
+    pass
+def _now() -> str:
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+def _time(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
 class OpportunityStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
         try:
             self.conn.executescript(SCHEMA)
             self.conn.commit()
         except sqlite3.OperationalError as exc:
-            # A read-only database from an earlier version has no profile table, and profile() then returns the built-in profile.
+            # A read-only database from an earlier version lacks the newer tables, and each of them then reads as empty.
             if exc.sqlite_errorcode & 0xFF != sqlite3.SQLITE_READONLY:
                 raise
     def close(self) -> None:
         self.conn.close()
+    def _has(self, table: str) -> bool:
+        return self.conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone() is not None
+    def _rows(self, table: str, sql: str, args: Sequence[Any] = ()) -> list[sqlite3.Row]:
+        return self.conn.execute(sql, args).fetchall() if self._has(table) else []
+    @contextmanager
+    def _write(self, table: str, error: type[Exception] = ReadOnlyDatabase) -> Iterator[None]:
+        # SCHEMA creates every table on open, so a table is missing only from a read-only database that an earlier version wrote.
+        if not self._has(table):
+            raise error(f"{self.db_path} is read-only and was written by an earlier version, so it has no {table} table to save to.")
+        with self.conn:
+            yield
     def profile(self) -> Profile:
-        row = self.conn.execute("SELECT profile_json FROM profile WHERE id = 1").fetchone() if self.conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile'").fetchone() else None
+        row = self.conn.execute("SELECT profile_json FROM profile WHERE id = 1").fetchone() if self._has("profile") else None
         return from_export(row["profile_json"]) if row else BUILTIN_PROFILE
     def save_profile(self, profile: Profile | None) -> None:
         if profile is not None:
@@ -69,3 +105,77 @@ class OpportunityStore:
             return date.fromisoformat(value) if value else None
         opp = Opportunity(source_id=row["source_id"], opportunity_number=row["opportunity_number"] or "", title=row["title"] or "", agency_code=row["agency_code"] or "", agency_name=row["agency_name"] or "", status=row["status"] or "", open_date=parse_date(row["open_date"]), close_date=parse_date(row["close_date"]), description=row["description"] or "", eligibility=tuple(json.loads(row["eligibility_json"] or "[]")), funding_instruments=tuple(json.loads(row["funding_instruments_json"] or "[]")), funding_categories=tuple(json.loads(row["funding_categories_json"] or "[]")), award_ceiling=row["award_ceiling"], award_floor=row["award_floor"], source_url=row["source_url"] or "", attachments=tuple(json.loads(row["attachments_json"] or "[]")), raw=json.loads(row["raw_json"] or "{}"))
         return ScoredOpportunity(opportunity=opp, score=row["score"], classification=row["classification"], reasons=tuple(json.loads(row["reasons_json"])), matched_terms=tuple(json.loads(row["matched_terms_json"])), breakdown=ScoreBreakdown(**json.loads(row["breakdown_json"])), scored_at=datetime.fromisoformat(row["scored_at"]))
+    def applications(self) -> list[Application]:
+        return [_application(row) for row in self._rows("applications", "SELECT * FROM applications ORDER BY id")]
+    def application(self, app_id: int) -> Application | None:
+        rows = self._rows("applications", "SELECT * FROM applications WHERE id = ?", (app_id,))
+        return _application(rows[0]) if rows else None
+    def add_application(self, *, opportunity_number: str, grant_type: str, title: str, resubmission: bool = False) -> Application:
+        key = (opportunity_number, grant_type, int(resubmission))
+        with self._write("applications"):
+            self.conn.execute("INSERT INTO applications (opportunity_number, grant_type, resubmission, title, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(opportunity_number, grant_type, resubmission) DO NOTHING", (*key, title, _now()))
+        return _application(self.conn.execute("SELECT * FROM applications WHERE opportunity_number = ? AND grant_type = ? AND resubmission = ?", key).fetchone())
+    def set_disclosure(self, app_id: int, on: bool) -> None:
+        with self._write("applications"):
+            self.conn.execute("UPDATE applications SET disclosure_on = ? WHERE id = ?", (int(on), app_id))
+    def delete_application(self, app_id: int) -> None:
+        # The delete triggers let a row go only while this setting names its application.
+        with self._write("applications"):
+            self.conn.execute("INSERT INTO settings VALUES ('deleting', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(app_id),))
+            for table in ("signoffs", "revisions", "requirements", "facts", "model_calls"):
+                self.conn.execute(f"DELETE FROM {table} WHERE application_id = ?", (app_id,))
+            self.conn.execute("DELETE FROM applications WHERE id = ?", (app_id,))
+            self.conn.execute("DELETE FROM settings WHERE key = 'deleting'")
+    def announcement(self, number: str) -> Announcement | None:
+        rows = self._rows("announcements", "SELECT * FROM announcements WHERE opportunity_number = ?", (number,))
+        return Announcement(rows[0]["opportunity_number"], rows[0]["text"], rows[0]["origin"], rows[0]["url"], rows[0]["sha256"], datetime.fromisoformat(rows[0]["fetched_at"])) if rows else None
+    def save_announcement(self, a: Announcement) -> None:
+        with self._write("announcements"):
+            self.conn.execute("INSERT INTO announcements VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(opportunity_number) DO UPDATE SET text=excluded.text, origin=excluded.origin, url=excluded.url, sha256=excluded.sha256, fetched_at=excluded.fetched_at", (a.opportunity_number, a.text, a.origin, a.url, a.sha256, a.fetched_at.isoformat()))
+    def facts(self, app_id: int) -> list[Fact]:
+        return [Fact(row["id"], row["kind"], row["text"], row["label"], json.loads(row["detail_json"]), _time(row["retired_at"])) for row in self._rows("facts", "SELECT * FROM facts WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_fact(self, app_id: int, kind: str, text: str, label: str = "", detail: dict[str, Any] | None = None) -> Fact:
+        with self._write("facts"):
+            fact_id = self.conn.execute("INSERT INTO facts (application_id, kind, label, text, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?)", (app_id, kind, label, text, json.dumps(detail or {}), _now())).lastrowid
+        return next(f for f in self.facts(app_id) if f.id == fact_id)
+    def retire_fact(self, fact_id: int) -> None:
+        with self._write("facts"):
+            self.conn.execute("UPDATE facts SET retired_at = ? WHERE id = ? AND retired_at IS NULL", (_now(), fact_id))
+    def requirements(self, app_id: int) -> list[Requirement]:
+        return [Requirement(row["kind"], row["text"], row["quote"], row["origin"], row["section"], Limit(**json.loads(row["limit_json"])) if row["limit_json"] else None, None if row["confirmed"] is None else bool(row["confirmed"]), row["id"], row["call_id"]) for row in self._rows("requirements", "SELECT * FROM requirements WHERE application_id = ? ORDER BY id", (app_id,))]
+    def replace_requirements(self, app_id: int, origin: str, items: Iterable[Requirement], call_id: int | None = None) -> list[Requirement]:
+        with self._write("requirements"):
+            self.conn.execute("DELETE FROM requirements WHERE application_id = ? AND origin = ?", (app_id, origin))
+            self.conn.executemany("INSERT INTO requirements (application_id, section, kind, text, quote, limit_json, origin, call_id, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [(app_id, r.section, r.kind, r.text, r.quote, json.dumps(asdict(r.limit)) if r.limit else None, origin, call_id, None if r.confirmed is None else int(r.confirmed)) for r in items])
+        return [r for r in self.requirements(app_id) if r.origin == origin]
+    def decide_requirement(self, requirement_id: int, confirmed: bool) -> None:
+        with self._write("requirements"):
+            self.conn.execute("UPDATE requirements SET confirmed = ? WHERE id = ?", (int(confirmed), requirement_id))
+    def calls(self, app_id: int) -> list[ModelCall]:
+        return [ModelCall(row["id"], row["section"], row["purpose"], row["provider"], row["model"], row["system"], row["prompt"], row["response"], row["input_tokens"], row["output_tokens"], datetime.fromisoformat(row["created_at"])) for row in self._rows("model_calls", "SELECT * FROM model_calls WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_call(self, app_id: int, section: str, purpose: str, provider: str, model: str, system: str, prompt: str, response: str, input_tokens: int = 0, output_tokens: int = 0) -> ModelCall:
+        with self._write("model_calls"):
+            call_id = self.conn.execute("INSERT INTO model_calls (application_id, section, purpose, provider, model, system, prompt, response, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, purpose, provider, model, system, prompt, response, input_tokens, output_tokens, _now())).lastrowid
+        return next(c for c in self.calls(app_id) if c.id == call_id)
+    def revisions(self, app_id: int) -> list[Revision]:
+        return [Revision(row["id"], row["section"], row["parent_id"], row["author"], row["action"], row["text"], row["call_id"], datetime.fromisoformat(row["created_at"])) for row in self._rows("revisions", "SELECT * FROM revisions WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_revision(self, app_id: int, section: str, parent_id: int | None, author: str, action: str, text: str, call_id: int | None = None) -> Revision:
+        with self._write("revisions"):
+            revision_id = self.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, call_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, parent_id, author, action, text, call_id, _now())).lastrowid
+        return next(r for r in self.revisions(app_id) if r.id == revision_id)
+    def signoffs(self, app_id: int) -> list[Signoff]:
+        return [Signoff(row["section"], row["revision_id"], row["signer"], row["attestation"], tuple(json.loads(row["findings_json"])), row["tool_version"], datetime.fromisoformat(row["signed_at"])) for row in self._rows("signoffs", "SELECT * FROM signoffs WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_signoff(self, app_id: int, section: str, revision_id: int, signer: str, attestation: str, findings: Sequence[str], tool_version: str) -> Signoff:
+        signed_at = _now()
+        with self._write("signoffs"):
+            self.conn.execute("INSERT INTO signoffs (application_id, section, revision_id, signer, attestation, findings_json, tool_version, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, revision_id, signer, attestation, json.dumps(list(findings)), tool_version, signed_at))
+        return Signoff(section, revision_id, signer, attestation, tuple(findings), tool_version, datetime.fromisoformat(signed_at))
+    def setting(self, key: str) -> str | None:
+        rows = self._rows("settings", "SELECT value FROM settings WHERE key = ?", (key,))
+        return rows[0]["value"] if rows else None
+    def set_setting(self, key: str, value: str) -> None:
+        with self._write("settings"):
+            self.conn.execute("INSERT INTO settings VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+
+def _application(row: sqlite3.Row) -> Application:
+    return Application(row["id"], row["opportunity_number"], row["grant_type"], row["title"], bool(row["resubmission"]), bool(row["disclosure_on"]), datetime.fromisoformat(row["created_at"]))
