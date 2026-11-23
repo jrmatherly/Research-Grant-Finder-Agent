@@ -80,6 +80,10 @@ Branch `feat/applicant-profile`, cut from `main`. A researcher outside machine l
 
 - Stage 1 ships alone, so two strings that name later features are held back. Wizard step 5 is titled "Your background", not "What the writer reuses". The export caption ends after "example sentences" and does not say "It holds no API key." Stage 3 restores both when the writer and the keys exist.
 - `save_profile` validates with the rules of `from_export`. `from_export` refuses a keyword that is not lower case or has outer spaces, and a `focus` or `examples_name` outside 1 to 60 letters, digits, spaces and `/ , ' -`. The wizard lower-cases and strips each term.
+- `from_export` requires `keywords` and `examples` to be present and non-empty, and it refuses a duplicate `prior_work` key or a blank citation. A file that leaves either field out no longer takes the built-in values.
+- The wizard saves the draft as it is. A new draft starts with `focus="profile"` and `examples_name="your example sentences"`, and an imported profile keeps its own labels through an edit.
+- `KEYWORD_PATTERNS` holds a pattern for the term "ai" that leaves out "AI/AN", and `AI_WORD_RE` is compiled from it.
+- Profile text and error text pass through `escape_markdown` in `ui/profile_page.py` before a caption or an alert shows them. A later view that shows profile or model text does the same.
 - `Save profile` is a submit button inside each step's form. There is no `Finish` button. A save with no terms or no example sentences is refused.
 - The aims of step 2 split on line breaks and on sentence ends.
 - `config_for` ranks with the built-in profile and warns when the stored profile cannot be read. Both views show the error and keep `Reset to built-in`. So a later stage that adds a `Profile` field gives it a default, and a change of `EXPORT_FORMAT` keeps a read path for `/1` rows.
