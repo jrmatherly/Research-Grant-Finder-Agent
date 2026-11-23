@@ -32,9 +32,7 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> bool
         done = action(store)
     except NotReady as exc:
         _notice("error", f"{escape_markdown(exc.reason)} {_findings(exc.findings)}".strip())
-    except ApiError as exc:
-        _notice("error", f"{escape_markdown(str(exc))} The standing rules of the grant type still apply.")
-    except (sqlite3.Error, ValueError, OSError) as exc:
+    except (ApiError, sqlite3.Error, ValueError, OSError) as exc:
         _notice("error", escape_markdown(str(exc)))
     else:
         if done:
@@ -88,7 +86,10 @@ def _sign(ws: Workspace, section: str, title: str) -> str:
     return f"Signed off the {title} at revision {signed.revision_id}."
 
 def _fetch(ws: Workspace) -> str:
-    origin = ORIGINS[ws.fetch_announcement().origin]
+    try:
+        origin = ORIGINS[ws.fetch_announcement().origin]
+    except ApiError as exc:
+        raise ApiError(f"{exc} " + ("The announcement saved earlier still applies, with what you decided from it." if ws.view().announcement else "The standing rules of the grant type still apply.")) from exc
     return f"Saved the announcement from {origin}. " + (NO_SECTION_IV if ws.view().no_section_iv else "Confirm or reject what it adds under Requirements.")
 
 def _restore(ws: Workspace, section: str, revision_id: int) -> str:
