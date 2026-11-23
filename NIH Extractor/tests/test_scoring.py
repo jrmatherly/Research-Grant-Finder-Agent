@@ -108,3 +108,13 @@ def test_the_level_follows_the_score_that_is_shown(monkeypatch) -> None:
     monkeypatch.setattr(MLRelevanceScorer, "_completeness_score", staticmethod(lambda opportunity: 89.96))
     scored = MLRelevanceScorer().score(Opportunity(source_id="1", opportunity_number="X", title="Notice", agency_code="", agency_name="", status="posted", close_date=date(2026, 1, 1)), today=date(2026, 7, 6))
     assert (scored.score, scored.classification) == (70.0, "High")
+
+
+def test_ai_an_is_not_artificial_intelligence() -> None:
+    scored = MLRelevanceScorer().score(_nih("Substance use prevention in AI/AN communities", "Community research with American Indian and Alaska Native (AI / ANs) youth."), today=date(2026, 7, 6))
+    assert "AI" not in scored.matched_terms
+    assert scored.classification == "Watchlist"
+
+@pytest.mark.parametrize("title", ["AI tools for AI/AN health", "AI/ML methods for imaging", "PRIMED-AI coordination", "AI/Analytics core"])
+def test_ai_matches_beside_ai_an(title: str) -> None:
+    assert "AI" in MLRelevanceScorer().score(_nih(title, ""), today=date(2026, 7, 6)).matched_terms
