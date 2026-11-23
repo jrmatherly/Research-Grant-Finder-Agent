@@ -405,7 +405,7 @@ On Linux, create the output folders before the first start, so that Docker does 
 mkdir -p "NIH Extractor"/{data,outputs,digests} && sudo chown -R 1000:1000 "NIH Extractor"/{data,outputs,digests}
 ```
 
-CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To use the published image instead of building, run `docker compose pull` and then `docker compose up -d`.
+CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To run it without a clone of this repository, or to update, pin, and troubleshoot it, see [Run NIH Grant Matcher from the published Docker image](docs/docker.md).
 
 ### Use the Command Line
 
