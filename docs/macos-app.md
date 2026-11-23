@@ -50,6 +50,16 @@ Git ignores `NIH Extractor/macos/build` and `NIH Extractor/macos/dist`.
 
 The app does not read the database in your clone. To keep earlier results, copy `NIH Extractor/data/grants.sqlite3` to `~/Library/Application Support/Grant Matcher/data/`.
 
+## Licences and the icon
+
+The app carries the licence texts of the packages it bundles, in `Grant Matcher.app/Contents/Resources/licenses`, one folder per package. The build copies them from the installed packages. Streamlit's package holds none, so the build fetches Streamlit's `LICENSE` and `NOTICES` files for the installed version from its repository and checks them against `NIH Extractor/macos/streamlit-licenses.sha256`. When a new Streamlit changes either file, the build stops and names the folder to read. Update the checksums with `shasum -a 256 LICENSE NOTICES` in that folder.
+
+The icon is `NIH Extractor/macos/icon.png`, a 1024-pixel render of `icon.svg` beside it. After a change to the SVG, render it again with a browser, for example:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-size=1024,1024 --default-background-color=00000000 --screenshot="$PWD/NIH Extractor/macos/icon.png" "file://$PWD/NIH Extractor/macos/icon.svg"
+```
+
 ## Notarize
 
 A Mac blocks an app that arrives from another computer unless Apple has notarized it. A build you run on the Mac that made it does not need this step.

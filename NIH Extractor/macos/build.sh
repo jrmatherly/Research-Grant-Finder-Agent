@@ -6,6 +6,18 @@ cd "$(dirname "$0")/.."
 app="macos/dist/Grant Matcher.app"
 dmg="macos/dist/Grant Matcher.dmg"
 
+# Streamlit's wheel has no licence files, and the app must carry them. The checksums fail the build when a new Streamlit changes either file.
+streamlit_version=$(uv run --locked python -c 'from importlib.metadata import version; print(version("streamlit"))')
+licences=macos/build/licenses/streamlit
+mkdir -p "$licences"
+for file in LICENSE NOTICES; do
+  curl -fsSL -o "$licences/$file" "https://raw.githubusercontent.com/streamlit/streamlit/$streamlit_version/$file"
+done
+(cd "$licences" && shasum -a 256 -c "$OLDPWD/macos/streamlit-licenses.sha256") || {
+  echo "Streamlit $streamlit_version ships different licence files. Read them in $licences, then update macos/streamlit-licenses.sha256." >&2
+  exit 1
+}
+
 uv run --locked --group macos pyinstaller --noconfirm --distpath macos/dist --workpath macos/build macos/grant_matcher.spec
 
 echo "Smoke test: starting the server"
@@ -32,6 +44,8 @@ if [[ -z $healthy ]]; then
   exit 1
 fi
 echo "Smoke test passed"
+# A release must not go out without the licence texts of what it bundles.
+test -s "$app/Contents/Resources/licenses/streamlit/NOTICES"
 
 if [[ -n ${CODESIGN_IDENTITY:-} ]]; then
   codesign --verify --deep --strict --verbose=1 "$app"
