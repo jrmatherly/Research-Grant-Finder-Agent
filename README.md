@@ -439,7 +439,7 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher apply list` | Lists the applications. |
 | `uv run python -m nih_grant_matcher apply fetch 1` | Fetches the full announcement of application 1. |
 | `uv run python -m nih_grant_matcher apply requirements 1` | Prints the standing rules and what the announcement adds. |
-| `uv run python -m nih_grant_matcher apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file PATH` reads the text from a UTF-8 file. |
+| `uv run python -m nih_grant_matcher apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file PATH` reads the text from a UTF-8 file. For `--kind reference`, add `--label smith2021`, and cite the reference in a section as `[@smith2021]`. |
 | `uv run python -m nih_grant_matcher apply write 1 project-narrative --file narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. |
 | `uv run python -m nih_grant_matcher apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
 | `uv run python -m nih_grant_matcher apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
