@@ -30,11 +30,14 @@ class OpportunityStore:
         row = self.conn.execute("SELECT profile_json FROM profile WHERE id = 1").fetchone() if self.conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile'").fetchone() else None
         return from_export(row["profile_json"]) if row else BUILTIN_PROFILE
     def save_profile(self, profile: Profile | None) -> None:
+        if profile is not None:
+            text = to_export(profile)
+            from_export(text)
         with self.conn:
             if profile is None:
                 self.conn.execute("DELETE FROM profile")
             else:
-                self.conn.execute("INSERT INTO profile VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json, updated_at=excluded.updated_at", (to_export(profile), datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
+                self.conn.execute("INSERT INTO profile VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json, updated_at=excluded.updated_at", (text, datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
     def upsert_scored(self, scored: ScoredOpportunity) -> bool:
         with self.conn:
             return self._upsert(scored)

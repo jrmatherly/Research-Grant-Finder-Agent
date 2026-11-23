@@ -21,7 +21,7 @@ def test_an_export_round_trips_and_has_only_profile_fields() -> None:
     assert data["format"] == EXPORT_FORMAT and from_export(to_export(WET_LAB)) == WET_LAB
     assert set(data["profile"]) == set(Profile.__dataclass_fields__)
 
-@pytest.mark.parametrize("change, field", [({"format": "other/9"}, "format"), ({"profile": {"keywords": {"x": 99}}}, "keywords"), ({"profile": {"keywords": {"": 5}}}, "keywords"), ({"profile": {"api_key": "sk-1"}}, "api_key"), ({"profile": {"keywords": {str(n): 5 for n in range(201)}}}, "keywords")])
+@pytest.mark.parametrize("change, field", [({"format": "other/9"}, "format"), ({"profile": {"keywords": {"x": 99}}}, "keywords"), ({"profile": {"keywords": {"": 5}}}, "keywords"), ({"profile": {"api_key": "sk-1"}}, "api_key"), ({"profile": {"keywords": {str(n): 5 for n in range(201)}}}, "keywords"), ({"profile": {"keywords": {"Mitochondria": 5}}}, "keywords")])
 def test_a_bad_import_is_refused_and_names_the_field(change, field) -> None:
     data = json.loads(to_export(BUILTIN_PROFILE))
     data = {**data, **{k: v for k, v in change.items() if k != "profile"}, "profile": {**data["profile"], **change.get("profile", {})}}
@@ -64,3 +64,13 @@ def test_an_export_keeps_the_order_of_the_keywords() -> None:
 def test_suggested_terms_are_the_rarest_words_of_the_sentences() -> None:
     terms = suggest_terms(("Study mitochondrial dynamics in research.",), {"research": 900, "study": 800, "mitochondrial": 3, "dynamics": 40}, documents=1000)
     assert list(terms)[0] == "mitochondrial" and "research" not in terms and all(4 <= weight <= 18 for weight in terms.values())
+
+def test_a_profile_that_would_not_load_is_not_saved(tmp_path) -> None:
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    try:
+        store.save_profile(WET_LAB)
+        with pytest.raises(ProfileError, match="keywords"):
+            store.save_profile(Profile(keywords={"x": 99}))
+        assert store.profile() == WET_LAB
+    finally:
+        store.close()
