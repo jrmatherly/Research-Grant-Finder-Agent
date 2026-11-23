@@ -2,9 +2,11 @@ from __future__ import annotations
 import argparse, json, ssl, sys, urllib.error
 from pathlib import Path
 from .agents import DigestAgent, NihContextAgent
-from .clients import GrantsGovXmlClient, NihReporterClient
-from .config import MatcherConfig
+from .clients import GrantsGovXmlClient, NihGuideClient, NihReporterClient
+from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
+from .normalizer import normalize_nih_guide
+from .scoring import document_frequencies
 from .store import OpportunityStore
 from .workflow import fetch_score_opportunities
 
@@ -31,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     context = sub.add_parser("reporter-context", help="Search NIH RePORTER for funded project context.")
     context.add_argument("--term", required=True)
     context.add_argument("--limit", type=int, default=10)
+    rarity = sub.add_parser("rarity-table", help="Rebuild the word-rarity table that similarity scoring uses, from expired NIH Guide opportunities.")
+    rarity.add_argument("--rows", type=int, default=3000, help="Expired opportunities to read.")
+    rarity.add_argument("--out", default=str(TERM_RARITY_PATH))
     xml = sub.add_parser("backfill-xml", help="Download the latest Grants.gov XML extract zip.")
     xml.add_argument("--out", default="data/latest_grants_extract.zip")
     return parser
@@ -45,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
         return _excel(args)
     if args.command == "reporter-context":
         return _reporter_context(args)
+    if args.command == "rarity-table":
+        return _rarity_table(args)
     if args.command == "backfill-xml":
         return _backfill_xml(args)
     raise ValueError(args.command)
@@ -84,6 +91,14 @@ def _excel(args: argparse.Namespace) -> int:
 
 def _reporter_context(args: argparse.Namespace) -> int:
     print(json.dumps(NihContextAgent(NihReporterClient()).similar_funded_projects(args.term, limit=args.limit), indent=2))
+    return 0
+
+def _rarity_table(args: argparse.Namespace) -> int:
+    texts = [normalize_nih_guide(item).searchable_text for item in NihGuideClient().search(rows=args.rows, types="expired")]
+    # A word seen in one document is as rare as an unseen word for scoring, so leave it out and keep the file small.
+    terms = {term: count for term, count in sorted(document_frequencies(texts).items()) if count > 1}
+    Path(args.out).write_text(json.dumps({"documents": len(texts), "terms": terms}, separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"Wrote {len(terms)} terms from {len(texts)} opportunities to {args.out}.")
     return 0
 
 def _backfill_xml(args: argparse.Namespace) -> int:

@@ -72,3 +72,15 @@ def test_xml_extract_url_is_resolved_against_the_page(monkeypatch) -> None:
     from nih_grant_matcher import clients
     monkeypatch.setattr(clients, "_get_bytes", lambda url, timeout=60: b'<a href="/extract/GrantsDBExtract20261122v2.zip">zip</a>')
     assert GrantsGovXmlClient().latest_extract_url() == "https://www.grants.gov/extract/GrantsDBExtract20261122v2.zip"
+
+
+def test_rarity_table_counts_documents_per_term_and_drops_singletons(monkeypatch, tmp_path, capsys) -> None:
+    import json
+    items = [{"rowid": "1", "docnum": "PA-1", "title": "Imaging imaging", "purpose": "Imaging research."}, {"rowid": "2", "docnum": "PA-2", "title": "Research", "purpose": "Once only."}]
+    monkeypatch.setattr(NihGuideClient, "search", lambda self, rows=250, keyword="", types="": items if types == "expired" else [])
+    out = tmp_path / "table.json"
+    assert cli.main(["rarity-table", "--out", str(out)]) == 0
+    table = json.loads(out.read_text(encoding="utf-8"))
+    assert table["documents"] == 2
+    assert table["terms"]["research"] == 2
+    assert "imaging" not in table["terms"] and "once" not in table["terms"]

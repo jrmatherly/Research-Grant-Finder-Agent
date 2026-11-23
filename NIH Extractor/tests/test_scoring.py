@@ -47,3 +47,21 @@ def test_common_words_do_not_count_as_similarity() -> None:
     scored = MLRelevanceScorer().score(_nih("Support for the care of patients", "Funds to support the use of tools to help patients and families from rural areas to get care and to learn from data."), today=date(2026, 7, 6))
     assert scored.breakdown.semantic_score < 8
     assert not any("curated" in reason for reason in scored.reasons)
+
+def test_data_infrastructure_terms_match_under_readable_names() -> None:
+    scored = MLRelevanceScorer().score(_nih("Statistical and Data Management Center", "Biostatistical support, data coordinating center duties, data harmonisation and secondary data analyses."), today=date(2026, 7, 6))
+    assert set(scored.matched_terms) == {"statistical", "data management", "biostatistics", "data coordination", "data harmonization", "secondary analysis"}
+
+def test_similarity_weights_rare_words_above_common_ones() -> None:
+    scorer = MLRelevanceScorer()
+    filler = "Supports investigators who study kidney stones, bladder function and urinary tract infection in older adults."
+    rare = scorer.score(_nih("Urology", f"{filler} Phenotypes."), today=date(2026, 7, 6))
+    common = scorer.score(_nih("Urology", f"{filler} Health."), today=date(2026, 7, 6))
+    assert rare.breakdown.semantic_score > 2 * common.breakdown.semantic_score
+    assert rare.breakdown.semantic_score >= 8
+    assert "Description is close to curated ML/data-science grant examples (shared terms: phenotypes)" in rare.reasons
+
+def test_rarity_table_is_present_and_plausible() -> None:
+    scorer = MLRelevanceScorer()
+    assert scorer.documents >= 1000
+    assert scorer.document_frequency["research"] > scorer.document_frequency["phenotypes"] > 1
