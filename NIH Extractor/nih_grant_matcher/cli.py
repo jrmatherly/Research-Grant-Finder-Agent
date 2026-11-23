@@ -1,8 +1,8 @@
 from __future__ import annotations
-import argparse, json, ssl, sys, urllib.error
+import argparse, json, sys
 from pathlib import Path
 from .agents import DigestAgent, NihContextAgent
-from .clients import ApiError, GrantsGovXmlClient, NihGuideClient, NihReporterClient
+from .clients import NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .normalizer import normalize_nih_guide
@@ -36,8 +36,6 @@ def build_parser() -> argparse.ArgumentParser:
     rarity = sub.add_parser("rarity-table", help="Rebuild the word-rarity table that similarity scoring uses, from expired NIH Guide opportunities.")
     rarity.add_argument("--rows", type=int, default=3000, help="Expired opportunities to read.")
     rarity.add_argument("--out", default=str(TERM_RARITY_PATH))
-    xml = sub.add_parser("backfill-xml", help="Download the latest Grants.gov XML extract zip.")
-    xml.add_argument("--out", default="data/latest_grants_extract.zip")
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,8 +50,6 @@ def main(argv: list[str] | None = None) -> int:
         return _reporter_context(args)
     if args.command == "rarity-table":
         return _rarity_table(args)
-    if args.command == "backfill-xml":
-        return _backfill_xml(args)
     raise ValueError(args.command)
 
 def _run(args: argparse.Namespace) -> int:
@@ -107,18 +103,4 @@ def _rarity_table(args: argparse.Namespace) -> int:
     partial.write_text(json.dumps({"documents": len(texts), "terms": terms}, separators=(",", ":")) + "\n", encoding="utf-8")
     partial.replace(args.out)
     print(f"Wrote {len(terms)} terms from {len(texts)} opportunities to {args.out}.")
-    return 0
-
-def _backfill_xml(args: argparse.Namespace) -> int:
-    try:
-        path = GrantsGovXmlClient().download_latest(Path(args.out))
-    except urllib.error.URLError as exc:
-        if not isinstance(exc.reason, ssl.SSLCertVerificationError):
-            raise
-        print(f"Could not verify a server certificate, so nothing was downloaded: {exc.reason}. www.grants.gov is known not to send its intermediate certificate. Download the extract in a browser from https://www.grants.gov/xml-extract.", file=sys.stderr)
-        return 1
-    except ApiError as exc:
-        print(f"Could not download the extract: {exc}", file=sys.stderr)
-        return 1
-    print(f"Downloaded latest Grants.gov XML extract to {path}.")
     return 0

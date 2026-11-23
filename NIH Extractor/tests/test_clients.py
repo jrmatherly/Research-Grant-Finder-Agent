@@ -100,10 +100,3 @@ def test_read_does_not_retry_a_certificate_error(monkeypatch, wrapped) -> None:
         clients._read(REQUEST, timeout=1)
     assert len(calls) == 1
 
-
-def test_download_removes_a_file_that_is_not_a_zip(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(clients.GrantsGovXmlClient, "latest_extract_url", lambda self: "https://example.invalid/x.zip")
-    monkeypatch.setattr(clients, "_get_bytes", lambda url, timeout=60: b"<html>blocked</html>")
-    with pytest.raises(clients.ApiError, match="not a zip archive"):
-        clients.GrantsGovXmlClient().download_latest(tmp_path / "x.zip")
-    assert not (tmp_path / "x.zip").exists()

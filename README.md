@@ -429,7 +429,6 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
 | `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores computed after a rebuild change. |
-| `uv run python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. With the project's Python this fails while `www.grants.gov` does not send its intermediate certificate. |
 
 Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.
 

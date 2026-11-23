@@ -1,9 +1,8 @@
 from __future__ import annotations
-import http.client, json, re, ssl, time, urllib.error, urllib.parse, urllib.request, zipfile
+import http.client, json, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-from .config import GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, GRANTSGOV_XML_EXTRACT_URL, NIH_GUIDE_API_URL, NIH_REPORTER_SEARCH_URL
+from .config import GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_REPORTER_SEARCH_URL
 
 class ApiError(RuntimeError):
     pass
@@ -18,7 +17,7 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
             failure, final = exc, exc.code < 500 and exc.code != 429
         # urllib wraps only a failed send in URLError. A connection that drops while the response is read raises OSError or HTTPException.
         except (OSError, http.client.HTTPException) as exc:
-            # A certificate that fails once fails every time. The caller reads the bare error to explain it.
+            # A certificate that fails once fails every time.
             if isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
                 raise
             failure, final = exc, False
@@ -34,9 +33,6 @@ def _post_json(url: str, payload: dict[str, Any], timeout: int = 30) -> dict[str
     if isinstance(parsed, dict) and parsed.get("errorcode") not in (None, 0):
         raise ApiError(f"{url} returned errorcode={parsed.get('errorcode')}: {parsed.get('msg')}")
     return parsed
-
-def _get_bytes(url: str, timeout: int = 60) -> bytes:
-    return _read(urllib.request.Request(url, headers={"User-Agent": "nih-grant-matcher/0.1"}), timeout)
 
 @dataclass
 class GrantsGovClient:
@@ -68,25 +64,6 @@ class GrantsGovClient:
         if not isinstance(data, dict):
             raise ApiError(f"Unexpected Grants.gov fetch response for {opportunity_id}")
         return data
-
-@dataclass
-class GrantsGovXmlClient:
-    extract_page_url: str = GRANTSGOV_XML_EXTRACT_URL
-    def latest_extract_url(self) -> str:
-        html = _get_bytes(self.extract_page_url).decode("utf-8", errors="replace")
-        matches = re.findall(r'href="([^"]*GrantsDBExtract\d+v\d+\.zip[^"]*)"', html) or re.findall(r"(https://[^\s\"']*GrantsDBExtract\d+v\d+\.zip)", html)
-        if not matches:
-            raise ApiError("No GrantsDBExtract zip link found on Grants.gov XML extract page")
-        latest = matches[-1]
-        return latest if latest.startswith("http") else urllib.parse.urljoin(self.extract_page_url, latest)
-    def download_latest(self, destination: str | Path) -> Path:
-        destination = Path(destination)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(_get_bytes(self.latest_extract_url()))
-        if not zipfile.is_zipfile(destination):
-            destination.unlink()
-            raise ApiError(f"Downloaded file is not a zip archive: {destination}")
-        return destination
 
 @dataclass
 class NihGuideClient:
