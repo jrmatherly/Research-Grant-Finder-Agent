@@ -332,16 +332,39 @@ def test_apply_delete_with_yes_deletes(tmp_path, capsys) -> None:
     assert "PAR-1" not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), ("Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx", False)])
+FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100
+
+
+@pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), (FOUR_PAGES, False)])
 def test_apply_fetch_and_requirements_say_when_the_text_has_no_section_iv(tmp_path, monkeypatch, capsys, text, said) -> None:
-    from nih_grant_matcher.clients import NihGuideClient
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     db = _apply_db(tmp_path)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
     for action in ("fetch", "requirements"):
         capsys.readouterr()
         assert cli.main(["--db", db, "apply", action, "1"]) == 0
         assert ("found no Section IV" in capsys.readouterr().out) == said
+
+
+def test_apply_fetch_names_a_decision_it_dropped(tmp_path, monkeypatch, capsys) -> None:
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
+    from nih_grant_matcher.store import OpportunityStore
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (FOUR_PAGES, "1"))
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    cli.main(["--db", db, "apply", "fetch", "1"])
+    store = OpportunityStore(db)
+    try:
+        store.decide_requirement(store.requirements(1)[0].id, True)
+    finally:
+        store.close()
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (FOUR_PAGES.replace("4 pages", "5 pages"), "1"))
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "fetch", "1"]) == 0
+    assert "Your decision on Research Strategy: at most 4 pages. was dropped, because the new text no longer has the sentence it came from." in capsys.readouterr().out
 
 
 def test_apply_check_prints_a_signed_section_with_a_new_error_as_a_draft(tmp_path, capsys) -> None:
