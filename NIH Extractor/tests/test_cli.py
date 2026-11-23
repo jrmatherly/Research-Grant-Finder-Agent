@@ -249,3 +249,66 @@ def test_a_read_only_database_from_before_says_what_to_do(tmp_path, capsys) -> N
         path.chmod(0o644)
     err = capsys.readouterr().err
     assert "not valid" not in err and "read-only" in err and "copy" in err and err.count("\n") == 1
+
+
+def _apply_db(tmp_path) -> str:
+    from helpers import opportunity
+    from nih_grant_matcher.scoring import MLRelevanceScorer
+    from nih_grant_matcher.store import OpportunityStore
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    try:
+        store.upsert_scored(MLRelevanceScorer().score(opportunity()))
+    finally:
+        store.close()
+    return str(tmp_path / "g.sqlite3")
+
+
+def test_apply_starts_writes_checks_signs_and_exports(tmp_path, capsys) -> None:
+    db, text = _apply_db(tmp_path), tmp_path / "narrative.txt"
+    assert cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"]) == 0
+    assert cli.main(["--db", db, "apply", "list"]) == 0
+    assert "PAR-1" in capsys.readouterr().out
+    text.write_text("One. Two. Three. Four.", encoding="utf-8")
+    assert cli.main(["--db", db, "apply", "write", "1", "project-narrative", "--file", str(text)]) == 0
+    assert cli.main(["--db", db, "apply", "check", "1"]) == 1
+    assert "over-limit" in capsys.readouterr().out
+    assert cli.main(["--db", db, "apply", "sign", "1", "project-narrative", "--signer", "A. Applicant"]) == 1
+    assert "over-limit" in capsys.readouterr().err
+    text.write_text("One. Two. Three.", encoding="utf-8")
+    assert cli.main(["--db", db, "apply", "write", "1", "project-narrative", "--file", str(text)]) == 0
+    assert cli.main(["--db", db, "apply", "check", "1"]) == 0
+    assert cli.main(["--db", db, "apply", "sign", "1", "project-narrative", "--signer", "A. Applicant"]) == 0
+    assert "I have read this section." in capsys.readouterr().out
+    assert cli.main(["--db", db, "apply", "export", "1", "--out", str(tmp_path / "out")]) == 0
+    assert (tmp_path / "out" / "project-narrative.md").read_text(encoding="utf-8").endswith("One. Two. Three.\n")
+    assert (tmp_path / "out" / "DRAFT-specific-aims.md").exists()
+
+
+def test_apply_adds_a_fact_and_lists_the_requirements(tmp_path, capsys) -> None:
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    assert cli.main(["--db", db, "apply", "add", "1", "--kind", "aim", "--text", "Map heart cells."]) == 0
+    assert cli.main(["--db", db, "apply", "requirements", "1"]) == 0
+    assert "Research Strategy" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv", [["start", "PAR-1", "--type", "R01"], ["start", "PAR-9", "--type", "R21"], ["check", "7"], ["write", "1", "budget", "--file", "x.txt"], ["add", "1", "--kind", "budget", "--text", "x"], ["write", "1", "specific-aims", "--file", "missing.txt"], ["delete", "1"]])
+def test_an_apply_mistake_is_one_line_and_exit_1(tmp_path, monkeypatch, capsys, argv) -> None:
+    db = _apply_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "x.txt").write_text("x", encoding="utf-8")
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", *argv]) == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "Traceback" not in err
+    assert cli.main(["--db", db, "apply", "list"]) == 0 and "PAR-1" in capsys.readouterr().out
+
+
+def test_apply_delete_with_yes_deletes(tmp_path, capsys) -> None:
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    assert cli.main(["--db", db, "apply", "delete", "1", "--yes"]) == 0
+    capsys.readouterr()
+    cli.main(["--db", db, "apply", "list"])
+    assert "PAR-1" not in capsys.readouterr().out

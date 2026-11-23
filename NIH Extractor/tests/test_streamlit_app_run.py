@@ -267,3 +267,83 @@ def test_a_database_path_that_is_not_a_database_gives_a_message(tmp_path, monkey
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     assert not app.exception
     assert app.error
+
+
+def _r21_database(tmp_path, start=False):
+    from helpers import opportunity
+    from nih_grant_matcher.writer import Workspace
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        saved = replace_close(opportunity())
+        store.upsert_scored(MLRelevanceScorer().score(saved))
+        if start:
+            Workspace.start(store, saved, "NIH:R21")
+    finally:
+        store.close()
+    return tmp_path / "data" / "grants.sqlite3"
+
+
+def replace_close(opportunity):
+    from dataclasses import replace
+    return replace(opportunity, close_date=date.today() + timedelta(days=60))
+
+
+def _apply_view(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Apply").run(timeout=30)
+    return app
+
+
+def test_start_application_opens_the_apply_view(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.button(key="start_application").click().run(timeout=30)
+    assert not app.exception
+    assert app.session_state["view"] == "Apply"
+    page = " ".join(element.value for element in [*app.markdown, *app.caption])
+    assert all(title in page for title in ("Specific Aims", "Research Strategy", "Project Summary/Abstract", "Project Narrative"))
+
+
+def test_the_apply_view_says_how_to_start_an_application(tmp_path, monkeypatch) -> None:
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception
+    assert any("choose Start application" in info.value for info in app.info)
+    _r21_database(tmp_path)
+    app.run(timeout=30)
+    assert not app.exception and any("choose Start application" in info.value for info in app.info)
+
+
+def test_signing_an_over_limit_narrative_is_refused(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("One. Two. Three. Four.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert not app.exception and any("Saved revision 1" in success.value for success in app.success)
+    app.text_input(key="apply_signer").set_value("A. Applicant")
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert not app.exception
+    assert any("4 sentences" in error.value for error in app.error)
+    store = OpportunityStore(path)
+    try:
+        assert store.signoffs(1) == [] and [r.text for r in store.revisions(1)] == ["One. Two. Three. Four."]
+    finally:
+        store.close()
+
+
+def test_a_database_error_on_save_is_a_message(tmp_path, monkeypatch) -> None:
+    import os
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    path.chmod(0o444)
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    try:
+        app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1.")
+        app.button(key="apply_save_button").click().run(timeout=30)
+    finally:
+        path.chmod(0o644)
+    assert not app.exception
+    assert any("readonly" in error.value.replace("\\", "") for error in app.error)
