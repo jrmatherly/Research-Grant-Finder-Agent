@@ -99,3 +99,6 @@ def test_rarity_table_is_present_and_plausible() -> None:
     scorer = MLRelevanceScorer()
     assert scorer.documents >= 1000
     assert scorer.document_frequency["research"] > scorer.document_frequency["phenotypes"] > 1
+
+def test_medium_starts_at_35_and_high_at_70() -> None:
+    assert [MLRelevanceScorer._classification(score) for score in (34.9, 35, 69.9, 70)] == ["Watchlist", "Medium", "Medium", "High"]

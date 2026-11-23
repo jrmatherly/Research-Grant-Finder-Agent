@@ -8,7 +8,7 @@ from .excel import write_excel
 from .normalizer import normalize_nih_guide
 from .scoring import document_frequencies
 from .store import OpportunityStore
-from .workflow import fetch_score_opportunities
+from .workflow import fetch_score_opportunities, rescore_saved
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find NIH grant opportunities relevant to ML/data analysis.")
@@ -62,6 +62,7 @@ def _run(args: argparse.Namespace) -> int:
     store = OpportunityStore(config.db_path)
     try:
         saved = store.upsert_many(scored)
+        rescore_saved(store)
         digest_path = DigestAgent(store, min_score=args.min_score).write(args.out, limit=max(100, args.limit))
     finally:
         store.close()
@@ -73,6 +74,7 @@ def _run(args: argparse.Namespace) -> int:
 def _digest(args: argparse.Namespace) -> int:
     store = OpportunityStore(args.db)
     try:
+        rescore_saved(store)
         digest_path = DigestAgent(store, min_score=args.min_score).write(args.out, limit=args.limit)
     finally:
         store.close()
@@ -82,6 +84,7 @@ def _digest(args: argparse.Namespace) -> int:
 def _excel(args: argparse.Namespace) -> int:
     store = OpportunityStore(args.db)
     try:
+        rescore_saved(store)
         items = store.top_scored(min_score=args.min_score, limit=args.limit)
         output_path = write_excel(items, args.out, min_score=args.min_score)
     finally:
