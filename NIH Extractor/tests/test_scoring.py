@@ -118,3 +118,9 @@ def test_ai_an_is_not_artificial_intelligence() -> None:
 @pytest.mark.parametrize("title", ["AI tools for AI/AN health", "AI/ML methods for imaging", "PRIMED-AI coordination", "AI/Analytics core"])
 def test_ai_matches_beside_ai_an(title: str) -> None:
     assert "AI" in MLRelevanceScorer().score(_nih(title, ""), today=date(2026, 7, 6)).matched_terms
+
+
+def test_score_bin_edges_follow_the_levels() -> None:
+    from nih_grant_matcher.scoring import score_bin
+    assert [score_bin(score) for score in (0, 24.9, 25, 34.9, 35, 69.9, 70, 100)] == ["0-25", "0-25", "25-35", "25-35", "35-70", "35-70", "70-100", "70-100"]
+    assert (MLRelevanceScorer._classification(35.0), MLRelevanceScorer._classification(70.0)) == ("Medium", "High")

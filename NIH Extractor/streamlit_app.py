@@ -9,6 +9,7 @@ import streamlit as st
 from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.excel import write_excel
 from nih_grant_matcher.models import ScoredOpportunity
+from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
@@ -210,13 +211,7 @@ with tab_visuals:
     with chart_col3:
         st.subheader("Score Distribution")
         score_labels = ["0-25", "25-35", "35-70", "70-100"]
-        score_bins = pd.cut(
-            filtered["Score"],
-            bins=[0, 25, 35, 70, 100],
-            labels=score_labels,
-            include_lowest=True,
-        )
-        score_counts = score_bins.value_counts().reindex(score_labels, fill_value=0)
+        score_counts = filtered["Score"].map(score_bin).value_counts().reindex(score_labels, fill_value=0)
         st.bar_chart(score_counts)
     with chart_col4:
         st.subheader("Expirations by Month")

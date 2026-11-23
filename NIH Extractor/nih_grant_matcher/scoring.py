@@ -20,6 +20,9 @@ def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
     left_norm = math.sqrt(sum(v * v for v in left.values()))
     right_norm = math.sqrt(sum(v * v for v in right.values()))
     return numerator / (left_norm * right_norm) if left_norm and right_norm else 0.0
+# The chart bins of the dashboard. Each bin starts at its lower edge, so 35 and 70 fall in the bin of their level in _classification.
+def score_bin(score: float) -> str:
+    return "0-25" if score < 25 else "25-35" if score < 35 else "35-70" if score < 70 else "70-100"
 
 class MLRelevanceScorer:
     def __init__(self, config: MatcherConfig | None = None) -> None:
