@@ -10,6 +10,10 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest>=8"]
+macos = [
+    "pyinstaller>=6.22.3 ; sys_platform == 'darwin'",
+    "pywebview>=6.2.1 ; sys_platform == 'darwin'",
+]
 
 [tool.uv]
 # An application run from this directory, not a library: uv installs the dependencies and does not build the project.

@@ -237,5 +237,8 @@ private/
 NIH Extractor/data/
 NIH Extractor/digests/
 NIH Extractor/outputs/
+NIH Extractor/macos/build/
+NIH Extractor/macos/dist/
+!NIH Extractor/macos/grant_matcher.spec
 CLAUDE.local.md
 .claude/settings.local.json

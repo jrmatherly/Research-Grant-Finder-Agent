@@ -1,0 +1,77 @@
+import multiprocessing, os, socket, subprocess, sys, threading, time, urllib.request
+from html import escape
+from pathlib import Path
+
+NAME = "Grant Matcher"
+
+
+def data_dir(home: Path) -> Path:
+    return home / "Library" / "Application Support" / NAME
+
+
+def log_path(home: Path) -> Path:
+    return home / "Library" / "Logs" / NAME / "server.log"
+
+
+def app_script() -> Path:
+    return Path(sys._MEIPASS) / "streamlit_app.py" if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent / "streamlit_app.py"
+
+
+def server_argv(app: Path, port: int) -> list[str]:
+    return ["streamlit", "run", str(app), "--global.developmentMode=false", "--server.address=127.0.0.1", "--server.headless=true", f"--server.port={port}", "--browser.gatherUsageStats=false", "--server.showEmailPrompt=false", "--client.toolbarMode=viewer", "--server.fileWatcherType=none"]
+
+
+def page(text: str) -> str:
+    return f"<html><body style='font:15px -apple-system,sans-serif;display:grid;place-items:center;height:90vh;color:#444'><p>{escape(text)}</p></body></html>"
+
+
+def serve(port: int) -> int:
+    home = data_dir(Path.home())
+    home.mkdir(parents=True, exist_ok=True)
+    os.chdir(home)
+
+    def watch() -> None:
+        # Quit kills only the window process, so the server exits once it is orphaned to launchd.
+        while os.getppid() != 1: time.sleep(1)
+        os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
+    from streamlit.web import cli
+    sys.argv = server_argv(app_script(), port)
+    return cli.main()
+
+
+def wait_and_load(window, child: subprocess.Popen, url: str, log: Path) -> None:
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and child.poll() is None:
+        try:
+            urllib.request.urlopen(url + "/_stcore/health", timeout=1)
+            return window.load_url(url)
+        except OSError:
+            time.sleep(0.25)
+    window.load_html(page(f"{NAME} could not start its server. See the log at {log}."))
+
+
+def main() -> int:
+    multiprocessing.freeze_support()
+    if "--serve" in sys.argv:
+        return serve(int(sys.argv[sys.argv.index("--serve") + 1]))
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
+    log = log_path(Path.home())
+    log.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, "--serve", str(port)] if getattr(sys, "frozen", False) else [sys.executable, __file__, "--serve", str(port)]
+    with log.open("ab") as out:
+        child = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+    try:
+        import webview
+        webview.settings["ALLOW_DOWNLOADS"] = True
+        window = webview.create_window(NAME, html=page(f"Starting {NAME}…"), width=1400, height=900, text_select=True)
+        webview.start(wait_and_load, (window, child, f"http://127.0.0.1:{port}", log))
+    finally:
+        child.terminate()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
