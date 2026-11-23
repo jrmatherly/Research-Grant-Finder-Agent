@@ -150,3 +150,7 @@ def test_an_unsure_sentence_count_gives_both_counts_and_says_to_count_by_hand() 
 def test_a_citation_names_your_inputs() -> None:
     found = check_section("Aim [NEEDS INPUT: dose] as shown [@jones2020].", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", ())
     assert all("fact" not in f.message and ("input" in f.message) for f in found if f.code in ("unknown-citation", "placeholder"))
+
+def test_a_figure_line_in_the_research_strategy_is_allowed() -> None:
+    assert "figure-not-allowed" not in _codes("Significance\nHeart cells fail.\nFigure 1. Heart cells in failure.", "research-strategy")
+    assert "figure-not-allowed" in _codes("Aim 1.\nFigure 1. Heart cells in failure.")

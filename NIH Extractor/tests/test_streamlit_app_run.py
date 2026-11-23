@@ -600,3 +600,87 @@ def test_a_saved_section_of_white_space_is_not_called_clean(tmp_path, monkeypatc
     app.button(key="apply_save_button").click().run(timeout=30)
     assert not app.exception and any("Saved revision 1" in success.value for success in app.success)
     assert "No text saved yet." in [info.value for info in app.info] and not any("found nothing to fix" in success.value for success in app.success)
+
+
+def _signoffs(path):
+    store = OpportunityStore(path)
+    try:
+        return store.signoffs(1)
+    finally:
+        store.close()
+
+
+def test_signing_a_clean_section_shows_it_signed(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("One. Two.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    app.text_input(key="apply_signer").set_value("A. Applicant")
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert not app.exception and any("Signed off at revision 1." in caption.value for caption in app.caption)
+    assert [s.signer for s in _signoffs(path)] == ["A. Applicant"]
+
+
+def test_signing_unsaved_text_asks_for_a_save_and_signs_nothing(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("One. Two.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("One. Two. Three.")
+    app.text_input(key="apply_signer").set_value("A. Applicant")
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert not app.exception and any("Save your text before you sign off" in error.value for error in app.error)
+    assert _signoffs(path) == []
+
+
+def test_a_stale_save_keeps_the_applicants_text_in_the_box(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 1, "applicant", "write", "Aim 1 from elsewhere.")
+    finally:
+        store.close()
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1, mine.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert any("changed after you opened it" in warning.value for warning in app.warning)
+    assert app.text_area(key="apply_text_1_specific-aims").value == "Aim 1, mine."
+
+
+def test_a_fetch_that_both_sources_fail_says_the_standing_rules_apply(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.clients import ApiError, GrantsGovClient, NihGuideClient
+    def down(self, number):
+        raise ApiError("timed out")
+    monkeypatch.setattr(NihGuideClient, "doctext", down)
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", down)
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    assert not app.exception and any("The standing rules of the grant type still apply." in error.value for error in app.error)
+
+
+def test_a_save_that_leaves_a_finding_shows_it_on_the_sections_tab(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1. See https://example.org for more.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert not app.exception and any("NIH allows a link only where the announcement says so." in warning.value.replace("\\", "") for warning in app.warning)
+
+
+def test_a_workspace_notice_is_on_the_page(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.writer import Workspace
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        ws = Workspace(store, 1)
+        fact = ws.add_fact("reference", "Smith J. Heart cells. 2021.", label="smith2021")
+        ws.sign("specific-aims", "A. Applicant", ws.write("specific-aims", "As we showed [@smith2021].", parent=None).id)
+        ws.retire_fact(fact.id)
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and any("is a draft again" in warning.value for warning in app.warning)

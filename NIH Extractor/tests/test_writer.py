@@ -266,3 +266,41 @@ def test_the_provenance_log_names_the_announcement_and_the_inputs(tmp_path) -> N
     assert all(part in log for part in ("the NIH Guide", announcement.url, announcement.sha256, f"{announcement.fetched_at:%Y-%m-%d}"))
     assert f"Input {kept.id}. reference, key smith2021. In use." in log and f"Input {retired.id}. aim. Retired on" in log
     assert "A secret aim." not in log and "Heart cells" not in log
+
+def test_a_rejected_limit_is_not_applied(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, False)
+    assert ws.view().section("research-strategy").limit.amount == 6
+
+def test_an_application_whose_notice_has_closed_still_fetches_by_its_number(tmp_path) -> None:
+    from datetime import date
+    from dataclasses import replace
+    from helpers import opportunity
+    from nih_grant_matcher.scoring import MLRelevanceScorer
+    from nih_grant_matcher.store import OpportunityStore
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    closed = replace(opportunity(), close_date=date(2020, 1, 1))
+    store.upsert_scored(MLRelevanceScorer().score(closed))
+    ws = Workspace.start(store, closed, "NIH:R21")
+    guide = Guide(FOUR_PAGES)
+    assert ws.opportunity is None and ws.fetch_announcement(guide, Grants("")).opportunity_number == "PAR-1"
+    assert guide.asked == ["PAR-1"] and ws.view().announcement is not None
+
+def test_the_attestation_names_the_digest_of_the_section_text(tmp_path) -> None:
+    import hashlib
+    ws = start(tmp_path)
+    revision = ws.write("project-narrative", "One. Two.", parent=None)
+    signed = ws.sign("project-narrative", "A. Applicant", revision.id)
+    assert signed.attestation.endswith(f"Revision {revision.id}, sha256 {hashlib.sha256('One. Two.'.encode('utf-8')).hexdigest()}.")
+
+def test_the_export_holds_the_rules_the_decisions_the_log_and_the_text(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    revision = ws.write("specific-aims", "Aim 1 maps heart cells.", parent=None)
+    out = ws.export(tmp_path / "out")
+    requirements = (out / "requirements.md").read_text(encoding="utf-8")
+    assert "- Specific Aims. At most 1 page." in requirements and "- Research Strategy: at most 4 pages. (confirmed). The announcement says" in requirements
+    assert f"- Revision {revision.id}. Specific Aims. applicant write, parent none, at " in (out / "provenance-log.md").read_text(encoding="utf-8")
+    assert (out / "DRAFT-specific-aims.md").read_text(encoding="utf-8") == "# Specific Aims\n\nAim 1 maps heart cells.\n"
