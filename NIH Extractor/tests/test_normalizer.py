@@ -9,3 +9,12 @@ def test_normalize_grantsgov_combines_search_and_detail() -> None:
     assert opportunity.close_date is not None
     assert opportunity.award_ceiling == 500000
     assert "Deep learning" in opportunity.description
+
+
+def test_clean_text_decodes_entities_after_it_strips_tags() -> None:
+    from nih_grant_matcher.normalizer import _clean_text
+    assert _clean_text("Alzheimer&rsquo;s&nbsp;disease <b>data</b> p&lt;0.05") == "Alzheimer’s disease data p<0.05"
+
+def test_nih_guide_title_loses_its_nonbreaking_space() -> None:
+    from nih_grant_matcher.normalizer import normalize_nih_guide
+    assert normalize_nih_guide({"rowid": "1", "docnum": "PAR-27-001", "title": "Machine&nbsp;learning for imaging", "type": "active"}).title == "Machine learning for imaging"
