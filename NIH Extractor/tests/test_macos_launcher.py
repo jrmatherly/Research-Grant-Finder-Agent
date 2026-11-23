@@ -186,3 +186,49 @@ def test_server_runs_from_the_data_folder(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     assert launcher.serve(51234) == 0
     assert seen["cwd"].resolve() == launcher.data_dir(tmp_path).resolve() and "--server.port=51234" in seen["argv"]
+
+
+def test_no_updater_when_the_app_is_not_frozen(monkeypatch) -> None:
+    launcher = _load(monkeypatch)
+    assert launcher.sparkle_framework() is None and launcher.app_menu() == []
+
+
+def test_updater_framework_is_found_inside_the_frozen_bundle(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    framework = tmp_path / "Grant Matcher.app" / "Contents" / "Frameworks" / "Sparkle.framework"
+    framework.mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Grant Matcher.app" / "Contents" / "MacOS" / "Grant Matcher"))
+    assert launcher.sparkle_framework() == framework
+
+
+def test_frozen_bundle_without_sparkle_has_no_updater(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Contents" / "MacOS" / "Grant Matcher"))
+    assert launcher.sparkle_framework() is None
+
+
+def test_a_failed_updater_start_is_logged_and_never_raised(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setitem(sys.modules, "objc", None)
+    log = tmp_path / "server.log"
+    launcher.start_updater(tmp_path / "Sparkle.framework", log)
+    assert launcher.UPDATER == [] and "updater did not start" in log.read_text()
+
+
+def test_checking_for_updates_without_an_updater_does_nothing(monkeypatch) -> None:
+    launcher = _load(monkeypatch)
+    launcher.check_for_updates()
+
+
+def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    scheduled = []
+    tools = types.ModuleType("PyObjCTools")
+    tools.AppHelper = types.SimpleNamespace(callAfter=lambda function, *args: scheduled.append((function, args)))
+    monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
+    framework, log = tmp_path / "Sparkle.framework", tmp_path / "server.log"
+    monkeypatch.setattr(launcher, "sparkle_framework", lambda: framework)
+    launcher.wait_and_load(_Window(), _Child(exit_code=1), "http://127.0.0.1:9", log)
+    assert scheduled == [(launcher.start_updater, (framework, log))]

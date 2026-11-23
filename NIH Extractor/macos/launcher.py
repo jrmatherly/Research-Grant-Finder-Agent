@@ -3,6 +3,8 @@ from html import escape
 from pathlib import Path
 
 NAME = "Grant Matcher"
+# Holds the one SPUStandardUpdaterController, which stops working once it is released.
+UPDATER: list = []
 
 
 def data_dir(home: Path) -> Path:
@@ -67,7 +69,43 @@ def start_failure(child: subprocess.Popen, url: str) -> str | None:
     return "its server did not answer within 60 seconds"
 
 
+def sparkle_framework() -> Path | None:
+    framework = Path(sys.executable).parent.parent / "Frameworks" / "Sparkle.framework"
+    return framework if getattr(sys, "frozen", False) and framework.is_dir() else None
+
+
+def start_updater(framework: Path, log: Path) -> None:
+    # Runs on the main thread. An app that cannot update must still open.
+    try:
+        import objc
+        objc.loadBundle("Sparkle", {}, bundle_path=str(framework))
+        controller = objc.lookUpClass("SPUStandardUpdaterController").alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None)
+        UPDATER.append(controller)
+    except Exception:
+        with log.open("a") as out:
+            out.write(f"{NAME} updater did not start:\n{traceback.format_exc()}")
+
+
+def check_for_updates() -> None:
+    if not UPDATER: return
+    # pywebview runs a menu action off the main thread.
+    from PyObjCTools import AppHelper
+    AppHelper.callAfter(lambda: UPDATER[0].checkForUpdates_(None))
+
+
+def app_menu() -> list:
+    if sparkle_framework() is None: return []
+    from webview.menu import Menu, MenuAction
+    # pywebview puts the items of a menu titled __app__ into the app menu.
+    return [Menu("__app__", [MenuAction("Check for Updates…", check_for_updates)])]
+
+
 def wait_and_load(window, child: subprocess.Popen, url: str, log: Path) -> None:
+    framework = sparkle_framework()
+    if framework is not None:
+        # The updater must not wait for the server: a release whose server cannot start is the one that most needs an update.
+        from PyObjCTools import AppHelper
+        AppHelper.callAfter(start_updater, framework, log)
     # pywebview runs this in a bare thread, where an uncaught error would leave the starting page up for good.
     try:
         failure = start_failure(child, url)
@@ -112,7 +150,7 @@ def run_window() -> None:
         import webview
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window(NAME, html=page(f"Starting {NAME}…"), width=1400, height=900, text_select=True)
-        webview.start(wait_and_load, (window, child, f"http://127.0.0.1:{port}", log))
+        webview.start(wait_and_load, (window, child, f"http://127.0.0.1:{port}", log), menu=app_menu())
     finally:
         child.terminate()
 
