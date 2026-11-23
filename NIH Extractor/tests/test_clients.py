@@ -100,3 +100,20 @@ def test_read_does_not_retry_a_certificate_error(monkeypatch, wrapped) -> None:
         clients._read(REQUEST, timeout=1)
     assert len(calls) == 1
 
+
+def test_nih_guide_default_run_reads_every_page(monkeypatch) -> None:
+    import json, urllib.parse
+    from nih_grant_matcher.agents import NihGuideIngestionAgent
+    from nih_grant_matcher.config import MatcherConfig
+    offsets = []
+    def fake_read(request, timeout, attempts=3):
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)
+        start, size = int(query["from"][0]), int(query["perpage"][0])
+        offsets.append((start, size))
+        hits = [{"_source": {"rowid": str(n), "docnum": f"PAR-27-{n:03d}", "title": "Notice", "type": "active"}} for n in range(start, min(start + size, 371))]
+        return json.dumps({"data": {"hits": {"hits": hits}}}).encode()
+    monkeypatch.setattr(clients, "_read", fake_read)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    opportunities = NihGuideIngestionAgent(clients.NihGuideClient(), MatcherConfig()).ingest()
+    assert len({opportunity.source_id for opportunity in opportunities}) == 371
+    assert offsets == [(0, 100), (100, 100), (200, 100), (300, 100)]

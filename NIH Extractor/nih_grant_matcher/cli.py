@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--agency", action="append", help="Grants.gov agency code. Used only with --source grants.gov or both.")
     run.add_argument("--status", action="append", help="Grants.gov opportunity status. Defaults to posted and forecasted.")
     run.add_argument("--keyword", default="", help="Optional keyword search.")
-    run.add_argument("--limit", type=int, default=250, help="Maximum rows to request per source.")
+    run.add_argument("--limit", type=int, default=500, help="Maximum rows to request per source.")
     run.add_argument("--out", default="digests/latest.md", help="Markdown digest path.")
     run.add_argument("--min-score", type=float, default=0.0, help="Minimum score included in digest.")
     digest = sub.add_parser("digest", help="Write a digest from saved opportunities.")
@@ -54,7 +54,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     config = MatcherConfig(agencies=tuple(args.agency or ("HHS-NIH11",)), statuses=tuple(args.status or ("posted", "forecasted")), rows=args.limit, min_digest_score=args.min_score, db_path=args.db)
-    scored, fetched = fetch_score_opportunities(config, source=args.source, keyword=args.keyword)
+    scored, fetched, capped = fetch_score_opportunities(config, source=args.source, keyword=args.keyword)
+    if capped:
+        print(f"A source returned {args.limit} rows, which is the --limit, and may hold more. Raise --limit and run again.", file=sys.stderr)
     store = OpportunityStore(config.db_path)
     try:
         saved = store.upsert_many(scored)

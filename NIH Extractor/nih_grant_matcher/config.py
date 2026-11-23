@@ -43,7 +43,7 @@ GENERIC_BIOMEDICAL_TERMS = {"clinical trial", "health disparities", "community h
 class MatcherConfig:
     agencies: tuple[str, ...] = ("HHS-NIH11",)
     statuses: tuple[str, ...] = ("posted", "forecasted")
-    rows: int = 250
+    rows: int = 500
     min_digest_score: float = 0.0
     db_path: str = "data/grants.sqlite3"
     keywords: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_KEYWORDS))

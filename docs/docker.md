@@ -33,7 +33,7 @@ The image `ghcr.io/jrmatherly/nih-grant-matcher` holds the dashboard and the com
 
 3. Open http://localhost:8501.
 
-4. In the sidebar, select **Run Search**. The first search takes a few seconds for the NIH Guide. The **grants.gov** source makes one request for each opportunity, so 250 rows take about two minutes.
+4. In the sidebar, select **Run Search**. The first search takes a few seconds for the NIH Guide. The **grants.gov** source makes one request for each opportunity, so the default of 500 rows takes about three minutes.
 
 The port is published on `127.0.0.1` only. The dashboard has no login and takes file paths as input, so do not publish it on a public address.
 
