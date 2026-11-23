@@ -345,3 +345,40 @@ Ran on 2026-11-23 as prototypes outside the package. Nothing in the package chan
 - What limits these numbers. One set of aims per field. Two stand-ins that the session lead chose, with no judgement from a researcher in the field. The topic count comes from the same full text that the last three rows score, so it favours them. The RePORTER weighting was a first attempt. A difference of two or three records between rows is within what another set of aims could change.
 - What they support. The text that is scored and the institute move the ranking more than the way terms are proposed. Scoring more text raises every score, so the High and Medium thresholds would no longer mean what the README says.
 - Read, for D14: `streamlit_app.py` and `profile_sentence` decide on the built-in wording by whether a profile is saved. A saved profile that keeps the built-in ranking and adds a name would lose the word "computational" from the page caption, so that test has to compare the ranking fields.
+
+## Research after Stage 2 (2026-11-23)
+
+Stage 2 merged as pull requests 11 and 12. The owner asked for two measurements before Stage 3: the size of the institute bonus of decision 15, and the rule for a second fetch of an announcement. The labels are the ones above. The scripts and their results are in the plan's git-ignored workspace, under `research-stage-3/`.
+
+### The institute bonus, measured again (2026-11-23)
+
+Agent ran the sweep. The session lead ran `measure.py` again, got the same `rows.csv`, and computed the totals below from it.
+
+- The set-up. Six fields (cardiology, oncology, neuroscience, health services, vision, oral health), three sets of aims each, scored against 369 live records with the narrow action-word list of decision 13. A bonus of 0 to 20 points goes to a record whose `agency_code` is an institute of the field. The counts are records in the six top tens, of 60, as the mean of the three sets of aims.
+
+| Bonus | Topic records, of 60 | Institute records, of 60 | Records at Medium on the institute alone |
+| --- | --- | --- | --- |
+| 0 | 22.0 | 15.3 | 0 |
+| 4 | 25.3 | 20.3 | 0 |
+| 8 | 28.3 | 24.7 | 0 |
+| 10 | 29.0 | 27.0 | 0 |
+| 12 | 30.0 | 29.0 | 1.0 |
+| 20 | 34.3 | 37.7 | 26.3 |
+
+- A bonus of 8 gives 6.3 of the 8.0 topic records that 12 adds. The best score of a record with no topical signal was 25.6, so a bonus up to 9.4 puts no such record at Medium (35) in this data.
+- The topic stand-in is not independent of the institute. For cardiology, 18 of the 19 NHLBI records count as topic records and 0 of 287 records from other institutes do. So most of the rise that decision 15 cites, from 21 to 26, follows from how the stand-in is built.
+- 22 percent of the records carry a code that is no single institute (NIH, OD, RMOD, FDA). The bonus does nothing for a field that no institute owns (health services) or for a small institute (NEI issued 3 of the 369).
+- With ten institutes in a profile the bonus reaches 52 to 59 percent of the records, and the gain in topic records is gone. Three is the limit in Task 9a.
+- A bonus that needs a topical match as well costs 6 topic records for the one sparse profile and changes nothing for the others. Task 9a has no such gate.
+- What limits these numbers. The two stand-ins are the session lead's, with no judgement from a researcher in the field, and a difference of two or three records is within what another set of aims changes.
+
+### Which copy of the announcement to keep
+
+Agent ran the requests. The session lead read NOT-OD-25-143, the cited code and the result files, and did not repeat the requests.
+
+- NOT-OD-25-143 makes Grants.gov the single official source of an NIH announcement from fiscal 2026.
+- Of 14 notices, the 6 posted before October 2025 have no real text on Grants.gov, and the 8 posted after all have one. The attachment for an older notice is a page that redirects to the NIH Guide.
+- PAR-26-121 has a revised attachment on Grants.gov that is a week newer than the text the Guide serves.
+- The same sentence differs between the two sources in spacing and punctuation. Of 9 quotes parsed from the Guide's text, `quoted_in` found 0 in the Grants.gov text, and a comparison on letters and digits found 9.
+- Defects this found in the Stage 2 code, all fixed in pull request 13: the first `Full-Announcement.html` was taken and not the newest; a Guide answer of 529 bytes was saved as the announcement; a refusal outlived the deletion of the application; a closed notice was looked up with no Grants.gov id; a Guide copy that replaced a Grants.gov copy dropped a decision and reported success; and a refusal said "gave no text" when the request had failed.
+- Decision 17 is the rule that came out of it.
