@@ -119,3 +119,27 @@ def test_run_says_when_it_reaches_the_limit(sources, tmp_path, capsys) -> None:
     assert cli.main(["--db", str(db), "run", "--out", str(tmp_path / "d.md")]) == 0
     assert capsys.readouterr().err == ""
     assert cli.build_parser().parse_args(["run"]).limit == 500
+
+
+def test_digest_calls_the_date_an_expiration(sources, tmp_path) -> None:
+    out = tmp_path / "d.md"
+    cli.main(["--db", str(tmp_path / "g.sqlite3"), "run", "--out", str(out)])
+    digest = out.read_text(encoding="utf-8")
+    assert f"- Expires: {CLOSE.isoformat()}" in digest
+    assert f"  - Open until {CLOSE.isoformat()}" in digest
+    assert "eadline" not in digest
+
+def test_digest_replaces_a_saved_deadline_reason(tmp_path) -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.models import Opportunity
+    from nih_grant_matcher.scoring import MLRelevanceScorer
+    from nih_grant_matcher.store import OpportunityStore
+    saved = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:5", opportunity_number="RFA-OLD", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active", close_date=CLOSE))
+    db, out = tmp_path / "g.sqlite3", tmp_path / "d.md"
+    store = OpportunityStore(db)
+    try:
+        store.upsert_scored(replace(saved, reasons=(f"Deadline is still active: {CLOSE.isoformat()}",)))
+    finally:
+        store.close()
+    assert cli.main(["--db", str(db), "digest", "--out", str(out)]) == 0
+    assert "eadline" not in out.read_text(encoding="utf-8")

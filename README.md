@@ -195,9 +195,9 @@ Text similarity provides an additional relevance signal when explicit computatio
 
 The scoring system considers whether the opportunity originates from an NIH or HHS source.
 
-### 5. Deadline Awareness
+### 5. Expiration Awareness
 
-Active deadlines contribute to prioritization so researchers can focus on actionable opportunities.
+An opportunity that expires soon ranks a little higher. The date shown is the day the notice expires. Application due dates are in the announcement.
 
 ### 6. Record Completeness
 
@@ -238,7 +238,7 @@ Researchers can:
 * Filter by NIH institute
 * Search within computational signals
 * Review relevance score distributions
-* Monitor upcoming deadlines
+* Monitor upcoming expiration dates
 * Inspect why an opportunity matched
 * Open official NIH Guide and Grants.gov records
 * Export selected opportunities to Excel
@@ -250,7 +250,7 @@ The dashboard automatically displays:
 * **Visible Opportunities**
 * **High-Priority Matches**
 * **Median Relevance Score**
-* **Next Funding Deadline**
+* **Next Expiration**
 
 ---
 
@@ -266,7 +266,7 @@ For each opportunity, this tool  preserves:
 * Reasons for the match
 * NIH institute
 * Opportunity status
-* Open and close dates
+* Open and expiration dates
 * Funding category
 * Opportunity description
 * Official source links
@@ -343,7 +343,7 @@ The research prototype currently supports:
 * NIH/HHS opportunity filtering
 * Computational relevance scoring
 * Explainable match reasoning
-* Deadline-aware prioritization
+* Expiration-aware prioritization
 * SQLite persistence
 * Saved opportunity retrieval
 * Markdown digest generation
@@ -430,7 +430,7 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
 | `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores computed after a rebuild change. |
 
-Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.
+Add `--help` to a command to see its options. Saved opportunities whose expiration date has passed are left out of the dashboard, the digest, and the Excel file.
 
 ---
 

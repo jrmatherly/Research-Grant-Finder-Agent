@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from .models import ScoredOpportunity
 
-HEADERS = ["Rank", "Classification", "Score", "Opportunity Number", "Title", "Agency", "Status", "Open Date", "Close Date", "Award Ceiling", "Matched Terms", "Why It Matched", "Summary", "Source URL"]
+HEADERS = ["Rank", "Classification", "Score", "Opportunity Number", "Title", "Agency", "Status", "Open Date", "Expires", "Award Ceiling", "Matched Terms", "Why It Matched", "Summary", "Source URL"]
 
 def write_excel(items: list[ScoredOpportunity], path: str | Path, min_score: float = 35.0) -> Path:
     path = Path(path)
