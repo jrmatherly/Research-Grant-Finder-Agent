@@ -90,6 +90,8 @@ class GrantsGovClient:
         return data
     def full_announcement(self, opportunity_id: str) -> str:
         folders = self.fetch_opportunity(opportunity_id).get("synopsisAttachmentFolders") or []
+        if not isinstance(folders, list) or any(isinstance(f, dict) and not isinstance(f.get("synopsisAttachments") or [], list) for f in folders):
+            raise ApiError(f"Unexpected Grants.gov fetch response for {opportunity_id}: an attachment list is not a list")
         found = next((a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")), None)
         if found is None:
             return ""

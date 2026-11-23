@@ -7,6 +7,7 @@ from typing import Any
 from . import __version__
 from .announcement import Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
 from .checks import check_section
+from .clients import ApiError
 from .models import Application, Attribution, Fact, Finding, Model, Opportunity, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import attribution, head, section_state, share
@@ -142,9 +143,11 @@ class Workspace:
 
     def fetch_announcement(self, guide: Any = None, grants: Any = None) -> Announcement:
         app = self._application()
-        # A closed notice is no longer among the saved rows, and the NIH Guide still finds it by its number.
+        # top_scored leaves out a closed notice, so the fetch goes by the number saved with the application.
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
+        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "nih-guide" and announcement.origin == "grants.gov":
+            raise ApiError(f"The NIH Guide gave no text for {app.opportunity_number} this time, so Grant Matcher kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}, and you can try again later.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
         for other in self.store.applications():

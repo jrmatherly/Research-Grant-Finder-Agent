@@ -181,7 +181,7 @@ def _apply(args: argparse.Namespace) -> int:
     store = OpportunityStore(args.db)
     try:
         return _apply_action(store, args)
-    except ProfileError:
+    except (ProfileError, UnicodeDecodeError):
         raise
     except ValueError as exc:
         # An unknown application, section, kind or grant type is the user's mistake, so it gets one line.

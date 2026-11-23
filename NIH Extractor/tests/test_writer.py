@@ -216,6 +216,14 @@ def test_a_decision_in_another_application_stays_while_its_quote_is_in_the_text(
     a.fetch_announcement(Guide(FOUR_PAGES + " More text."), Grants(""))
     assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 4 pages.", False)]
 
+def test_a_fetch_that_falls_back_to_grants_gov_keeps_the_saved_guide_copy(tmp_path) -> None:
+    ws = start(tmp_path)
+    saved = ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    with pytest.raises(ApiError, match=f"kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}"):
+        ws.fetch_announcement(Guide(""), Grants("<p>Section IV. Application and Submission Information The Research Strategy is limited to 5 pages.</p>" + "<p>Follow the guide.</p>" * 80))
+    assert ws.view().announcement == saved and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+
 def test_a_blank_section_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path)
     revision = ws.write("project-narrative", "  \n ", parent=None)
