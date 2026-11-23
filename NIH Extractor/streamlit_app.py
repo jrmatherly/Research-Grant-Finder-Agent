@@ -109,9 +109,11 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 # Streamlit drops the state of a widget it does not draw, so the Find settings are kept under keys that outlive a visit to Profile.
 for find_key, find_default in {"find_source": "nih-guide", "find_keyword": "", "find_rows": 500, "find_min_score": 0.0, "find_max_saved": 500, "find_excel": DEFAULT_EXCEL}.items():
     st.session_state[find_key] = st.session_state.get(find_key, find_default)
-# The Apply widgets are kept the same way. Streamlit refuses a value set for a button, so every Apply button key ends in _button.
-for apply_key in [key for key in st.session_state if key == "application_id" or (str(key).startswith("apply_") and not str(key).endswith("_button"))]:
-    st.session_state[apply_key] = st.session_state[apply_key]
+# The Apply widgets are kept the same way, but only in a run that does not draw them, because a value set in a run that draws its widget is sent to the browser over text typed in a form and not yet saved.
+# Streamlit refuses a value set for a button, so every Apply button key ends in _button.
+if st.session_state.get("view") != "Apply":
+    for apply_key in [key for key in st.session_state if key == "application_id" or (str(key).startswith("apply_") and not str(key).endswith("_button"))]:
+        st.session_state[apply_key] = st.session_state[apply_key]
 
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile"], key="view")

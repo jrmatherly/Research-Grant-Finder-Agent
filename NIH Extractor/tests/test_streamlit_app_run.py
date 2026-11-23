@@ -353,17 +353,80 @@ def _tabs_index(app):
     return next(index for index, child in app.main.children.items() if type(child).__name__ == "Block" and any(type(c).__name__ == "Tab" for c in child.children.values()))
 
 
-def test_a_notice_does_not_move_the_tabs_or_change_the_open_tab(tmp_path, monkeypatch) -> None:
+def _tabs(app):
+    return app.main.children[_tabs_index(app)].proto.id
+
+
+# The open tab lives in the browser and follows the tabs block's id, so a run that keeps the place and the id keeps the tab.
+def test_a_notice_does_not_move_the_tabs_or_change_their_id(tmp_path, monkeypatch) -> None:
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
-    before = _tabs_index(app)
-    app.session_state["apply_tab"] = "Sections"
+    before = (_tabs_index(app), _tabs(app))
     app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1.")
     app.button(key="apply_save_button").click().run(timeout=30)
     assert not app.exception and app.success
-    assert _tabs_index(app) == before and app.session_state["apply_tab"] == "Sections"
+    assert (_tabs_index(app), _tabs(app)) == before
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    assert (_tabs_index(app), _tabs(app)) == before
+
+
+def test_a_rerun_does_not_send_a_value_over_what_the_applicant_is_typing(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
     app.run(timeout=30)
-    assert _tabs_index(app) == before and app.session_state["apply_tab"] == "Sections"
+    assert not app.exception
+    assert [app.text_area(key=key).proto.set_value for key in ("apply_text_1_specific-aims", "apply_fact_text")] == [False, False]
+    assert not app.text_input(key="apply_fact_label").proto.set_value and not app.selectbox(key="apply_section").proto.set_value
+
+
+def test_find_and_apply_values_survive_a_view_switch(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_input(key="apply_export_1").set_value("elsewhere").run(timeout=30)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    app.sidebar.text_input(key="find_keyword").set_value("imaging").run(timeout=30)
+    app.sidebar.radio[0].set_value("Apply").run(timeout=30)
+    assert app.text_input(key="apply_export_1").value == "elsewhere"
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    assert not app.exception and app.sidebar.text_input(key="find_keyword").value == "imaging"
+
+
+def test_a_start_or_a_delete_opens_the_first_tab_and_a_switch_keeps_it(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    first = _tabs(app)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    app.checkbox[0].check().run(timeout=30)
+    app.button(key="start_application").click().run(timeout=30)
+    started = _tabs(app)
+    assert not app.exception and started != first
+    app.selectbox(key="application_id").set_value(1).run(timeout=30)
+    assert _tabs(app) == started
+    app.text_input(key="apply_delete_1").set_value("PAR-1").run(timeout=30)
+    app.button(key="apply_delete_button").click().run(timeout=30)
+    assert not app.exception and _tabs(app) not in (first, started)
+
+
+def test_a_stale_warning_does_not_follow_a_deleted_application(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 1, "applicant", "write", "Aim 1 from elsewhere.")
+    finally:
+        store.close()
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1, mine.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    stale = "This section changed after you opened it"
+    assert any(stale in warning.value for warning in app.warning)
+    app.text_input(key="apply_delete_1").set_value("PAR-1").run(timeout=30)
+    app.button(key="apply_delete_button").click().run(timeout=30)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    app.button(key="start_application").click().run(timeout=30)
+    assert not app.exception and app.selectbox(key="application_id").value == 1
+    assert not any(stale in warning.value for warning in app.warning)
 
 
 def test_a_typed_delete_confirmation_does_not_carry_to_a_new_application(tmp_path, monkeypatch) -> None:

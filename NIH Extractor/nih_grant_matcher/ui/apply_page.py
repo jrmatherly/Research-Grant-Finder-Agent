@@ -29,9 +29,6 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> None
         done = action(store)
     except NotReady as exc:
         _notice("error", f"{escape_markdown(exc.reason)} {_findings(exc.findings)}".strip())
-    except StaleEdit as exc:
-        # The Sections tab shows both texts for this section, which says more than the message.
-        st.session_state["apply_stale"] = exc.head.section
     except ApiError as exc:
         _notice("error", f"{escape_markdown(str(exc))} The standing rules of the grant type still apply.")
     except (sqlite3.Error, ValueError, OSError) as exc:
@@ -44,12 +41,23 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> None
             store.close()
 
 def _on(db_path: str, app_id: int, action: Callable[[Workspace], str | None]) -> None:
-    _act(db_path, lambda store: action(Workspace(store, app_id)))
+    def run(store: OpportunityStore) -> str | None:
+        try:
+            return action(Workspace(store, app_id))
+        except StaleEdit as exc:
+            # The Sections tab shows both texts for this section, which says more than the message.
+            st.session_state["apply_stale"] = (app_id, exc.head.section)
+            return None
+    _act(db_path, run)
+
+def _open_first_tab() -> None:
+    st.session_state["apply_tabs_opened"] = st.session_state.get("apply_tabs_opened", 0) + 1
 
 def start_application(db_path: str, opportunity: Opportunity, grant_type: str, resubmission: bool) -> None:
     def start(store: OpportunityStore) -> None:
         st.session_state["application_id"] = Workspace.start(store, opportunity, grant_type, resubmission).application_id
     _act(db_path, start)
+    _open_first_tab()
     # A widget's key may be set only in a callback, which runs before the radio is drawn again.
     st.session_state["view"] = "Apply"
 
@@ -93,8 +101,9 @@ def _delete(ws: Workspace, number: str) -> str:
         raise ValueError(f"Type {number} to delete this application. Nothing was deleted.")
     ws.delete()
     # Ids are reused after a delete, so every value keyed by this id goes with it.
-    for key in [k for k in st.session_state if owned_by(ws.application_id, str(k))] + ["application_id"]:
+    for key in [k for k in st.session_state if owned_by(ws.application_id, str(k))] + ["application_id", "apply_stale"]:
         st.session_state.pop(key, None)
+    _open_first_tab()
     return f"Deleted the application for {escape_markdown(number)} and everything logged for it."
 
 def apply_page(db_path: str) -> None:
@@ -134,8 +143,8 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     with st.container():
         for notice in view.notices:
             st.warning(notice)
-    # With a key and on_change, the open tab is kept in session state and survives a rerun.
-    announcement_tab, requirements_tab, inputs_tab, sections_tab, log_tab = st.tabs(["Announcement", "Requirements", "Your inputs", "Sections", "Log and export"], key="apply_tab", on_change="rerun")
+    # The open tab is the browser's and follows the key, so a tab click needs no rerun. A start or a delete changes the key, which opens the first tab.
+    announcement_tab, requirements_tab, inputs_tab, sections_tab, log_tab = st.tabs(["Announcement", "Requirements", "Your inputs", "Sections", "Log and export"], key=f"apply_tabs_{st.session_state.get('apply_tabs_opened', 0)}")
     with announcement_tab:
         st.button("Fetch the full announcement", key="apply_fetch_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w: f"Saved the announcement from {'the NIH Guide' if w.fetch_announcement().origin == 'nih-guide' else 'Grants.gov'}. Confirm or reject what it adds under Requirements."))
         a = view.announcement
@@ -197,7 +206,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         st.caption(f"{s.rule.title}. At most {describe(s.limit)}. " + {"empty": "No text saved yet.", "draft": f"Draft at revision {s.revision_id}.", "final": f"Signed off at revision {s.revision_id}."}[s.state])
         if s.gaps:
             st.info(f"This section still needs {', '.join(s.gaps)}. Add them under Your inputs.")
-        if st.session_state.get("apply_stale") == key:
+        if st.session_state.get("apply_stale") == (app_id, key):
             st.warning("This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision.")
             newest, yours = st.columns(2)
             newest.caption(f"Revision {s.revision_id}")
