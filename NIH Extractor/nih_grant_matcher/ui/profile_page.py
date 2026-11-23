@@ -1,0 +1,145 @@
+from __future__ import annotations
+from dataclasses import replace
+from pathlib import Path
+import pandas as pd
+import streamlit as st
+from ..profile import BUILTIN_PROFILE, Profile, ProfileError, Reference, from_export, suggest_terms, to_export
+from ..scoring import MLRelevanceScorer
+from ..store import OpportunityStore
+from ..workflow import config_for
+
+STEPS = ("You", "Your research", "Your terms", "Preview", "What the writer reuses")
+CAREER_STAGES = ("early-stage investigator", "new investigator", "established")
+BLANK = Profile(keywords={}, examples=(), focus="profile", examples_name="your example sentences")
+
+def saved_profile(db_path: str) -> Profile | None:
+    # Opening a store creates the file, and the Find view loads any file it finds, so read only one that exists.
+    if not Path(db_path).exists():
+        return None
+    store = OpportunityStore(db_path)
+    try:
+        profile = store.profile()
+    finally:
+        store.close()
+    return None if profile == BUILTIN_PROFILE else profile
+
+def _apply(db_path: str, make, done: str) -> bool:
+    try:
+        profile = make()
+        store = OpportunityStore(db_path)
+        try:
+            store.save_profile(profile)
+        finally:
+            store.close()
+    except ProfileError as exc:
+        st.session_state["profile_notice"] = ("error", str(exc))
+        return False
+    st.session_state["profile_notice"] = ("success", done)
+    st.session_state["scored_items"] = []
+    return True
+
+def _save(db_path: str) -> None:
+    if _apply(db_path, lambda: replace(st.session_state["profile_draft"], focus="profile", examples_name="your example sentences"), "Saved your profile. The Find view now ranks with it."):
+        st.session_state["profile_step"] = None
+
+def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
+    if not Path(db_path).exists():
+        return None
+    store = OpportunityStore(db_path)
+    try:
+        current, opportunities = MLRelevanceScorer(config_for(store)), [item.opportunity for item in store.top_scored(limit=-1)]
+    finally:
+        store.close()
+    proposed = MLRelevanceScorer(draft.matcher_config())
+    rows = []
+    for opp in opportunities:
+        before, after = current.score(opp), proposed.score(opp)
+        rows.append({"Opportunity Number": opp.opportunity_number, "Title": opp.title, "Current Score": before.score, "Draft Score": after.score, "Change": round(after.score - before.score, 1), "Why It Matched": "; ".join(after.reasons)})
+    rows.sort(key=lambda row: -row["Change"])
+    return pd.DataFrame([row for row in rows if row["Change"] > 0][:10] + [row for row in reversed(rows) if row["Change"] < 0][:10][::-1]) if rows else None
+
+def _step(n: int, db_path: str, draft: Profile) -> None:
+    st.subheader(f"{n + 1}. {STEPS[n]}")
+    with st.form(f"profile_step_{n}"):
+        if n == 0:
+            investigator = st.text_input("Name", value=draft.investigator)
+            institution = st.text_input("Institution", value=draft.institution)
+            stage = st.selectbox("Career stage", CAREER_STAGES, index=CAREER_STAGES.index(draft.career_stage) if draft.career_stage in CAREER_STAGES else None, placeholder="Choose a stage")
+        elif n == 1:
+            summary = st.text_area("Research summary", value=draft.research_summary)
+            aims = st.text_area("Aims of recent or planned work, one sentence per line", value="\n".join(draft.examples), help="Three to six sentences. Ranking compares each opportunity with them.")
+        elif n == 2:
+            st.caption("Terms proposed from your research text. Keep, remove, re-weight or add terms. A weight runs from 1 to 30.")
+            terms = st.data_editor(pd.DataFrame({"Term": list(draft.keywords), "Weight": list(draft.keywords.values())}, columns=["Term", "Weight"]), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Weight": st.column_config.NumberColumn("Weight", min_value=1, max_value=30, step=1, default=10)})
+        elif n == 3:
+            preview = _preview(db_path, draft)
+            if preview is None:
+                st.info("No saved opportunities to preview. Run a search under Find first.")
+            elif preview.empty:
+                st.info("Your draft scores every saved opportunity the same as the current profile.")
+            else:
+                st.caption("The ten largest rises and the ten largest falls among the saved opportunities, scored with your draft beside the current profile. Nothing is saved yet.")
+                st.dataframe(preview, width="stretch", hide_index=True)
+        else:
+            expertise = st.text_area("Expertise", value=draft.expertise)
+            resources = st.text_area("Resources", value=draft.resources)
+            st.caption("Prior work, one reference per row. A key holds only letters, digits and hyphens.")
+            refs = st.data_editor(pd.DataFrame([{"Key": ref.key, "Citation": ref.citation, "PMID": ref.pmid, "DOI": ref.doi} for ref in draft.prior_work], columns=["Key", "Citation", "PMID", "DOI"], dtype=str), num_rows="dynamic", hide_index=True, width="stretch")
+        back_col, next_col = st.columns(2)
+        back = back_col.form_submit_button("Back", disabled=n == 0, width="stretch")
+        forward = next_col.form_submit_button("Next" if n < len(STEPS) - 1 else "Finish", type="primary", width="stretch")
+    if not (back or forward):
+        return
+    if n == 0:
+        draft = replace(draft, investigator=investigator.strip(), institution=institution.strip(), career_stage=stage or "")
+    elif n == 1:
+        examples = tuple(line.strip() for line in aims.splitlines() if line.strip())
+        if forward and not 3 <= len(examples) <= 6:
+            st.error(f"Write three to six sentences. You wrote {len(examples)}.")
+            return
+        if (summary.strip(), examples) != (draft.research_summary, draft.examples) or not draft.keywords:
+            scorer = MLRelevanceScorer()
+            draft = replace(draft, keywords={**suggest_terms((*examples, summary), scorer.document_frequency, scorer.documents), **draft.keywords})
+        draft = replace(draft, research_summary=summary.strip(), examples=examples)
+    elif n == 2:
+        # The scorer matches lower-case text, and a saved profile refuses any other term.
+        draft = replace(draft, keywords={str(term).strip().lower(): int(weight) for term, weight in zip(terms["Term"], terms["Weight"]) if pd.notna(term) and str(term).strip() and pd.notna(weight)})
+    elif n == 4:
+        cells = [["" if pd.isna(value) else str(value).strip() for value in row] for row in refs[["Key", "Citation", "PMID", "DOI"]].itertuples(index=False)]
+        draft = replace(draft, expertise=expertise.strip(), resources=resources.strip(), prior_work=tuple(Reference(*row) for row in cells if any(row)))
+    st.session_state["profile_draft"] = draft
+    st.session_state["profile_step"] = max(0, n - 1) if back else min(n + 1, len(STEPS) - 1)
+    st.rerun()
+
+def profile_page(db_path: str) -> None:
+    st.header("Profile")
+    kind, text = st.session_state.pop("profile_notice", (None, ""))
+    if kind:
+        getattr(st, kind)(text)
+    saved = saved_profile(db_path)
+    if saved is None:
+        st.info("Ranking uses the built-in profile (machine learning and data science).")
+    else:
+        st.caption(f"Ranking uses the profile of {saved.investigator or 'an unnamed investigator'}, with {len(saved.keywords)} terms and {len(saved.examples)} example sentences.")
+    step = st.session_state.get("profile_step")
+    if step is None:
+        st.button("Set up my profile" if saved is None else "Edit my profile", type="primary", on_click=lambda: st.session_state.update(profile_step=0, profile_draft=saved or BLANK))
+    else:
+        _step(step, db_path, st.session_state["profile_draft"])
+        st.button("Save profile", type="primary", on_click=_save, args=(db_path,), help="Saves each step as of your last Back, Next or Finish.")
+
+    st.divider()
+    st.subheader("Export and import")
+    st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json")
+    st.caption("The file holds your name and your example sentences. It holds no API key.")
+    pasted = st.text_area("Import a profile", key="profile_import_text", placeholder="Paste the contents of an exported profile file.")
+    incoming = None
+    if pasted.strip():
+        try:
+            incoming = from_export(pasted)
+        except ProfileError as exc:
+            st.error(str(exc))
+        else:
+            st.caption(f"This profile names {incoming.investigator or 'no investigator'} and holds {len(incoming.keywords)} terms.")
+    st.button("Import profile", key="profile_import_save", disabled=incoming is None, on_click=_apply, args=(db_path, lambda: from_export(st.session_state.get("profile_import_text", "")), "Imported the profile. The Find view now ranks with it."))
+    st.button("Reset to built-in", disabled=saved is None, on_click=_apply, args=(db_path, lambda: None, "Reset to the built-in profile."))

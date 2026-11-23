@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = sorted((ROOT / "nih_grant_matcher").glob("*.py")) + [ROOT / "streamlit_app.py"]
+SOURCES = sorted((ROOT / "nih_grant_matcher").rglob("*.py")) + [ROOT / "streamlit_app.py"]
 
 
 @pytest.mark.parametrize("path", SOURCES, ids=lambda p: p.name)
