@@ -48,3 +48,16 @@ def test_no_appcast_without_the_key(tmp_path) -> None:
 def test_no_appcast_for_a_missing_disk_image(tmp_path) -> None:
     result = _run(tmp_path, dmg_exists=False)
     assert result.returncode != 0 and result.stdout == "" and "Grant-Matcher-1.2.3-arm64.dmg" in result.stderr
+
+
+def test_seed_reaches_the_signer_on_stdin_only(tmp_path) -> None:
+    seen = tmp_path / "seen"
+    signer = tmp_path / "recording_signer"
+    signer.write_text(f'#!/bin/bash\necho "stdin=$(cat) args=$*" >> "{seen}"\nfor a in "$@"; do [ "$a" = --verify ] && exit 0; done\necho "c2lnbmF0dXJl"\n')
+    signer.chmod(0o755)
+    assert _run(tmp_path, env={"SIGN_UPDATE": str(signer)}).returncode == 0
+    sign, verify = seen.read_text().splitlines()
+    dmg = str(tmp_path / "Grant-Matcher-1.2.3-arm64.dmg")
+    assert sign.startswith("stdin=c2VlZA== args=") and verify.startswith("stdin=c2VlZA== args=")
+    assert "c2VlZA==" not in sign.split("args=")[1] and "c2VlZA==" not in verify.split("args=")[1]
+    assert sign.endswith(dmg) and verify.endswith(f"{dmg} c2lnbmF0dXJl")

@@ -105,9 +105,13 @@ sparkle_jobs() {
   grep -oE "gm-rehearsal-sparkle-[a-z]+" <<<"$all" | sort -u || true
 }
 
+processes() { pgrep -f "$app_path/Contents/MacOS/Grant Matcher" || true; }
 updated=
+old_pids=
 for _ in $(seq "$deadline"); do
   if [ "$(disk_version)" = 0.0.2 ]; then updated=1; break; fi
+  now=$(processes | tr '\n' ' ')
+  if [ -n "$now" ]; then old_pids=$now; fi
   sleep 1
 done
 
@@ -119,15 +123,17 @@ if [ -z "$updated" ]; then
 fi
 [ "$mode" = happy ] || { echo "rehearse: $mode: the app reads 0.0.2, and it must not" >&2; exit 1; }
 
-# The new bundle on disk does not prove the relaunch. The window and the server are two processes of this copy.
+# The new bundle on disk does not prove the relaunch. The window and the server are two processes of this copy, and neither may be one that ran before the update.
 running=0
 for _ in $(seq 30); do
-  # || true: pgrep finds nothing between the old app's exit and the relaunch, and pipefail would end the script there.
-  running=$(($({ pgrep -f "$app_path/Contents/MacOS/Grant Matcher" || true; } | wc -l)))
+  running=0
+  for pid in $(processes); do
+    case " $old_pids " in *" $pid "*) ;; *) running=$((running + 1)) ;; esac
+  done
   if [ "$running" -ge 2 ]; then break; fi
   sleep 1
 done
-[ "$running" -ge 2 ] || { echo "rehearse: the app reads 0.0.2, but $running of its 2 processes run after 30 s" >&2; exit 1; }
+[ "$running" -ge 2 ] || { echo "rehearse: the app reads 0.0.2, but $running of its 2 new processes run after 30 s" >&2; exit 1; }
 codesign --verify --deep --strict "$app_path" || { echo "rehearse: the updated app does not pass codesign --verify" >&2; exit 1; }
 left=
 for _ in $(seq 30); do

@@ -26,7 +26,8 @@ if [ ! -f "macos/build/$archive" ]; then
   curl -fsSL -o "macos/build/$archive.part" "https://github.com/sparkle-project/Sparkle/releases/download/$sparkle_version/$archive"
   mv "macos/build/$archive.part" "macos/build/$archive"
 fi
-(cd macos/build && echo "$sparkle_sha256  $archive" | shasum -a 256 -c)
+# A wrong archive is removed, or every later build would stop here on the cached copy.
+(cd macos/build && echo "$sparkle_sha256  $archive" | shasum -a 256 -c) || { rm -f "macos/build/$archive"; echo "Sparkle $sparkle_version does not match sparkle_sha256. The download was removed." >&2; exit 1; }
 rm -rf macos/build/sparkle
 mkdir -p macos/build/sparkle
 tar -xJf "macos/build/$archive" -C macos/build/sparkle

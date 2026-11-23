@@ -230,7 +230,8 @@ def _fake_objc(monkeypatch) -> list:
     calls = []
     objc = types.ModuleType("objc")
     objc.loadBundle = lambda name, namespace, bundle_path: calls.append(("load", bundle_path))
-    objc.lookUpClass = lambda name: calls.append(("class", name))
+    made = types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda *args: calls.append(("init", args)))
+    objc.lookUpClass = lambda name: calls.append(("class", name)) or types.SimpleNamespace(alloc=lambda: made)
     monkeypatch.setitem(sys.modules, "objc", objc)
     return calls
 
@@ -242,7 +243,9 @@ def test_check_updater_flag_loads_sparkle_and_never_opens_a_window(monkeypatch, 
     monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("the check must not open a window"))
     monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--check-updater"])
     assert launcher.main() == 0
-    assert calls == [("load", str(tmp_path / "Sparkle.framework")), ("class", "SPUStandardUpdaterController")]
+    assert calls[:2] == [("load", str(tmp_path / "Sparkle.framework")), ("class", "SPUStandardUpdaterController")]
+    # The check builds the controller without starting it, because that is the call that fails at launch.
+    assert calls[2:] == [("init", (False, None, None))]
 
 
 def test_check_updater_flag_fails_when_sparkle_cannot_load(monkeypatch, tmp_path) -> None:
@@ -263,5 +266,60 @@ def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> 
     monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
     framework, log = tmp_path / "Sparkle.framework", tmp_path / "server.log"
     monkeypatch.setattr(launcher, "sparkle_framework", lambda: framework)
-    launcher.wait_and_load(_Window(), _Child(exit_code=1), "http://127.0.0.1:9", log)
-    assert scheduled == [(launcher.start_updater, (framework, log))]
+    # The answer records what was scheduled when the wait for the server began.
+    monkeypatch.setattr(launcher, "start_failure", lambda child, url: f"seen {len(scheduled)}")
+    window = _Window()
+    launcher.wait_and_load(window, _Child(), "http://127.0.0.1:9", log)
+    assert scheduled == [(launcher.start_updater, (framework, log))] and "seen 1" in window.shown[0][1]
+
+
+def test_window_still_loads_when_the_updater_cannot_be_scheduled(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setitem(sys.modules, "PyObjCTools", None)
+    monkeypatch.setattr(launcher, "sparkle_framework", lambda: tmp_path / "Sparkle.framework")
+    _lsof_reports(monkeypatch, launcher, "4242\n")
+    window, url, log = _Window(), _healthy_server_url(), tmp_path / "server.log"
+    launcher.wait_and_load(window, _Child(), url, log)
+    assert window.shown == [("url", url)] and "updater did not start" in log.read_text()
+
+
+def test_frozen_app_without_sparkle_says_so_in_the_log(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Contents" / "MacOS" / "Grant Matcher"))
+    _lsof_reports(monkeypatch, launcher, "4242\n")
+    window, url, log = _Window(), _healthy_server_url(), tmp_path / "server.log"
+    launcher.wait_and_load(window, _Child(), url, log)
+    assert window.shown == [("url", url)] and "Sparkle.framework is missing" in log.read_text()
+
+
+def test_started_updater_is_kept_and_the_menu_item_reaches_it(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    checks = []
+    controller = types.SimpleNamespace(checkForUpdates_=checks.append)
+    made = types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda start, a, b: controller if (start, a, b) == (True, None, None) else None)
+    monkeypatch.setattr(launcher, "sparkle_class", lambda framework: types.SimpleNamespace(alloc=lambda: made))
+    tools = types.ModuleType("PyObjCTools")
+    tools.AppHelper = types.SimpleNamespace(callAfter=lambda function, *args: function(*args))
+    monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
+    monkeypatch.setattr(launcher, "alert", lambda message: pytest.fail(message))
+    launcher.start_updater(tmp_path / "Sparkle.framework", tmp_path / "server.log")
+    launcher.check_for_updates()
+    assert launcher.UPDATER == [controller] and checks == [None]
+
+
+def test_the_server_does_not_overwrite_what_the_app_writes_to_the_log(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    log = launcher.log_path(tmp_path)
+    real_popen = subprocess.Popen
+    monkeypatch.setattr(launcher.subprocess, "Popen", lambda cmd, **kwargs: real_popen([sys.executable, "-c", "import time; time.sleep(0.5); print('server line ' * 20, flush=True)"], **kwargs))
+    def start(function, args, menu) -> None:
+        with log.open("a") as out:
+            out.write("Grant Matcher updater did not start:\n")
+        args[1].wait()
+    webview = types.ModuleType("webview")
+    webview.settings, webview.create_window, webview.start = {}, lambda *args, **kwargs: None, start
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    launcher.run_window()
+    assert "updater did not start" in log.read_text() and "server line" in log.read_text()

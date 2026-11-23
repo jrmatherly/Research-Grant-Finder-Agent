@@ -33,7 +33,7 @@ def serve(port: int) -> int:
     os.chdir(home)
 
     def watch() -> None:
-        # Quit exits the window process without reaching main()'s finally, so the server exits once it is reparented to launchd.
+        # Quit exits the window process without reaching run_window()'s finally, so the server exits once it is reparented to launchd.
         while os.getppid() != 1: time.sleep(1)
         os._exit(0)
 
@@ -105,11 +105,18 @@ def app_menu() -> list:
 
 
 def wait_and_load(window, child: subprocess.Popen, url: str, log: Path) -> None:
-    framework = sparkle_framework()
-    if framework is not None:
-        # The updater must not wait for the server: a release whose server cannot start is the one that most needs an update.
-        from PyObjCTools import AppHelper
-        AppHelper.callAfter(start_updater, framework, log)
+    # The updater must not wait for the server: a release whose server cannot start is the one that most needs an update.
+    try:
+        framework = sparkle_framework()
+        if framework is not None:
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(start_updater, framework, log)
+        elif getattr(sys, "frozen", False):
+            with log.open("a") as out:
+                out.write(f"{NAME} cannot update: Sparkle.framework is missing from the app.\n")
+    except Exception:
+        with log.open("a") as out:
+            out.write(f"{NAME} updater did not start:\n{traceback.format_exc()}")
     # pywebview runs this in a bare thread, where an uncaught error would leave the starting page up for good.
     try:
         failure = start_failure(child, url)
@@ -133,7 +140,7 @@ def main() -> int:
         return serve(int(sys.argv[sys.argv.index("--serve") + 1]))
     if "--check-updater" in sys.argv:
         # build.sh runs this. Nothing else fails a build whose updater cannot load, and such a release would be the last one its users get.
-        sparkle_class(sparkle_framework())
+        sparkle_class(sparkle_framework()).alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(False, None, None)
         return 0
     # A windowed app has no console, so an error here would otherwise close the app with nothing shown.
     try:
@@ -152,7 +159,8 @@ def run_window() -> None:
     # Keep the launch before this one, because the first thing a user does after a failure is open the app again.
     if log.exists(): log.replace(log.with_suffix(".log.1"))
     cmd = [sys.executable, "--serve", str(port)] if getattr(sys, "frozen", False) else [sys.executable, __file__, "--serve", str(port)]
-    with log.open("wb") as out:
+    # Append, so that the server's output does not overwrite what this process writes to the log. The rotation above left no file.
+    with log.open("ab") as out:
         child = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
     try:
         import webview
