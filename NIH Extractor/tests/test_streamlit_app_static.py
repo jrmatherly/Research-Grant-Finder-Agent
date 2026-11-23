@@ -20,4 +20,5 @@ def test_streamlit_score_bins_use_string_labels() -> None:
     app_text = Path("streamlit_app.py").read_text(encoding="utf-8")
 
     assert 'score_labels = ["0-25", "25-35", "35-70", "70-100"]' in app_text
+    assert "bins=[0, 25, 35, 70, 100]," in app_text
     assert "labels=score_labels" in app_text

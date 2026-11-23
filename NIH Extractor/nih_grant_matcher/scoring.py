@@ -74,7 +74,7 @@ class MLRelevanceScorer:
         completeness_score = self._completeness_score(opportunity)
         generic_penalty = self._generic_penalty(text, matched_terms)
         score = max(0.0, min(100.0, keyword_score + semantic_score + nih_score + urgency_score + completeness_score + min(centrality_score, 18) - generic_penalty))
-        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(score), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty, shared_terms)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1)), scored_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(round(score, 1)), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty, shared_terms)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1)), scored_at=datetime.now(timezone.utc).replace(tzinfo=None))
     @staticmethod
     def _is_nih_hhs(opportunity: Opportunity) -> bool:
         combined = f"{opportunity.agency_code} {opportunity.agency_name}".lower()

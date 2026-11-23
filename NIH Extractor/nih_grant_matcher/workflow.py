@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-import sys
+import warnings
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -60,8 +60,10 @@ def rescore_saved(store: OpportunityStore) -> None:
     try:
         store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])
     except sqlite3.OperationalError as exc:
-        # A read-only or locked database can still be read, with the scores it holds.
-        print(f"Could not update the saved scores, so they are shown as last saved: {exc}", file=sys.stderr)
+        # A read-only database, or one that another program is writing to, can still be read, with the scores it holds. Any other failure, such as a full disk, is an error.
+        if exc.sqlite_errorcode & 0xFF not in (sqlite3.SQLITE_READONLY, sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+            raise
+        warnings.warn(f"Could not update the saved scores, so they are shown as last saved: {exc}", RuntimeWarning, stacklevel=2)
 
 
 def load_saved(db_path: str, min_score: float = 0.0, limit: int = 500) -> list[ScoredOpportunity]:

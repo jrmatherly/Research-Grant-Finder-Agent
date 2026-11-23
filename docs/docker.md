@@ -98,7 +98,7 @@ On Linux, the container writes as user 1000. If your user has a different ID, cr
 mkdir -p data outputs digests
 ```
 
-If the folders belong to someone else, give them to your user first. This is the case when Docker created them as root, and when an earlier version of this guide had you give them to user 1000:
+If the folders belong to someone else, give them to your user first. This is the case when Docker created them as root, and when they belong to user 1000 from a start without `--user`:
 
 ```bash
 sudo chown -R "$(id -u):$(id -g)" data outputs digests
@@ -122,7 +122,7 @@ Docker Desktop on macOS and Windows does not need this step.
 - **Remove.** `docker rm -f nih-grant-matcher` removes the container. `docker rmi ghcr.io/jrmatherly/nih-grant-matcher:latest` removes the image.
 - **Read the log.** `docker logs nih-grant-matcher`.
 
-Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is rebuilt every week with Debian's security fixes.
+Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is normally rebuilt every week with Debian's security fixes. A build with a serious vulnerability that has a fix is not published.
 
 ## Troubleshooting
 

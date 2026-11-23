@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -141,7 +142,12 @@ if run_clicked:
 
 if load_clicked or (not get_scored_items_from_session() and Path(db_path).exists()):
     try:
-        set_scored_items_in_session(load_saved(db_path, min_score=0.0, limit=max_saved))
+        with warnings.catch_warnings(record=True) as load_warnings:
+            warnings.simplefilter("always", RuntimeWarning)
+            set_scored_items_in_session(load_saved(db_path, min_score=0.0, limit=max_saved))
+        for load_warning in load_warnings:
+            if issubclass(load_warning.category, RuntimeWarning):
+                st.warning(str(load_warning.message))
     except Exception as exc:
         st.warning(f"Could not load saved results: {exc}")
 

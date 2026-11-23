@@ -2,8 +2,6 @@
 name = "nih-grant-matcher"
 version = "0.1.0"
 description = "Find NIH/HHS grant opportunities relevant to ML and data analysis expertise."
-# Covers the fork's changes only. The original work has no license: see ../LICENSE.
-license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
   "streamlit>=1.50",
