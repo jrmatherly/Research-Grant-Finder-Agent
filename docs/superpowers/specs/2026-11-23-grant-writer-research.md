@@ -319,3 +319,29 @@ Stage 1 merged as pull request 10. These notes cover what its reviews left open.
 ### A built-in user and the wizard
 
 - Ran: a user with no saved profile who opens the wizard, types a name and presses Save is refused, because a new draft has no example sentences and no terms. Read: the draft starts from an empty profile, so the only way to keep the built-in ranking and add a name, expertise or prior work is to export the built-in profile, edit the file and import it.
+
+### A measured comparison of ranking approaches
+
+Ran on 2026-11-23 as prototypes outside the package. Nothing in the package changed.
+
+- The set-up. Four fields (cardiology, oncology, neuroscience, health services), three aim sentences each, scored against the 384 saved records with today's scorer. Each approach changes the profile's terms, the text that is scored, or adds a bonus.
+- Two stand-ins for relevance, counted in the top ten of each field. "Institute": the record's `agency_code` is an institute of the field (NHLBI; NCI; NINDS, NIMH and NIA; NIDDK, NIMHD, NINR and NIA). "Topic": the full announcement matches a pattern for the field five times or more ("heart", "cardiac" and so on). A random ten would hold 4.2 institute records and 7.3 topic records across the four fields.
+- The full text came from `https://search.grants.nih.gov/guide/api/data` with `perpage` 100 and `fields` all: four requests returned 274 documents, and 273 of the 384 records had text. The median full text has 8,874 words. All 273 hold the heading "Funding Opportunity Description".
+- RePORTER terms came from one text search per field over fiscal 2025 and 2026, up to 50 projects each, with `pref_terms` and `spending_categories_desc`.
+
+| Approach | Topic records in the four top tens, of 40 | Institute records, of 40 | Note |
+| --- | --- | --- | --- |
+| As shipped | 18 | 14 | "test", "how" and "define" match the most records |
+| A narrow list of about 40 action words dropped, and 10 for a word the table lacks | 21 | 13 | Better for cardiology and neuroscience, slightly worse for oncology |
+| A wide list of about 60 words dropped | 19 | 13 | It also drops "models", "signals" and "combination", which helped oncology |
+| The example sentences alone, with no terms | 9 | 7 | The similarity score carries little by itself |
+| RePORTER `pref_terms` in place of the suggestions | 26 | 14 | Neuroscience matched 209 records on "brain", "time" and "data". Health services had 0 institute records |
+| RePORTER categories in place of the suggestions | 9 | 6 | Two fields kept no category after the rarity cut, so this row says little |
+| The narrow list, plus 12 points for a record from the field's institute | 26 | 24 | The topic count is the independent check |
+| The narrow list, scored on the first 800 words of the announcement's description | 29 | 18 | High records rose, for example from 0 to 20 for oncology |
+| The same, on the first 2,000 words | 35 | 22 | High records rose from 5 to 61 for health services |
+| The first 800 words and the institute bonus | 32 | 23 | |
+
+- What limits these numbers. One set of aims per field. Two stand-ins that the session lead chose, with no judgement from a researcher in the field. The topic count comes from the same full text that the last three rows score, so it favours them. The RePORTER weighting was a first attempt. A difference of two or three records between rows is within what another set of aims could change.
+- What they support. The text that is scored and the institute move the ranking more than the way terms are proposed. Scoring more text raises every score, so the High and Medium thresholds would no longer mean what the README says.
+- Read, for D14: `streamlit_app.py` and `profile_sentence` decide on the built-in wording by whether a profile is saved. A saved profile that keeps the built-in ranking and adds a name would lose the word "computational" from the page caption, so that test has to compare the ranking fields.
