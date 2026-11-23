@@ -54,6 +54,32 @@ def test_run_and_save_reports_fetched_and_saved_counts(sources, tmp_path) -> Non
     assert [item.score for item in items] == sorted((item.score for item in items), reverse=True)
 
 
+def test_workflow_dedupe_keeps_the_guide_record_for_a_shared_number() -> None:
+    from nih_grant_matcher.models import Opportunity
+    def opp(source_id: str, number: str) -> Opportunity:
+        return Opportunity(source_id=source_id, opportunity_number=number, title="t", agency_code="", agency_name="", status="posted")
+    kept = workflow._dedupe_opportunities([opp("nih-guide:1", "RFA-1"), opp("11", "RFA-1"), opp("12", ""), opp("13", "")])
+    assert [item.source_id for item in kept] == ["nih-guide:1", "12", "13"]
+
+
+def test_rarity_table_keeps_the_old_table_when_the_fetch_is_short(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setattr(NihGuideClient, "search", lambda self, rows=250, keyword="", types="": [])
+    out = tmp_path / "table.json"
+    out.write_text("old", encoding="utf-8")
+    assert cli.main(["rarity-table", "--out", str(out)]) == 1
+    assert out.read_text(encoding="utf-8") == "old"
+    assert "was not replaced" in capsys.readouterr().err
+
+
+def test_backfill_xml_reports_a_failed_download(monkeypatch, tmp_path, capsys) -> None:
+    from nih_grant_matcher.clients import ApiError
+    def fail(self, destination):
+        raise ApiError("https://www.grants.gov/xml-extract failed after 3 attempt(s): HTTP Error 503")
+    monkeypatch.setattr(GrantsGovXmlClient, "download_latest", fail)
+    assert cli.main(["backfill-xml", "--out", str(tmp_path / "x.zip")]) == 1
+    assert "HTTP Error 503" in capsys.readouterr().err
+
+
 def test_reporter_context_prints_projects(monkeypatch, capsys) -> None:
     monkeypatch.setattr(NihReporterClient, "search_projects", lambda self, term, limit=25: [{"project_num": "R01", "term": term, "limit": limit}])
     assert cli.main(["reporter-context", "--term", "imaging", "--limit", "3"]) == 0
@@ -65,7 +91,7 @@ def test_backfill_xml_reports_a_certificate_error(monkeypatch, tmp_path, capsys)
         raise urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate"))
     monkeypatch.setattr(GrantsGovXmlClient, "download_latest", fail)
     assert cli.main(["backfill-xml", "--out", str(tmp_path / "x.zip")]) == 1
-    assert "Could not verify the certificate" in capsys.readouterr().err
+    assert "unable to get local issuer certificate" in capsys.readouterr().err
 
 
 def test_xml_extract_url_is_resolved_against_the_page(monkeypatch) -> None:
@@ -79,7 +105,7 @@ def test_rarity_table_counts_documents_per_term_and_drops_singletons(monkeypatch
     items = [{"rowid": "1", "docnum": "PA-1", "title": "Imaging imaging", "purpose": "Imaging research."}, {"rowid": "2", "docnum": "PA-2", "title": "Research", "purpose": "Once only."}]
     monkeypatch.setattr(NihGuideClient, "search", lambda self, rows=250, keyword="", types="": items if types == "expired" else [])
     out = tmp_path / "table.json"
-    assert cli.main(["rarity-table", "--out", str(out)]) == 0
+    assert cli.main(["rarity-table", "--rows", "2", "--out", str(out)]) == 0
     table = json.loads(out.read_text(encoding="utf-8"))
     assert table["documents"] == 2
     assert table["terms"]["research"] == 2

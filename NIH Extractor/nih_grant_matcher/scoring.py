@@ -23,10 +23,13 @@ def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
 class MLRelevanceScorer:
     def __init__(self, config: MatcherConfig | None = None) -> None:
         self.config = config or MatcherConfig()
-        # Similarity weights each word by how rare it is in NIH Guide text, so "of" and "health" count for little and "phenotypes" for a lot.
+        # Similarity weights each word by how rare it is in NIH Guide text, so "research" and "health" count for little and "phenotypes" for a lot.
         # The table is fixed in the repository, so a record scores the same whatever else a run fetched.
-        rarity = json.loads(TERM_RARITY_PATH.read_text(encoding="utf-8"))
-        self.documents, self.document_frequency = rarity["documents"], rarity["terms"]
+        try:
+            rarity = json.loads(TERM_RARITY_PATH.read_text(encoding="utf-8"))
+            self.documents, self.document_frequency = rarity["documents"], rarity["terms"]
+        except (OSError, ValueError, KeyError) as exc:
+            raise RuntimeError(f"Cannot read the word-rarity table {TERM_RARITY_PATH}. Restore it from git, or rebuild it with `python -m nih_grant_matcher rarity-table`.") from exc
         self.example_vectors = [self._weighted(example) for example in self.config.semantic_examples]
         # A keyword starts at the start of a word, so "modeling" does not match "remodeling", and may take a suffix
         # ("algorithm" matches "algorithms"). An acronym of three letters or fewer takes a plural only.
@@ -35,13 +38,15 @@ class MLRelevanceScorer:
         return {token: count * (math.log((self.documents + 1) / (self.document_frequency.get(token, 0) + 1)) + 1) for token, count in _term_frequency(text).items()}
     def _keyword_hits(self, text: str) -> list[str]:
         spans = {phrase: [match.span() for match in pattern.finditer(text)] for phrase, pattern in self.keyword_patterns.items()}
-        hits = []
-        for phrase, found in spans.items():
-            # A match that lies inside a longer phrase's match is the same evidence, so only the longer one counts.
-            longer = [span for other, others in spans.items() if len(other) > len(phrase) for span in others]
-            if found and not all(any(a <= start and end <= b for a, b in longer) for start, end in found):
-                hits.append(phrase)
-        return hits
+        hits, taken = set(), []
+        # Words that two keywords share are one piece of evidence. The longer keyword takes them, and a shorter one counts
+        # only where it also matches text that no longer keyword took: "medical imaging analytics" is "imaging analytics" alone.
+        for phrase in sorted(spans, key=len, reverse=True):
+            free = [(start, end) for start, end in spans[phrase] if not any(start < b and a < end for a, b in taken)]
+            if free:
+                hits.add(phrase)
+                taken += free
+        return [phrase for phrase in spans if phrase in hits]
     def score(self, opportunity: Opportunity, today: date | None = None) -> ScoredOpportunity:
         today = today or date.today()
         text = opportunity.searchable_text.lower()
@@ -60,7 +65,9 @@ class MLRelevanceScorer:
             centrality_score += min(weight * (0.8 if in_title else 0.25), 12 if in_title else 4)
         vector = self._weighted(opportunity.searchable_text)
         similarity, example = max(((_cosine(vector, ex), ex) for ex in self.example_vectors), key=lambda pair: pair[0], default=(0.0, {}))
-        semantic_score = min(similarity * 120, 20)
+        # A text of a few words is close to an example as soon as it shares one of them, so scale similarity down below 30 words.
+        # NIH Guide records run from about 25 words up. A Grants.gov record with no synopsis is a title alone.
+        semantic_score = min(similarity * min(1.0, sum(_term_frequency(opportunity.searchable_text).values()) / 30) * 120, 20)
         shared_terms = sorted(set(vector) & set(example), key=lambda token: -vector[token] * example[token])[:3]
         nih_score = 10.0 if self._is_nih_hhs(opportunity) else 0.0
         urgency_score = self._deadline_score(opportunity.close_date, today)

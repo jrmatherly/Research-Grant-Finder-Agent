@@ -15,12 +15,16 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
-            if exc.code < 500 or attempt == attempts:
-                raise
+            failure, final = exc, exc.code < 500 and exc.code != 429
         # urllib wraps only a failed send in URLError. A connection that drops while the response is read raises OSError or HTTPException.
         except (OSError, http.client.HTTPException) as exc:
-            if attempt == attempts or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
+            # A certificate that fails once fails every time. The caller reads the bare error to explain it.
+            if isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
                 raise
+            failure, final = exc, False
+        if final or attempt == attempts:
+            # Name the address: the dashboard shows only this message, and a run talks to three services.
+            raise ApiError(f"{getattr(request, 'full_url', request)} failed after {attempt} attempt(s): {failure}") from failure
         time.sleep(2 ** (attempt - 1))
     raise AssertionError("unreachable")
 
@@ -80,6 +84,7 @@ class GrantsGovXmlClient:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(_get_bytes(self.latest_extract_url()))
         if not zipfile.is_zipfile(destination):
+            destination.unlink()
             raise ApiError(f"Downloaded file is not a zip archive: {destination}")
         return destination
 
