@@ -6,7 +6,11 @@ from nih_grant_matcher.clients import ApiError
 from nih_grant_matcher.profile import Profile, Reference
 from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace
 
-FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx"
+FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100
+GRANTS_PAGE = "<p>Section IV. Application and Submission Information</p><p>The Research Strategy is limited to 4 pages, as in (NOT-OD-26-001).</p>" + "<p>Follow the guide.</p>" * 80
+
+class GuideDown:
+    def doctext(self, number): raise ApiError("timed out")
 
 def test_a_new_application_lists_its_sections_and_gaps(tmp_path) -> None:
     view = start(tmp_path).view()
@@ -216,13 +220,31 @@ def test_a_decision_in_another_application_stays_while_its_quote_is_in_the_text(
     a.fetch_announcement(Guide(FOUR_PAGES + " More text."), Grants(""))
     assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 4 pages.", False)]
 
-def test_a_fetch_that_falls_back_to_grants_gov_keeps_the_saved_guide_copy(tmp_path) -> None:
+def test_any_fetched_announcement_replaces_the_saved_one_in_either_direction(tmp_path) -> None:
+    from dataclasses import replace
     ws = start(tmp_path)
-    saved = ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.opportunity = replace(ws.opportunity, raw={"guide_item": {"ggid": "360675"}})
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    official, _ = ws.fetch_announcement(GuideDown(), Grants(GRANTS_PAGE))
+    assert official.origin == "grants.gov" and ws.view().announcement == official
+    assert ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))[0].origin == ws.view().announcement.origin == "nih-guide"
+
+def test_a_decision_carries_to_the_guide_text_of_the_same_sentence(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(""), Grants(GRANTS_PAGE))
     ws.decide(ws.view().requirements[0].id, True)
-    with pytest.raises(ApiError, match=f"kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}"):
-        ws.fetch_announcement(Guide(""), Grants("<p>Section IV. Application and Submission Information The Research Strategy is limited to 5 pages.</p>" + "<p>Follow the guide.</p>" * 80))
-    assert ws.view().announcement == saved and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+    # The Guide text drops the opening bracket that the Grants.gov text keeps.
+    ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages.", "4 pages, as in NOT-OD-26-001).")), Grants(""))
+    assert ws.view().announcement.origin == "nih-guide" and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+
+def test_a_fetch_reports_the_decisions_it_dropped_for_this_application(tmp_path) -> None:
+    a = start(tmp_path)
+    b = Workspace.start(a.store, a.opportunity, "NIH:R21", resubmission=True)
+    a.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    a.decide(a.view().requirements[0].id, True)
+    b.decide(b.view().requirements[0].id, False)
+    _, dropped = a.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
+    assert [(r.text, r.confirmed) for r in dropped] == [("Research Strategy: at most 4 pages.", True)]
 
 def test_a_blank_section_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path)
@@ -259,7 +281,7 @@ def test_export_returns_the_absolute_folder(tmp_path, monkeypatch) -> None:
 
 def test_the_provenance_log_names_the_announcement_and_the_inputs(tmp_path) -> None:
     ws = start(tmp_path)
-    announcement = ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    announcement, _ = ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
     kept, retired = ws.add_fact("reference", "Smith J. Heart cells. 2021.", label="smith2021"), ws.add_fact("aim", "A secret aim.")
     ws.retire_fact(retired.id)
     log = (ws.export(tmp_path / "out") / "provenance-log.md").read_text(encoding="utf-8")
@@ -280,12 +302,12 @@ def test_an_application_whose_notice_has_closed_still_fetches_by_its_number(tmp_
     from nih_grant_matcher.scoring import MLRelevanceScorer
     from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(tmp_path / "g.sqlite3")
-    closed = replace(opportunity(), close_date=date(2020, 1, 1))
+    closed = replace(opportunity(), close_date=date(2020, 1, 1), raw={"guide_item": {"ggid": "361234"}})
     store.upsert_scored(MLRelevanceScorer().score(closed))
     ws = Workspace.start(store, closed, "NIH:R21")
-    guide = Guide(FOUR_PAGES)
-    assert ws.opportunity is None and ws.fetch_announcement(guide, Grants("")).opportunity_number == "PAR-1"
-    assert guide.asked == ["PAR-1"] and ws.view().announcement is not None
+    guide, grants = Guide(FOUR_PAGES, ggid=""), Grants(GRANTS_PAGE)
+    ws.fetch_announcement(guide, grants)
+    assert guide.asked == ["PAR-1"] and grants.asked == ["361234"] and ws.view().announcement.origin == "grants.gov"
 
 def test_the_attestation_names_the_digest_of_the_section_text(tmp_path) -> None:
     import hashlib

@@ -463,7 +463,7 @@ def test_a_phased_award_says_why_it_cannot_be_started(tmp_path, monkeypatch) -> 
     assert any("phased award" in caption.value for caption in app.caption)
 
 
-SECTION_IV = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Application Review Information\nx"
+SECTION_IV = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Application Review Information\nx" + " More text." * 100
 
 
 def _page_text(app):
@@ -471,8 +471,9 @@ def _page_text(app):
 
 
 def test_an_announcement_with_no_section_iv_is_named_on_each_tab(tmp_path, monkeypatch) -> None:
-    from nih_grant_matcher.clients import NihGuideClient
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("A notice with no headings at all. " * 40, "1"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
@@ -483,8 +484,9 @@ def test_an_announcement_with_no_section_iv_is_named_on_each_tab(tmp_path, monke
 
 
 def test_each_apply_button_does_its_one_thing(tmp_path, monkeypatch) -> None:
-    from nih_grant_matcher.clients import NihGuideClient
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     path = _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
@@ -686,15 +688,16 @@ def test_a_workspace_notice_is_on_the_page(tmp_path, monkeypatch) -> None:
     assert not app.exception and any("is a draft again" in warning.value for warning in app.warning)
 
 
-def test_a_refused_fetch_over_a_saved_guide_copy_says_the_saved_one_still_applies(tmp_path, monkeypatch) -> None:
+def test_a_fetch_from_grants_gov_replaces_a_saved_guide_copy_and_names_a_dropped_decision(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     _r21_database(tmp_path, start=True)
-    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("Section IV. Application and Submission Information x", "360675"))
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "360675"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
-    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("", "360675"))
+    app.button(key="apply_confirm_1_button").click().run(timeout=30)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "<p>" + "From Grants.gov. " * 100 + "</p>")
     app.button(key="apply_fetch_button").click().run(timeout=30)
-    shown = [error.value.replace("\\", "") for error in app.error]
-    assert not app.exception and any("kept the copy" in text and "The announcement saved earlier still applies" in text for text in shown)
-    assert not any("standing rules of the grant type still apply" in text for text in shown)
+    shown = [success.value for success in app.success]
+    assert not app.exception and not app.error and any("Saved the announcement from Grants.gov." in text for text in shown)
+    assert any("Your decision on Research Strategy\\: at most 4 pages\\. was dropped, because the new text no longer has the sentence it came from." in text for text in shown)

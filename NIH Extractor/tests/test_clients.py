@@ -166,7 +166,23 @@ def test_full_announcement_downloads_only_the_full_announcement_attachment(monke
     assert reads[1:] == ([f"{GRANTSGOV_ATTACHMENT_URL}/355218"] if expected else [])
 
 
-@pytest.mark.parametrize("attachment", [{"fileName": "PAR-27-090-Full-Announcement.html"}, {"id": "../x", "fileName": "PAR-27-090-Full-Announcement.html"}, {"id": "1?a=b", "fileName": "PAR-27-090-Full-Announcement.html"}], ids=["no-id", "path", "query"])
+# PAR-26-121 on Grants.gov on 2026-11-23 has the first announcement and its revision, in that order.
+@pytest.mark.parametrize("dates, expected", [(("Dec 11, 2025 12:55:49 PM EST", "Dec 18, 2025 02:19:42 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 2), (("Dec 18, 2025 02:19:42 PM EST", "Dec 11, 2025 12:55:49 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 1), (("Dec 18, 2025 02:19:42 PM EST", "soon", "Dec 11, 2025 12:55:49 PM EST"), 3)], ids=["newest-second", "newest-first", "unreadable-date-takes-the-last"])
+def test_full_announcement_downloads_the_newest_full_announcement(monkeypatch, dates, expected) -> None:
+    import json
+    from nih_grant_matcher.config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL
+    reads = []
+    def fake_read(request, timeout, attempts=3):
+        reads.append(request.full_url)
+        if request.full_url == GRANTSGOV_FETCH_URL:
+            return json.dumps({"errorcode": 0, "data": {"synopsisAttachmentFolders": [{"synopsisAttachments": [{"id": n, "fileName": f"PAR-26-121-{n}-Full-Announcement.html", "createdDate": d}, {"id": 9, "fileName": "PAR-26-121.pdf", "createdDate": "Dec 31, 2025 09:00:00 AM EST"}]} for n, d in enumerate(dates, 1)]}}).encode()
+        return b"<p>Full</p>"
+    monkeypatch.setattr(clients, "_read", fake_read)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    assert clients.GrantsGovClient().full_announcement("359862") == "<p>Full</p>" and reads[1:] == [f"{GRANTSGOV_ATTACHMENT_URL}/{expected}"]
+
+
+@pytest.mark.parametrize("attachment", [{"fileName": "PAR-27-090-Full-Announcement.html"},{"id": "../x", "fileName": "PAR-27-090-Full-Announcement.html"}, {"id": "1?a=b", "fileName": "PAR-27-090-Full-Announcement.html"}], ids=["no-id", "path", "query"])
 def test_a_full_announcement_without_a_numeric_id_is_an_api_error_and_is_not_requested(monkeypatch, attachment) -> None:
     import json
     from nih_grant_matcher.config import GRANTSGOV_FETCH_URL

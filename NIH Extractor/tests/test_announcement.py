@@ -100,10 +100,25 @@ def test_a_record_with_no_grants_gov_id_says_grants_gov_was_not_asked() -> None:
 
 def test_the_guide_text_is_saved_without_html_entities() -> None:
     assert html.unescape(TEXT) == TEXT
-    found = fetch_announcement(OPP, Guide(_in_section_iv("NEI&#146;s Research Strategy is limited to 6&nbsp;pages.")), Grants(""))
+    found = fetch_announcement(OPP, Guide(_in_section_iv("NEI&#146;s Research Strategy is limited to 6&nbsp;pages.") + " More text." * 100), Grants(""))
     assert "&" not in found.text and "NEI’s" in found.text
     [limit] = parse_requirements(found)
     assert limit.limit.amount == 6 and quoted_in(limit.quote, found.text)
+
+def test_a_real_grants_gov_attachment_wins_over_the_guide_text() -> None:
+    grants = Grants("<p>Section IV. Application and Submission Information</p>" + FILLER)
+    assert fetch_announcement(OPP, Guide(TEXT), grants).origin == "grants.gov" and grants.asked == ["360675"]
+
+def test_the_guide_text_is_used_when_grants_gov_fails_or_only_links() -> None:
+    class Down:
+        def full_announcement(self, ggid): raise clients.ApiError("timed out")
+    assert fetch_announcement(OPP, Guide(TEXT), Down()).origin == fetch_announcement(OPP, Guide(TEXT), Grants(LINK_ONLY)).origin == "nih-guide"
+
+def test_a_guide_answer_too_short_to_be_an_announcement_is_no_text() -> None:
+    # The Guide answered for PAR-27-032 on 2026-11-23 with 529 characters of a PDF's bytes.
+    with pytest.raises(clients.ApiError) as failed:
+        fetch_announcement(OPP, Guide("%PDF-1.4 " + "x" * 520), Grants(""))
+    assert str(failed.value) == "No announcement text for PAR-27-090. The NIH Guide answered with only 529 characters, too few to be the announcement. Grants.gov has no full announcement attached."
 
 def test_a_record_with_a_bare_grants_gov_id_asks_grants_gov_for_it() -> None:
     grants = Grants(FILLER)
