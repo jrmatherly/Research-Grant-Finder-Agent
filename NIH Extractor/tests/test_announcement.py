@@ -48,3 +48,27 @@ def test_not_limited_to_is_not_a_page_limit() -> None:
 
 def test_an_announcement_without_section_headings_yields_no_requirements() -> None:
     assert parse_requirements(_announcement("A notice of special interest with no numbered sections.")) == ()
+
+def _in_section_iv(sentence: str) -> str:
+    return f"Section IV. Application and Submission Information Format the attachments. {sentence} Section V. Application Review Information Factor 1."
+
+def test_every_limit_in_one_sentence_is_read_with_the_whole_sentence() -> None:
+    sentence = "The Specific Aims is limited to 1 page and the Research Strategy is limited to 6 pages."
+    found = parse_requirements(_announcement(_in_section_iv(sentence)))
+    assert [(r.section, r.limit.amount if r.limit else None, r.quote) for r in found] == [("specific-aims", 1, sentence), ("research-strategy", 6, sentence)]
+
+def test_a_decimal_point_does_not_end_the_quoted_sentence() -> None:
+    sentence = "For version 2.0 forms, the Research Strategy is limited to 12 pages."
+    assert [r.quote for r in parse_requirements(_announcement(_in_section_iv(sentence)))] == [sentence]
+
+def test_a_guide_reply_with_a_malformed_hit_falls_back_to_grants_gov(monkeypatch) -> None:
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: b'{"data": {"hits": {"hits": [{"_source": "PAR-27-090"}]}}}')
+    found = fetch_announcement(OPP, clients.NihGuideClient(), Grants("<p>Section IV. Application and Submission Information</p>"))
+    assert found.origin == "grants.gov"
+
+def test_a_grants_gov_id_that_is_not_a_number_ends_in_the_error_that_names_both(monkeypatch) -> None:
+    def no_network(request, timeout, attempts=3): raise AssertionError("no request may be sent")
+    monkeypatch.setattr(clients, "_read", no_network)
+    opportunity = Opportunity(source_id="nih-guide:9", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active", raw={"guide_item": {"ggid": "../x"}})
+    with pytest.raises(clients.ApiError, match="NIH Guide.*Grants.gov.*not a number"):
+        fetch_announcement(opportunity, Guide(""), clients.GrantsGovClient())
