@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 from helpers import Grants, Guide, start
 from nih_grant_matcher import __version__
@@ -184,3 +185,57 @@ def test_a_confirmed_limit_in_another_unit_is_not_applied(tmp_path) -> None:
     for requirement in ws.view().requirements:
         ws.decide(requirement.id, True)
     assert (ws.view().section("project-summary").limit.amount, ws.view().section("project-summary").limit.unit) == (30, "lines")
+    assert any("Project Summary/Abstract" in notice and "1 page" in notice and "lines" in notice for notice in ws.view().notices)
+
+def test_a_second_application_for_the_announcement_gets_its_requirements(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    other = Workspace.start(ws.store, ws.opportunity, "NIH:R21", resubmission=True)
+    assert [(r.text, r.confirmed) for r in other.view().requirements] == [("Research Strategy: at most 4 pages.", None)]
+    other.decide(other.view().requirements[0].id, False)
+    Workspace.start(ws.store, ws.opportunity, "NIH:R21", resubmission=True)
+    assert [r.confirmed for r in other.view().requirements] == [False] and [r.confirmed for r in ws.view().requirements] == [True]
+
+def test_a_blank_section_cannot_be_signed(tmp_path) -> None:
+    ws = start(tmp_path)
+    revision = ws.write("project-narrative", "  \n ", parent=None)
+    with pytest.raises(NotReady):
+        ws.sign("project-narrative", "A. Applicant", revision.id)
+    assert ws.store.signoffs(ws.application_id) == []
+
+def test_a_signed_section_with_a_new_error_is_a_draft_again(tmp_path) -> None:
+    ws = start(tmp_path)
+    fact = ws.add_fact("reference", "Smith J. Heart cells. 2021.", label="smith2021")
+    revision = ws.write("specific-aims", "As we showed [@smith2021].", parent=None)
+    ws.sign("specific-aims", "A. Applicant", revision.id)
+    assert ws.view().section("specific-aims").state == "final" and not ws.view().notices
+    ws.retire_fact(fact.id)
+    view = ws.view()
+    assert view.section("specific-aims").state == "draft" and len(ws.store.signoffs(ws.application_id)) == 1
+    assert [n for n in view.notices if "Specific Aims" in n and "draft again" in n and "error" in n and "log" in n]
+    names = {path.name for path in ws.export(tmp_path / "out").iterdir()}
+    assert "DRAFT-specific-aims.md" in names and "specific-aims.md" not in names
+
+def test_an_announcement_without_a_section_iv_is_named_as_one(tmp_path) -> None:
+    ws = start(tmp_path)
+    assert not ws.view().no_section_iv
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    assert not ws.view().no_section_iv
+    ws.fetch_announcement(Guide("A notice with no headings at all. " * 40), Grants(""))
+    assert ws.view().no_section_iv and ws.view().requirements == ()
+
+def test_export_returns_the_absolute_folder(tmp_path, monkeypatch) -> None:
+    ws = start(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert ws.export(Path("outputs/application-1")) == (tmp_path / "outputs" / "application-1").resolve()
+
+def test_the_provenance_log_names_the_announcement_and_the_inputs(tmp_path) -> None:
+    ws = start(tmp_path)
+    announcement = ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    kept, retired = ws.add_fact("reference", "Smith J. Heart cells. 2021.", label="smith2021"), ws.add_fact("aim", "A secret aim.")
+    ws.retire_fact(retired.id)
+    log = (ws.export(tmp_path / "out") / "provenance-log.md").read_text(encoding="utf-8")
+    assert all(part in log for part in ("the NIH Guide", announcement.url, announcement.sha256, f"{announcement.fetched_at:%Y-%m-%d}"))
+    assert f"Input {kept.id}. reference, key smith2021. In use." in log and f"Input {retired.id}. aim. Retired on" in log
+    assert "A secret aim." not in log and "Heart cells" not in log

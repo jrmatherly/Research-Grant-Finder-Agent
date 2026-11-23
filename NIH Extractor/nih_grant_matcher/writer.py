@@ -13,6 +13,10 @@ from .provenance import attribution, head, section_state, share
 from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, grant_types_for
 from .store import OpportunityStore
 
+DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
+ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
+NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
+
 class NotReady(Exception):
     def __init__(self, reason: str, findings: tuple[Finding, ...] = ()) -> None:
         super().__init__(reason)
@@ -45,6 +49,9 @@ class ApplicationView:
     log: tuple[Revision, ...]
     notices: tuple[str, ...]
     disclosure: str
+    @property
+    def no_section_iv(self) -> bool:
+        return self.announcement is not None and not self.announcement.section("IV")
     def section(self, key: str) -> SectionView:
         for s in self.sections:
             if s.rule.key == key:
@@ -86,6 +93,8 @@ class Workspace:
         if app.id not in before:
             for ref in prior:
                 store.add_fact(app.id, "reference", ref.citation, ref.key, {k: v for k, v in (("pmid", ref.pmid), ("doi", ref.doi)) if v})
+            if (announcement := store.announcement(app.opportunity_number)) is not None:
+                store.replace_requirements(app.id, "parsed", parse_requirements(announcement))
         return cls(store, app.id, model)
 
     def _application(self) -> Application:
@@ -111,11 +120,16 @@ class Workspace:
             limit = min(confirmed, key=lambda l: l.amount, default=rule.limit)
             if len(confirmed) > 1:
                 notices.append(f"You confirmed {len(confirmed)} limits for the {rule.title}. The smallest, {describe(limit)}, applies.")
+            notices += [f"You confirmed a limit of {describe(r.limit)} for the {rule.title}. Its own limit is in {rule.limit.unit}, so Grant Matcher does not apply the one you confirmed." for r in requirements if r.kind == "limit" and r.confirmed and r.section == rule.key and r.limit and r.limit.unit != rule.limit.unit]
             current = head(revisions, rule.key)
             words = attribution(revisions, current.id) if current else ()
             text = current.text if current else ""
             findings = check_section(text, rule, limit, grant_type.page, facts, grounding, words) if current else ()
-            sections.append(SectionView(rule, limit, text, current.id if current else None, section_state(revisions, signoffs, rule.key), tuple(k for k in rule.needs if k not in kinds), findings, share(words)))
+            state = section_state(revisions, signoffs, rule.key)
+            if state == "final" and any(f.severity == "error" for f in findings):
+                state = "draft"
+                notices.append(f"The {rule.title} is a draft again, because an error has appeared since you signed off revision {current.id}. The sign-off stays in the log.")
+            sections.append(SectionView(rule, limit, text, current.id if current else None, state, tuple(k for k in rule.needs if k not in kinds), findings, share(words)))
         year = datetime.now(timezone.utc).year
         if app.created_at.year == year and (n := sum(a.created_at.year == year and a.id <= app.id for a in store.applications())) >= 6:
             notices.append(f"This is application {n} that Grant Matcher has started in {year}. NIH accepts six per investigator per calendar year (NOT-OD-25-132). Grant Matcher counts only its own.")
@@ -175,6 +189,8 @@ class Workspace:
         s = view.section(section)
         if s.revision_id is None:
             raise NotReady(f"The {s.rule.title} has no text yet. Write it and save it before you sign off.")
+        if not s.text.strip():
+            raise NotReady(f"The {s.rule.title} holds no text. Write it and save it before you sign off.")
         if s.revision_id != revision_id:
             raise StaleEdit(next(r for r in view.log if r.id == s.revision_id))
         if not signer.strip():
@@ -194,7 +210,7 @@ class Workspace:
         self.store.set_disclosure(self.application_id, on)
 
     def export(self, out_dir: Path) -> Path:
-        view, out_dir = self.view(), Path(out_dir)
+        view, out_dir = self.view(), Path(out_dir).resolve()
         app, signoffs = view.application, self.store.signoffs(self.application_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         titles = {s.rule.key: s.rule.title for s in view.sections}
@@ -203,14 +219,16 @@ class Workspace:
             (out_dir / f"{'' if final else 'DRAFT-'}{s.rule.key}.md").write_text(f"# {s.rule.title}\n\n{s.text}\n", encoding="utf-8")
             # A file from an earlier export would otherwise stand beside this one under the other name.
             (out_dir / f"{'DRAFT-' if final else ''}{s.rule.key}.md").unlink(missing_ok=True)
-        status = {None: "not yet decided", True: "confirmed", False: "rejected"}
         lines = [f"# Requirements for {app.opportunity_number} ({view.grant_type.code})", "", "## Standing rules", ""]
         lines += [f"- {s.rule.title}. At most {describe(s.rule.limit)}." + (f" You confirmed the announcement's limit of {describe(s.limit)}." if s.limit != s.rule.limit else "") for s in view.sections]
         lines += ["", "Sources:", ""] + [f"- {src.url} (read on {src.read_on})" for src in view.grant_type.sources]
-        lines += ["", "## From the announcement", ""] + ([f"- {r.text} ({status[r.confirmed]}). The announcement says \"{' '.join(r.quote.split())}\"" for r in view.requirements] or ["- None found." if view.announcement else "- The announcement has not been fetched."])
+        lines += ["", "## From the announcement", ""] + ([f"- {r.text} ({DECISIONS[r.confirmed]}). The announcement says \"{' '.join(r.quote.split())}\"" for r in view.requirements] or ["- None found." if view.announcement else "- The announcement has not been fetched."])
         (out_dir / "requirements.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         log = [f"# Provenance log for {app.opportunity_number} ({view.grant_type.code})", "", f"Exported by Grant Matcher {__version__}.", "", "## Revisions", ""]
         log += [f"- Revision {r.id}. {titles.get(r.section, r.section)}. {r.author} {r.action}, parent {r.parent_id or 'none'}, at {r.created_at.isoformat(timespec='seconds')} UTC. {len(r.text.split())} words." for r in view.log] or ["- None."]
+        a = view.announcement
+        log += ["", "## Announcement", "", f"- From {ORIGINS[a.origin]} at {a.url}, fetched on {a.fetched_at:%Y-%m-%d}. SHA-256 {a.sha256}." if a else "- Not fetched."]
+        log += ["", "## Inputs", ""] + ([f"- Input {f.id}. {f.kind}{f', key {f.label}' if f.label else ''}. " + (f"Retired on {f.retired_at:%Y-%m-%d}." if f.retired_at else "In use.") for f in self.store.facts(self.application_id)] or ["- None."])
         log += ["", "## Sign-offs", ""]
         log += [f"- {titles.get(s.section, s.section)}, revision {s.revision_id}, signed by {s.signer} at {s.signed_at.isoformat(timespec='seconds')} UTC with Grant Matcher {s.tool_version}. {'The warnings that stood were ' + ', '.join(s.findings) + '.' if s.findings else 'No warning stood.'} {s.attestation}" for s in signoffs] or ["- None."]
         (out_dir / "provenance-log.md").write_text("\n".join(log) + "\n", encoding="utf-8")
