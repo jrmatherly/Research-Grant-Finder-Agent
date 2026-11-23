@@ -33,4 +33,5 @@ Start your coding assistant at the repository root, so that it loads the project
 
 - This repository is a fork. Push and open pull requests against `jrmatherly/Research-Grant-Finder-Agent` only, never against the upstream repository.
 - `NIH Extractor/data/`, `NIH Extractor/outputs/`, and `NIH Extractor/digests/` hold generated files. Change the code that writes them, not the files.
+- `nih_grant_matcher/term_rarity.json` is generated. See `.claude/rules/scoring.md` before you rebuild it.
 - `tests/test_streamlit_app_static.py` asserts literal strings in `streamlit_app.py`. A reworded line or comment in that file can fail a test.

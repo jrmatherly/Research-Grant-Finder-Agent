@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from pathlib import Path
 
 GRANTSGOV_SEARCH_URL = "https://api.grants.gov/v1/api/search2"
 GRANTSGOV_FETCH_URL = "https://api.grants.gov/v1/api/fetchOpportunity"
@@ -15,9 +16,18 @@ DEFAULT_KEYWORDS = {
     "bioinformatics": 12, "computational": 10, "omics": 10, "ehr": 10,
     "electronic health record": 10, "imaging analytics": 12, "data analysis": 8,
     "analytics": 7, "algorithm": 7, "modeling": 6,
+    # Data infrastructure and quantitative methods. Half of the relevant opportunities in a labeled sample named none of the terms above.
+    "medical imaging": 12, "data integration": 10, "informatics": 12, "biostatistics": 12, "statistical": 8, "quantitative": 8,
+    "data coordination": 10, "data management": 8, "data standards": 10, "data harmonization": 10, "secondary analysis": 10, "data resource": 8, "data sharing": 6,
 }
 # A keyword listed here is matched with its own pattern. "omics" covers genomics and proteomics, but not economics.
-KEYWORD_PATTERNS = {"omics": r"\b(?!\w*(?:econ|ergon)omics)\w*omics\b"}
+KEYWORD_PATTERNS = {
+    "omics": r"\b(?!\w*(?:econ|ergon)omics)\w*omics\b",
+    "biostatistics": r"\bbiostatistic\w*", "data coordination": r"\bdata coordinat\w*", "data standards": r"\bdata standard\w*",
+    "data harmonization": r"\bdata harmoni[sz]\w*", "secondary analysis": r"\bsecondary (?:data )?analys\w*",
+}
+# Built by `python -m nih_grant_matcher rarity-table` from expired NIH Guide opportunities.
+TERM_RARITY_PATH = Path(__file__).with_name("term_rarity.json")
 CURATED_COMPUTATIONAL_EXAMPLES = (
     "Develop machine learning models to predict clinical risk from electronic health records.",
     "Use deep learning and computer vision to analyze biomedical imaging data.",

@@ -173,6 +173,9 @@ The engine searches for signals associated with:
 * Statistical modeling
 * Multimodal data
 * Data integration
+* Informatics and biostatistics
+* Data coordination, management, standards, and sharing
+* Secondary data analysis
 
 ### 2. Title Centrality Analysis
 
@@ -183,6 +186,8 @@ The assumption is that a computational concept appearing in the title is more li
 ### 3. Grant Similarity Analysis
 
 Opportunity descriptions are compared with curated AI and data-science grant examples.
+
+Each word is weighted by how rare it is in NIH Guide text, so a shared word such as "phenotypes" counts for far more than "health". The weights come from a table in the repository, built from 3,000 expired opportunities, so an opportunity gets the same score whatever else a run fetched. The match reason names the shared words.
 
 Text similarity provides an additional relevance signal when explicit computational terminology is limited.
 
@@ -412,6 +417,7 @@ Run these commands from `NIH Extractor/`. The package uses the standard library 
 | `uv run python -m nih_grant_matcher digest` | Writes the digest again from the saved opportunities. |
 | `uv run python -m nih_grant_matcher excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
 | `uv run python -m nih_grant_matcher reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
+| `uv run python -m nih_grant_matcher rarity-table` | Rebuilds the word-rarity table from expired NIH Guide opportunities. Scores change after a rebuild. |
 | `uv run python -m nih_grant_matcher backfill-xml` | Downloads the Grants.gov XML extract. This fails while `www.grants.gov` does not send its intermediate certificate. |
 
 Add `--help` to a command to see its options. Saved opportunities whose deadline has passed are left out of the dashboard, the digest, and the Excel file.
