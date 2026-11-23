@@ -87,6 +87,10 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `digest` | Writes the digest again from the saved opportunities. |
 | `excel` | Writes the saved opportunities to `outputs/nih_grant_opportunities.xlsx`. |
 | `reporter-context --term "machine learning"` | Prints related funded projects from NIH RePORTER. |
+| `profile show` | Prints the saved profile, or the built-in one when none is saved. |
+| `profile export --out data/profile.json` | Writes that profile to a file. Give a path under `data/`, so that the file lands in the mounted folder. A path outside the mounted folders fails with "Permission denied". |
+| `profile import data/profile.json` | Saves the profile in the file, or refuses a file that is not a valid profile. |
+| `profile reset` | Deletes the saved profile, so ranking uses the built-in one. |
 
 Add `--help` to a command to see its options. Do not run `rarity-table` in the container. It rewrites a file inside the image, and the container's user cannot write there.
 

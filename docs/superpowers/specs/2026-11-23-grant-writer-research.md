@@ -280,3 +280,42 @@ All agent-read.
 ### 12. `ReviewFeedbackAgent`
 
 Checked in the README: it is listed in the agent table ("Captures researcher feedback for future relevance tuning"), and the text calls it "the foundation for a future adaptive recommendation system in which researcher feedback can improve opportunity prioritization." Nothing calls it.
+
+## Research after Stage 1 (2026-11-23)
+
+Stage 1 merged as pull request 10. These notes cover what its reviews left open. Each item says how it was checked: "ran" means a command or a browser run on this date, "read" means the code or a page was read, and "agent" means a research agent reported it and the session lead did not repeat it.
+
+### What the suggested terms do to a ranking
+
+- Ran: `term_rarity.json` holds 6,532 single words from 3,000 expired notices, and the lowest count is 2. A word that the table lacks counts as frequency 0 and gets weight 18. So "mitophagy" and "melanoma" get 18, and so do "protects", "shapes" and "predicts". The table cannot tell a rare topic word from an inflected verb.
+- Ran: `suggest_terms` on three aim sentences for five fields gave 17 to 24 terms each. Between 1 and 8 of them had weight 18. Every list held action words from the sentences: "test", "define", "map", "identify", "evaluate", "whether", "how", "after", "two".
+- Ran: those action words drive the ranking. For the cardiology aims, the terms that matched the most saved records were "test" (72 of 384), "how" (17) and "define" (16). The top result matched "map, heart, how". For neuroscience the top result was a mental health implementation trial that matched "underlie, whether, changes, two, test".
+- Ran, as a prototype: dropping about 60 action words removed those matches. The cardiology profile then matched on "heart", "aging" and "muscle" only, and its Medium count fell from 21 to 6.
+- Ran: the saved records rarely hold a specific topic word. The median record has 133 words, which is the title and the short description from the NIH Guide. Of 384 records, 0 contain "mitochondri", 0 "immunotherap", 0 "heart failure", 0 "tumor microenvironment" and 0 "synaptic plasticity". Broad words do appear: "cancer" in 47, "aging" in 37, "mental health" in 20, "heart" in 7, "cardiovascular" in 1. "clinical trial" is in 355, because activity code names carry it.
+- So better terms alone will not rank a narrow field well. The text that is scored is short and general, and the scorer has no signal for an NIH institute. `_is_nih_hhs` tests only whether the agency is NIH or HHS.
+
+### Where better terms could come from
+
+- Agent, with one call repeated by the session lead: the NIH RePORTER API v2 returns `pref_terms` (a semicolon list such as "Cardiac Myocytes;Heart failure;Ischemia"), `terms` (the same with synonyms) and `spending_categories_desc` (the RCDC categories, such as "Aging; Cardiovascular; Heart Disease") for a project. It has no `project_terms` field. It needs no key.
+- Agent: projects can be searched by `pi_profile_ids`, and by `pi_names` with `org_names`. The API page asks for at most one request a second, and large jobs at night or on weekends. `NihReporterClient.search_projects` does a text search only and asks for no term field.
+- Agent: MeSH on Demand answers without a key, took 71 seconds for one request, and its endpoint is not documented. MTI and MetaMap are retired, with no maintenance after 2024-12-31. The MeSH lookup API matches labels and does not read free text. UMLS needs an account and a key.
+- Agent, run as a sketch: RAKE fails on three sentences, because it splits only at stop words and the longest run wins ("gut microbiome shapes immune responses"). Methods that need a repeated word (TextRank, C-value) have none to work with in three sentences. YAKE was not run.
+- Agent, run as a sketch with the MeSH lookup as the vocabulary: taking every run of one to three words between stop words, and keeping the runs found in a vocabulary, kept "clinical trial", "colorectal cancer", "dietary fiber" and "gut microbiome", and dropped "protects", "shapes" and "study". The vocabulary is what removes the verbs.
+- Agent: RePORTER's Matchmaker runs in the web application and is not in the public API. Its page loads reCAPTCHA, so it must not be automated.
+- Not verified: whether the phrases of a RePORTER vocabulary appear in notice text often enough to matter, the terms for redistributing MeSH, and the rate limit beyond the one request a second that the API page states.
+
+### The four findings the review of pull request 10 left
+
+- `docs/docker.md`: ran. `profile show`, `profile export --out data/profile.json`, `profile import data/profile.json` and `profile reset` each exited 0 in `ghcr.io/jrmatherly/nih-grant-matcher:latest` built from `95060d3`. `profile export --out profile.json` failed with "Permission denied", because the container's user can write only to the mounted folders. The page now lists the four commands.
+- A read-only database from an earlier version: ran. `save_profile` and a reset both raise `OperationalError: no such table: profile`. A read-only database that has the table raises `attempt to write a readonly database`. The dashboard shows the first message as it is, and the CLI prints a traceback.
+- A term whose weight cell is cleared: ran once in the built application's own server, and not reproduced. The cell showed "None", and after Next and Back the term was in the table with its weight of 18. The cause is unknown. The code at `ui/profile_page.py` drops a row whose weight is missing, so the grid may not send a cleared number.
+- Length limits: ran. `from_export` accepted a profile with a 10 MB `expertise` and a 1 MB example sentence, a keyword of 5,000 characters, and keywords that hold a line break or a Markdown link.
+
+### The built application
+
+- Ran: the binary in `macos/dist/Grant Matcher.app`, built from `b8df1d1`, was started as `--serve` with a scratch home folder. Its Find view loaded 384 records. Its Profile view opened, the wizard reached step 4, and Save on step 1 was refused with the message that names steps 2 and 3. So the frozen application holds and runs the `ui` subpackage.
+- Not checked: the application's own window, which pywebview draws. Only its server was opened, in a browser.
+
+### A built-in user and the wizard
+
+- Ran: a user with no saved profile who opens the wizard, types a name and presses Save is refused, because a new draft has no example sentences and no terms. Read: the draft starts from an empty profile, so the only way to keep the built-in ranking and add a name, expertise or prior work is to export the built-in profile, edit the file and import it.

@@ -16,7 +16,7 @@
 
 ## Owner decisions
 
-All twelve decisions are settled (2026-11-23). The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
+All twelve decisions are settled (2026-11-23). Three more, D13 to D15, came out of Stage 1 and are open. They are under "Stage 1 follow-ups". The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
 
 | # | Decision | In this plan | The alternative |
 | --- | --- | --- | --- |
@@ -468,7 +468,34 @@ git commit -m "feat: add the profile wizard with export and import"
 
 ---
 
+## Stage 1 follow-ups
+
+The reviews of Stage 1 left the items below. The evidence for each is in the research notes under "Research after Stage 1 (2026-11-23)". F1 to F4 have a task that carries them. D13 to D15 wait for the owner, and no task builds them until he decides.
+
+### Carried by a task
+
+| # | Item | What was found | Where it lands |
+| --- | --- | --- | --- |
+| F1 | `docs/docker.md` lacks the `profile` commands | All four ran in the published image built from `95060d3`. `profile export` needs a path under `data/`. | Done on 2026-11-23, in the page. |
+| F2 | A write to a read-only database from an earlier version says "no such table: profile" | Reproduced for a save and for a reset. The CLI prints a traceback. | Task 6, which adds tables to `SCHEMA` and already handles a read-only open. `save_profile` raises a `ProfileError` that says the database is read-only when the table is absent, and the same rule covers each table Task 6 adds. The CLI prints one line for a `sqlite3.Error`. Add a test for each. |
+| F3 | A term whose weight cell is cleared may be dropped with no message | Not reproduced in one run: the term came back with its weight. The code drops a row with no weight. Two terms that differ only by case still merge silently. | Task 8, Step "check the dashboard by hand": clear a weight, add two terms that differ by case, and say what happened. If a row is dropped or merged, the wizard names it in an `st.warning`. |
+| F4 | The profile has no length limits | `from_export` accepted 10 MB of `expertise`, a 1 MB sentence, a 5,000-character keyword, and a keyword with a line break. | Task 9, before any profile text reaches a prompt. `from_export` refuses: a keyword over 80 characters or with a line break; a sentence over 600 characters; `investigator`, `institution` and `career_stage` over 200; `research_summary`, `expertise` and `resources` over 6,000 each; more than 100 references; a citation over 1,000. Each message starts with the field name. The numbers are this tool's. They hold the text fields and the sentences to about 5,000 words together, and Task 10 sends a prompt only the references it cites. Add parametrize cases, and check that the built-in profile and the test profiles pass. |
+
+### Open decisions
+
+| # | Question | Evidence | Recommendation | The alternatives |
+| --- | --- | --- | --- | --- |
+| D13 | How should the wizard propose terms? | Action words from the aim sentences ("test", "how", "define") drive the ranking today, and a word the rarity table lacks gets the top weight of 18. The saved records hold 133 words at the median and rarely name a specific topic, so "heart failure" and "tumor microenvironment" match none of 384. | In two parts. First, a small change: drop a fixed list of action words from the suggestions, and give a word the table lacks a middle weight of 10. Second, measure before building more: for three fields, the owner judges the top ten results with terms taken from a RePORTER vocabulary (`pref_terms` and the RCDC categories) against the terms of the first part. Build the vocabulary table only if it wins. | Build the RePORTER phrase table now: a generator command, a second data file in the package (the constraint against data files would need an exception and a line in the build spec), and about 20 lines in `suggest_terms`. Or add a button that reads the applicant's own funded projects from RePORTER, which helps a funded investigator and nobody else, and sends a name to NIH. Or leave it: the applicant edits the terms and the preview shows the effect. |
+| D14 | Should a user of the built-in profile be able to add a name, expertise and prior work without replacing the built-in ranking? | Reproduced: the wizard starts from an empty draft, and a save with only a name is refused. The writer in Stage 3 reads those fields. The owner's own field is the built-in one. | Yes. Step 1 of the wizard asks "Rank with my own research" or "Keep the built-in ranking". The second choice starts the draft from the built-in profile, skips steps 2 to 4, and keeps the built-in labels in the reasons. About ten lines and one test, in Task 9, before the writer needs the fields. | Split `Profile` into a ranking part and a background part. It is the cleaner model and it changes the export format, the store and every test. Or leave it, and such a user exports, edits the file by hand and imports. |
+| D15 | Should the profile carry a preferred NIH institute? | The scorer tests only whether the agency is NIH or HHS. A specific topic rarely appears in a notice, and the institute is on every record. | Decide after D13's measurement. If terms alone rank a narrow field poorly, add the institutes as a profile field and one line in the reasons. It changes product behaviour, so it needs a new last field in `ScoreBreakdown` and cases in `tests/test_scoring.py` (`.claude/rules/scoring.md`). | Score the full announcement text that Task 5 fetches, which is longer and names more topics. It makes a score depend on a second request. |
+
+Still unproven after Stage 1: the built application's own window with the Profile view. Its server was run and both views opened in a browser. The owner opens the application once from `macos/dist`, or Stage 2's build check covers it.
+
+---
+
 ## Stage 2. An application workspace with no model
+
+Read "Stage 1 follow-ups" first. F2 lands in Task 6 and F3 in Task 8.
 
 Branch `feat/application-workspace`, cut from `main` after Stage 1 merges. When this stage merges, an applicant reads the full announcement in the tool, writes their own sections, and gets limits, required parts, citation and prose checks, a log, and a sign-off. No model, no key.
 
@@ -1144,6 +1171,8 @@ git commit -m "feat: write, check and sign off an application"
 ---
 
 ## Stage 3. Models that edit, and the AI-use statement
+
+Read "Stage 1 follow-ups" first. F4 lands in Task 9, and so does D14 if the owner takes it.
 
 Branch `feat/writer-models`, cut from `main` after Stage 2 merges. When this stage merges, the applicant picks a provider, and a model polishes or revises text the applicant wrote. This is the use that NIH's reminder of 2026-05-14 calls acceptable. Every change is logged and attributed.
 
