@@ -176,3 +176,9 @@ def test_a_new_application_after_a_delete_gets_a_new_id(store) -> None:
     first = _app(store)
     store.delete_application(first)
     assert _app(store) != first
+
+def test_a_requirement_id_is_not_given_out_again(store) -> None:
+    from nih_grant_matcher.announcement import Requirement
+    app, items = _app(store), [Requirement("must", f"Rule {n}.", "q", "parsed") for n in range(2)]
+    first = {r.id for r in store.replace_requirements(app, "parsed", items)}
+    assert not first & {r.id for r in store.replace_requirements(app, "parsed", items)}

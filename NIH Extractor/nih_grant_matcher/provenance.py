@@ -13,8 +13,11 @@ def attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[
         if chain[-1].parent_id not in by_id:
             raise ValueError(f"Revision {chain[-1].id} names parent {chain[-1].parent_id}, which is not in the log given.")
         chain.append(by_id[chain[-1].parent_id])
-    words: list[tuple[str, str]] = []
-    for revision in reversed(chain):
+    ordered = chain[::-1]
+    # Every word of a run of applicant revisions is the applicant's, so the diffs start at the last one before a model's.
+    first = next((i for i, r in enumerate(ordered) if r.author != "applicant"), len(ordered))
+    words = [(w, "applicant") for w in ordered[first - 1].text.split()] if first else []
+    for revision in ordered[first:]:
         new, origin = revision.text.split(), "applicant" if revision.author == "applicant" else revision.action
         opcodes = SequenceMatcher(a=[w for w, _ in words], b=new, autojunk=False).get_opcodes()
         words = [pair for tag, i1, i2, j1, j2 in opcodes for pair in (words[i1:i2] if tag == "equal" else [(w, origin) for w in new[j1:j2]])]
