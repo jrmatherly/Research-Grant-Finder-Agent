@@ -50,6 +50,23 @@ def _apply(db_path: str, make, done: str) -> None:
     st.session_state["profile_step"] = None
     st.session_state["scored_items"] = []
 
+def read_terms(terms: pd.DataFrame) -> tuple[dict[str, int], list[str], list[tuple[str, str, int]]]:
+    # The scorer matches lower-case text, and a saved profile refuses any other term.
+    keywords: dict[str, int] = {}
+    dropped, first, pairs = [], {}, []
+    for term, weight in zip(terms["Term"], terms["Weight"]):
+        if pd.isna(term) or not str(term).strip():
+            continue
+        if pd.isna(weight):
+            dropped.append(str(term).strip())
+            continue
+        name = str(term).strip()
+        if name.lower() in first:
+            pairs.append((first[name.lower()], name))
+        first.setdefault(name.lower(), name)
+        keywords[name.lower()] = int(weight)
+    return keywords, dropped, [(a, b, keywords[a.lower()]) for a, b in pairs]
+
 def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
     if not Path(db_path).exists():
         return None
@@ -112,8 +129,10 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
             draft = replace(draft, keywords={**suggest_terms((*examples, summary), scorer.document_frequency, scorer.documents), **draft.keywords})
         draft = replace(draft, research_summary=summary.strip(), examples=examples)
     elif n == 2:
-        # The scorer matches lower-case text, and a saved profile refuses any other term.
-        draft = replace(draft, keywords={str(term).strip().lower(): int(weight) for term, weight in zip(terms["Term"], terms["Weight"]) if pd.notna(term) and str(term).strip() and pd.notna(weight)})
+        keywords, dropped, merged = read_terms(terms)
+        draft = replace(draft, keywords=keywords)
+        if notes := [f"{escape_markdown(t)} had no weight, so it was dropped." for t in dropped] + [f"{escape_markdown(a)} and {escape_markdown(b)} are one term, so the wizard kept it once with weight {w}." for a, b, w in merged]:
+            st.session_state["profile_terms_warning"] = " ".join(notes)
     elif n == 4:
         cells = [["" if pd.isna(value) else str(value).strip() for value in row] for row in refs[["Key", "Citation", "PMID", "DOI"]].itertuples(index=False)]
         draft = replace(draft, expertise=expertise.strip(), resources=resources.strip(), prior_work=tuple(Reference(*row) for row in cells if any(row)))
@@ -133,6 +152,9 @@ def profile_page(db_path: str) -> None:
     kind, text = st.session_state.pop("profile_notice", (None, ""))
     if kind:
         getattr(st, kind)(text)
+    # The wizard reruns after it reads the terms table, so what it dropped or merged is shown on the next run.
+    if terms_warning := st.session_state.pop("profile_terms_warning", None):
+        st.warning(terms_warning)
     try:
         saved, unreadable = saved_profile(db_path), False
     except ProfileError as exc:
