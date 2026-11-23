@@ -506,6 +506,58 @@ Read "Stage 1 follow-ups" first. F2 lands in Task 6 and F3 in Task 8.
 
 Branch `feat/application-workspace`, cut from `main` after Stage 1 merges. When this stage merges, an applicant reads the full announcement in the tool, writes their own sections, and gets limits, required parts, citation and prose checks, a log, and a sign-off. No model, no key.
 
+**As built (2026-11-23).** Tasks 4 to 8 are done on the branch. The code differs from the task text below in these ways, and later stages build on the code.
+
+Grant types and the announcement:
+
+- `grant_types_for` returns nothing for a record that lists `R33` or `UH3`, and for the agencies FDA and NIOSH. One saved record lists R21 with R33, and the four saved FDA announcements with a covered code do not use the three-factor review. `rules.why_not_covered` returns the sentence that the Details tab shows in place of the Start button.
+- U01 stays in. Two U01 announcements (RFA-NS-28-012 and PAR-27-057) ask for the standard research plan in Section IV and keep the cooperative-agreement terms in Section VI.
+- `NihGuideClient.doctext` asks for five hits and takes the one whose `docnum` matches. A malformed reply from either source is an `ApiError`, so `fetch_announcement` goes on to the other source.
+- A Grants.gov attachment with under 1,000 characters of text is not an announcement. The attachment for PA-25-253 is a page that only redirects to the NIH page, and it was saved as the announcement before this rule.
+- A limit sentence is matched on the section title, the verb and the number only. Its quote is the whole sentence, a title matches in any case, and two limits in one sentence both come back.
+
+The store and the log:
+
+- `applications.id` is `AUTOINCREMENT`, so the id of a deleted application is not given out again. A repeat start of an existing application skips one id.
+- `model_calls` has `parent_id`, the revision that a proposal read, which Task 10's `Proposal.parent_id` and `pending` need. The key is deferred, because `revisions.call_id` and `model_calls.parent_id` point at each other and a delete could not otherwise finish.
+- `add_revision` and `add_signoff` refuse a revision of another application or section. `add_revision(only_on_head=True)` writes only when the parent is the head, in one statement, and `Workspace.write` uses it for `StaleEdit`.
+- A write to a read-only database from an earlier version raises `store.ReadOnlyDatabase` (follow-up F2). A profile save raises `store.ReadOnlyProfile`, a `ProfileError`, and both say to open a copy that can be written to. `cli.main` prints one line for any `sqlite3.Error`.
+- `set_setting` refuses the key `deleting`. `share` and `attribution` raise `ValueError` for an origin or a parent they do not know.
+- `facts()` returns retired facts too. `Workspace.view` shows and checks the live ones.
+
+The checks:
+
+- A sentence is counted twice. The first count is the task's rule with a longer list of titles (Prof, St, Mr, Mrs, Ms, Mt, Jr, Sr, No, Inc). The second also splits after a single capital letter, after a closing quote or bracket, and before a lower-case or digit start. Over the limit on the first count is the `over-limit` error. Over only on the second is the warning `sentence-count-unsure`.
+- A citation that a model wrote is known only when it matches one live reference exactly: a DOI or a PMID from the reference's `detail` or text, or a whole surname and a year. `Workspace.start` puts the PMID and the DOI of each `prior_work` entry into `detail`.
+- `prose.scan` returns one finding for each rule, with a count when the rule matched more than once. Rule 7 matches whole words, rules 8 and 23 whole phrases, and rule 31 also matches inflections. Rule 24 does not read the month May as a hedge. The first-person check skips `Phase I`, `type I` and the like.
+
+The workspace, the CLI and the view:
+
+- A section is `final` only when its head is signed and no error stands. A signed section that gains an error is a draft again, with a notice, and it exports with `DRAFT-`. A blank section and a blank signer are refused at sign-off.
+- `write` with unchanged text adds no revision. A confirmed limit applies only when its unit is the unit of the section's own limit, and the smaller of two wins.
+- A second application for an announcement that is already saved gets the requirements parsed from it at `start`. A decided requirement is kept across a new fetch while its quote is in the text.
+- When the saved text has no Section IV, the view and the CLI say so (`ApplicationView.no_section_iv`).
+- The Details tab has a `This is a resubmission` checkbox beside `Start application`.
+- The Apply widgets have `apply_*` keys. The loop in `streamlit_app.py` that keeps them across a view switch runs only when the Apply view is not drawn. In an Apply run it would send each saved value over text that the applicant is typing. The tabs have a key and no `on_change`.
+- `apply` has no command to confirm or reject a requirement, to retire an input, or to restore a revision. The task lists none.
+- `provenance-log.md` also holds the announcement's origin, address, hash and fetch date, and each input's kind and key.
+- Follow-up F3: the Profile wizard names each term it drops for an empty weight and each pair it merges by case (`read_terms` in `ui/profile_page.py`).
+
+Carried into Stage 3:
+
+- Before Task 9, split `_page` in `ui/apply_page.py` into one function for each tab, and move `escape_markdown` to a module both pages import.
+- Task 10 needs a store method that appends two revisions in one transaction for an accept with edits, the `grounding` text taken out of `view()` so that `propose` can use it, and `delete_application` to remove the `discarded:<call_id>` settings.
+- Task 10 or 11 widens the author and year pattern to `Smith and Jones (2021)`, `(Smith, 2021)` and accented surnames. The check runs only on words a model wrote, so it cannot fire before then.
+- `Workspace` gets an error class of its own, in place of the `ValueError` that the CLI and the view catch.
+- `docs/docker.md` gets the `apply` commands after this stage merges, each run against the published image.
+
+Not fixed, for the owner:
+
+- Text that is typed and not saved is lost when the Section box changes, because the text area is in a form.
+- A narrative that has `Gen.`, `cf.`, `Univ.` or `approx.` before a capital letter counts one sentence too many, and the error has no override.
+- An export writes a folder on the machine that runs the dashboard, with no download.
+- A saved announcement stays after its last application is deleted.
+
 ### Task 4: Grant types as data
 
 **Files:**
