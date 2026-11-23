@@ -22,9 +22,12 @@ class RunSummary:
     capped: bool = False
 
 
+def config_for(store: OpportunityStore, base: MatcherConfig | None = None) -> MatcherConfig:
+    return store.profile().matcher_config(base)
+
+
 def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", keyword: str = "") -> tuple[list[ScoredOpportunity], int, bool]:
     parser = GrantParserAgent()
-    relevance = MLRelevanceAgent(MLRelevanceScorer(config))
     opportunities: list[Opportunity] = []
     fetched = 0
     # fetched sums the sources, so the limit is compared to each source's own count.
@@ -42,6 +45,12 @@ def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", 
         fetched += len(enriched)
         capped = capped or len(enriched) >= config.rows
 
+    # Read the profile after the fetch, so that a failed request leaves no database behind.
+    store = OpportunityStore(config.db_path)
+    try:
+        relevance = MLRelevanceAgent(MLRelevanceScorer(config_for(store, config)))
+    finally:
+        store.close()
     scored = [relevance.score(opp) for opp in _dedupe_opportunities(opportunities)]
     current = [item for item in scored if is_current_nih_hhs_opportunity(item.opportunity)]
     current.sort(key=lambda item: (-item.score, item.opportunity.close_date is None, item.opportunity.close_date or item.scored_at.date()))
@@ -60,8 +69,7 @@ def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str 
 
 def rescore_saved(store: OpportunityStore) -> None:
     # A saved score goes stale when the scoring rules change, and as the expiration date nears. Scoring needs no network, so score the open rows again before every read.
-    # The default rules, as every caller of the scorer uses today. A caller that sets its own keywords must pass them here too.
-    scorer = MLRelevanceScorer()
+    scorer = MLRelevanceScorer(config_for(store))
     try:
         store.upsert_many([scorer.score(item.opportunity) for item in store.top_scored(limit=-1)])
     except sqlite3.OperationalError as exc:
