@@ -423,9 +423,10 @@ def test_a_stale_warning_does_not_follow_a_deleted_application(tmp_path, monkeyp
     assert any(stale in warning.value for warning in app.warning)
     app.text_input(key="apply_delete_1").set_value("PAR-1").run(timeout=30)
     app.button(key="apply_delete_button").click().run(timeout=30)
+    assert "apply_stale" not in app.session_state and "apply_text_1_specific-aims" not in app.session_state
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     app.button(key="start_application").click().run(timeout=30)
-    assert not app.exception and app.selectbox(key="application_id").value == 1
+    assert not app.exception and app.selectbox(key="application_id").value == 2
     assert not any(stale in warning.value for warning in app.warning)
 
 
@@ -437,10 +438,11 @@ def test_a_typed_delete_confirmation_does_not_carry_to_a_new_application(tmp_pat
     app.text_input(key="apply_delete_1").set_value("PAR-1").run(timeout=30)
     app.button(key="apply_delete_button").click().run(timeout=30)
     assert not app.exception and any("Deleted" in success.value for success in app.success)
+    assert "apply_delete_1" not in app.session_state
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     app.button(key="start_application").click().run(timeout=30)
-    assert not app.exception and app.selectbox(key="application_id").value == 1
-    assert app.text_input(key="apply_delete_1").value == "" and app.button(key="apply_delete_button").disabled
+    assert not app.exception and app.selectbox(key="application_id").value == 2
+    assert app.text_input(key="apply_delete_2").value == "" and app.button(key="apply_delete_button").disabled
 
 
 def test_the_keys_of_a_deleted_application_are_its_own() -> None:

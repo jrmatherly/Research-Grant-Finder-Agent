@@ -100,6 +100,7 @@ class ModelCall:
     input_tokens: int
     output_tokens: int
     created_at: datetime
+    parent_id: int | None = None
 
 @dataclass(frozen=True)
 class Revision:

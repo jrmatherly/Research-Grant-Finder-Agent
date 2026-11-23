@@ -100,7 +100,7 @@ def _delete(ws: Workspace, number: str) -> str:
     if st.session_state.get(f"apply_delete_{ws.application_id}", "").strip() != number:
         raise ValueError(f"Type {number} to delete this application. Nothing was deleted.")
     ws.delete()
-    # Ids are reused after a delete, so every value keyed by this id goes with it.
+    # Every value keyed by this id goes with it, so the session holds nothing of an application that is gone.
     for key in [k for k in st.session_state if owned_by(ws.application_id, str(k))] + ["application_id", "apply_stale"]:
         st.session_state.pop(key, None)
     _open_first_tab()
