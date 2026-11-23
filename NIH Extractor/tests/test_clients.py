@@ -144,7 +144,7 @@ def test_doctext_takes_the_text_only_of_the_document_asked_for(monkeypatch, docn
     from nih_grant_matcher.config import NIH_GUIDE_DOCTEXT_URL
     def fake_read(request, timeout, attempts=3):
         url, _, query = request.full_url.partition("?")
-        assert url == NIH_GUIDE_DOCTEXT_URL and urllib.parse.parse_qs(query)["query"] == ["PAR-27-090"] and urllib.parse.parse_qs(query)["perpage"] == ["1"]
+        assert url == NIH_GUIDE_DOCTEXT_URL and urllib.parse.parse_qs(query)["query"] == ["PAR-27-090"] and urllib.parse.parse_qs(query)["perpage"] == ["5"]
         return json.dumps({"data": {"hits": {"hits": [{"_source": {"docnum": docnum, "doctext": "Body", "ggid": "360675"}}]}}}).encode()
     monkeypatch.setattr(clients, "_read", fake_read)
     assert clients.NihGuideClient().doctext("PAR-27-090") == expected
@@ -179,3 +179,10 @@ def test_a_full_announcement_without_a_numeric_id_is_an_api_error_and_is_not_req
     with pytest.raises(clients.ApiError, match="attachment id"):
         clients.GrantsGovClient().full_announcement("360675")
     assert reads == [GRANTSGOV_FETCH_URL]
+
+
+def test_doctext_takes_the_hit_for_the_number_when_another_document_ranks_first(monkeypatch) -> None:
+    import json
+    hits = [{"_source": {"docnum": "NOT-OD-27-001", "doctext": "A notice that cites PAR-27-090.", "ggid": "1"}}, {"_source": {"docnum": "PAR-27-090", "doctext": "Body", "ggid": "360675"}}]
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: json.dumps({"data": {"hits": {"hits": hits}}}).encode())
+    assert clients.NihGuideClient().doctext("PAR-27-090") == ("Body", "360675")

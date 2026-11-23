@@ -8,7 +8,7 @@ from . import __version__
 from .announcement import Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
 from .checks import check_section
 from .models import Application, Attribution, Fact, Finding, Model, Opportunity, Revision, Signoff
-from .profile import BUILTIN_PROFILE, ProfileError
+from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import attribution, head, section_state, share
 from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, grant_types_for
 from .store import OpportunityStore
@@ -57,6 +57,13 @@ def describe(limit: Limit) -> str:
 def _percent(value: float) -> int:
     return round(value * 100)
 
+def _profile(store: OpportunityStore) -> Profile:
+    # The dashboard already says that the saved profile cannot be read, and an application can still be started and checked without it.
+    try:
+        return store.profile()
+    except ProfileError:
+        return BUILTIN_PROFILE
+
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
 
@@ -74,7 +81,7 @@ class Workspace:
         covered = [f"{g.funder}:{g.code}" for g in grant_types_for(opportunity)]
         if grant_type not in covered:
             raise ValueError(f"Grant Matcher does not write {opportunity.opportunity_number} as {grant_type}." + (f" It can write it as {', '.join(covered)}." if covered else ""))
-        prior, before = store.profile().prior_work, {a.id for a in store.applications()}
+        prior, before = _profile(store).prior_work, {a.id for a in store.applications()}
         app = store.add_application(opportunity_number=opportunity.opportunity_number, grant_type=grant_type, title=opportunity.title, resubmission=resubmission)
         if app.id not in before:
             for ref in prior:
@@ -95,16 +102,12 @@ class Workspace:
         app, store = self._application(), self.store
         grant_type, announcement = GRANT_TYPES[app.grant_type], store.announcement(app.opportunity_number)
         requirements, facts = tuple(store.requirements(app.id)), tuple(f for f in store.facts(app.id) if f.retired_at is None)
-        revisions, signoffs = store.revisions(app.id), store.signoffs(app.id)
-        try:
-            profile = store.profile()
-        except ProfileError:
-            # The dashboard already says that the saved profile cannot be read, and the section text is still worth checking.
-            profile = BUILTIN_PROFILE
+        revisions, signoffs, profile = store.revisions(app.id), store.signoffs(app.id), _profile(store)
         grounding = "\n".join([*(f.text for f in facts), profile.research_summary, profile.expertise, profile.resources, *(r.text for r in revisions if r.author == "applicant"), announcement.text if announcement else ""])
         notices, kinds, sections = [], {f.kind for f in facts}, []
         for rule in _rules(app):
-            confirmed = [r.limit for r in requirements if r.kind == "limit" and r.confirmed and r.section == rule.key and r.limit]
+            # A limit in pages cannot replace a limit in lines or sentences.
+            confirmed = [r.limit for r in requirements if r.kind == "limit" and r.confirmed and r.section == rule.key and r.limit and r.limit.unit == rule.limit.unit]
             limit = min(confirmed, key=lambda l: l.amount, default=rule.limit)
             if len(confirmed) > 1:
                 notices.append(f"You confirmed {len(confirmed)} limits for the {rule.title}. The smallest, {describe(limit)}, applies.")
@@ -154,7 +157,9 @@ class Workspace:
             raise StaleEdit(current)
         if current is not None and current.text == text:
             return current
-        return self.store.add_revision(self.application_id, section, parent, "applicant", "write", text)
+        if (written := self.store.add_revision(self.application_id, section, parent, "applicant", "write", text, only_on_head=True)) is None:
+            raise StaleEdit(head(self.store.revisions(self.application_id), section))
+        return written
 
     def restore(self, section: str, revision_id: int) -> Revision:
         self._check_section(section)

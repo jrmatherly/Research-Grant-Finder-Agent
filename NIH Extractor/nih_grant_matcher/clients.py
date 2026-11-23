@@ -119,15 +119,16 @@ class NihGuideClient:
             time.sleep(self.pause_seconds)
         return collected[:rows]
     def doctext(self, docnum: str) -> tuple[str, str]:
-        parsed = _read_json(_guide_request(NIH_GUIDE_DOCTEXT_URL, perpage=1, sort="_score", offset=0, types="active,activenosis", keyword=docnum), 30)
+        parsed = _read_json(_guide_request(NIH_GUIDE_DOCTEXT_URL, perpage=5, sort="_score", offset=0, types="active,activenosis", keyword=docnum), 30)
         hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
         if not isinstance(hits, list):
             raise ApiError("Unexpected NIH Guide response: hits is not a list")
-        source = (hits[0].get("_source", hits[0]) if isinstance(hits[0], dict) else None) if hits else {}
-        if not isinstance(source, dict):
-            raise ApiError(f"Unexpected NIH Guide response for {docnum}: the hit is not an object")
+        sources = [hit.get("_source", hit) if isinstance(hit, dict) else None for hit in hits]
         # The search ranks by relevance, so the top hit can be another document that cites this number.
-        if source.get("docnum") != docnum:
+        source = next((source for source in sources if isinstance(source, dict) and source.get("docnum") == docnum), None)
+        if source is None and not all(isinstance(source, dict) for source in sources):
+            raise ApiError(f"Unexpected NIH Guide response for {docnum}: the hit is not an object")
+        if source is None:
             return "", ""
         return str(source.get("doctext") or ""), str(source.get("ggid") or "")
 

@@ -1,6 +1,6 @@
 from dataclasses import replace
 from nih_grant_matcher.models import Opportunity
-from nih_grant_matcher.rules import FACT_KINDS, GRANT_TYPES, Limit, grant_types_for
+from nih_grant_matcher.rules import FACT_KINDS, GRANT_TYPES, Limit, grant_types_for, why_not_covered
 
 def _opp(*codes: str) -> Opportunity:
     return Opportunity(source_id="nih-guide:1", opportunity_number="PAR-1", title="t", agency_code="NCI", agency_name="NIH NCI", status="active", funding_instruments=codes)
@@ -26,3 +26,7 @@ def test_a_phased_award_or_a_non_nih_agency_gets_no_grant_type() -> None:
     assert grant_types_for(_opp("R21", "R33")) == () and grant_types_for(_opp("UG3", "UH3")) == ()
     assert [g.code for g in grant_types_for(replace(_opp("R01"), agency_code="NCI"))] == ["R01"]
     assert grant_types_for(replace(_opp("R01"), agency_code="FDA")) == () and grant_types_for(replace(_opp("R01"), agency_code="NIOSH")) == ()
+
+def test_the_reason_a_listed_code_is_not_covered_is_said_in_a_sentence() -> None:
+    assert "phased award" in why_not_covered(_opp("R21", "R33")) and "own criteria" in why_not_covered(replace(_opp("R01"), agency_code="FDA"))
+    assert why_not_covered(_opp("R01")) == "" and why_not_covered(_opp("UM1")) == ""

@@ -151,3 +151,12 @@ def test_a_delete_that_fails_part_way_leaves_the_log_locked(store) -> None:
     assert store.setting("deleting") is None and len(store.revisions(a)) == 1
     with pytest.raises(sqlite3.IntegrityError, match="append-only"):
         store.conn.execute("DELETE FROM revisions WHERE id = ?", (parent.id,))
+
+def test_a_revision_that_must_follow_the_head_is_not_written_after_another(store) -> None:
+    app = _app(store)
+    first = store.add_revision(app, "specific-aims", None, "applicant", "write", "a")
+    store.add_revision(app, "specific-aims", first.id, "applicant", "write", "b")
+    assert store.add_revision(app, "specific-aims", first.id, "applicant", "write", "c", only_on_head=True) is None
+    assert store.add_revision(app, "specific-aims", None, "applicant", "write", "d", only_on_head=True) is None
+    assert store.add_revision(app, "project-narrative", None, "applicant", "write", "e", only_on_head=True).text == "e"
+    assert [r.text for r in store.revisions(app)] == ["a", "b", "e"]

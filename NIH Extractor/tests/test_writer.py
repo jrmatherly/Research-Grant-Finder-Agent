@@ -34,7 +34,7 @@ def test_signing_is_refused_while_an_error_stands_and_goes_stale_on_an_edit(tmp_
     with pytest.raises(StaleEdit):
         ws.sign("project-narrative", "A. Applicant", revision.id)
     signed = ws.sign("project-narrative", "A. Applicant", fixed.id)
-    assert signed.revision_id == fixed.id and "0 percent" in signed.attestation
+    assert signed.revision_id == fixed.id and "By Grant Matcher's record, 0 percent" in signed.attestation
     assert ws.view().section("project-narrative").state == "final"
     ws.write("project-narrative", "One. Two.", parent=fixed.id)
     assert ws.view().section("project-narrative").state == "draft"
@@ -150,3 +150,37 @@ def test_a_sign_off_needs_a_name_and_text(tmp_path) -> None:
     revision = ws.write("project-narrative", "One.", parent=None)
     with pytest.raises(NotReady):
         ws.sign("project-narrative", "  ", revision.id)
+
+def test_a_save_between_reading_the_head_and_writing_is_refused(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.store import OpportunityStore
+    ws = start(tmp_path)
+    base = ws.write("specific-aims", "Base.", parent=None)
+    other = Workspace(OpportunityStore(ws.store.db_path), ws.application_id)
+    read = ws.store.revisions
+    def read_then_other_tab_saves(app_id):
+        found = read(app_id)
+        monkeypatch.setattr(ws.store, "revisions", read)
+        other.write("specific-aims", "Tab two.", parent=base.id)
+        return found
+    monkeypatch.setattr(ws.store, "revisions", read_then_other_tab_saves)
+    with pytest.raises(StaleEdit) as stale:
+        ws.write("specific-aims", "Tab one.", parent=base.id)
+    assert stale.value.head.text == "Tab two."
+    assert [(r.id, r.parent_id, r.text) for r in ws.view().log] == [(1, None, "Base."), (2, 1, "Tab two.")]
+    other.store.close()
+
+def test_an_unreadable_profile_does_not_stop_a_start(tmp_path) -> None:
+    from helpers import opportunity
+    from nih_grant_matcher.store import OpportunityStore
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    with store.conn:
+        store.conn.execute("INSERT INTO profile VALUES (1, ?, ?)", ('{"format": "grant-matcher-profile/2", "profile": {}}', "2026-11-23T00:00:00"))
+    ws = Workspace.start(store, opportunity(), "NIH:R21")
+    assert ws.view().facts == () and len(ws.view().sections) == 4
+
+def test_a_confirmed_limit_in_another_unit_is_not_applied(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES.replace("Section V", "The Project Summary/Abstract is limited to 1 page. Section V")), Grants(""))
+    for requirement in ws.view().requirements:
+        ws.decide(requirement.id, True)
+    assert (ws.view().section("project-summary").limit.amount, ws.view().section("project-summary").limit.unit) == (30, "lines")

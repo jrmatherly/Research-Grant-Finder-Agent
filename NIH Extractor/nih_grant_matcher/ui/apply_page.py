@@ -84,18 +84,25 @@ def _add_fact(ws: Workspace) -> str:
     st.session_state["apply_fact_text"] = st.session_state["apply_fact_label"] = ""
     return f"Added input {fact.id} under {fact.kind}."
 
+def owned_by(app_id: int, key: str) -> bool:
+    # The parts are split at underscores, so id 1 does not match id 11, and a section key holds no underscore.
+    return key.startswith("apply_") and not key.endswith("_button") and str(app_id) in key.split("_")[2:]
+
 def _delete(ws: Workspace, number: str) -> str:
     if st.session_state.get(f"apply_delete_{ws.application_id}", "").strip() != number:
         raise ValueError(f"Type {number} to delete this application. Nothing was deleted.")
     ws.delete()
-    for key in [k for k in st.session_state if str(k).startswith((f"apply_text_{ws.application_id}_", f"apply_base_{ws.application_id}_", f"apply_acknowledge_{ws.application_id}_"))] + ["application_id"]:
+    # Ids are reused after a delete, so every value keyed by this id goes with it.
+    for key in [k for k in st.session_state if owned_by(ws.application_id, str(k))] + ["application_id"]:
         st.session_state.pop(key, None)
     return f"Deleted the application for {escape_markdown(number)} and everything logged for it."
 
 def apply_page(db_path: str) -> None:
     st.header("Apply")
-    for kind, text in st.session_state.pop("apply_notices", []):
-        getattr(st, kind)(text)
+    # The frontend matches the tabs by their place on the page, so a notice that came and went would reopen the first tab. Each container holds its place whether or not it has a notice.
+    with st.container():
+        for kind, text in st.session_state.pop("apply_notices", []):
+            getattr(st, kind)(text)
     # Opening a store creates the file, so a path with no database yet has no application either.
     if not Path(db_path).exists():
         st.info(HOW_TO_START)
@@ -124,9 +131,11 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     st.caption(f"Your text, your inputs and every model call for this application are stored in {f'`{path}`' if '`' not in path else escape_markdown(path)}. Anyone who can read that file can read them.")
     ws = Workspace(store, app_id)
     view = ws.view()
-    for notice in view.notices:
-        st.warning(notice)
-    announcement_tab, requirements_tab, inputs_tab, sections_tab, log_tab = st.tabs(["Announcement", "Requirements", "Your inputs", "Sections", "Log and export"])
+    with st.container():
+        for notice in view.notices:
+            st.warning(notice)
+    # With a key and on_change, the open tab is kept in session state and survives a rerun.
+    announcement_tab, requirements_tab, inputs_tab, sections_tab, log_tab = st.tabs(["Announcement", "Requirements", "Your inputs", "Sections", "Log and export"], key="apply_tab", on_change="rerun")
     with announcement_tab:
         st.button("Fetch the full announcement", key="apply_fetch_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w: f"Saved the announcement from {'the NIH Guide' if w.fetch_announcement().origin == 'nih-guide' else 'Grants.gov'}. Confirm or reject what it adds under Requirements."))
         a = view.announcement

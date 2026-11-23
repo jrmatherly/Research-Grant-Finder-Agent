@@ -11,7 +11,7 @@ from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.excel import write_excel
 from nih_grant_matcher.models import ScoredOpportunity
 from nih_grant_matcher.profile import ProfileError
-from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for
+from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for, why_not_covered
 from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.ui.apply_page import apply_page, start_application
 from nih_grant_matcher.ui.profile_page import escape_markdown, profile_page, profile_sentence, saved_profile, show_unreadable
@@ -285,7 +285,7 @@ with tab_detail:
             resubmission = st.checkbox("This is a resubmission")
             st.button("Start application", key="start_application", type="primary", on_click=start_application, args=(db_path, opportunity, grant_type, resubmission))
         else:
-            st.caption(escape_markdown(f"Grant Matcher writes applications for {', '.join(g.code for g in GRANT_TYPES.values())}. This opportunity lists {', '.join(opportunity.funding_instruments) or 'no activity code'}."))
+            st.caption(escape_markdown(f"Grant Matcher writes applications for {', '.join(g.code for g in GRANT_TYPES.values())}. This opportunity lists {', '.join(opportunity.funding_instruments) or 'no activity code'}. {why_not_covered(opportunity)}".strip()))
             st.button("Start application", key="start_application", disabled=True)
 
 if export_clicked:
