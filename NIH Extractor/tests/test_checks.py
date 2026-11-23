@@ -1,3 +1,4 @@
+from time import perf_counter
 from nih_grant_matcher.checks import check_section, estimate
 from nih_grant_matcher.models import Fact
 from nih_grant_matcher.prose import scan
@@ -79,3 +80,32 @@ def test_every_finding_has_a_plain_message_and_errors_come_first() -> None:
     assert [(f.code, f.message) for f in found if scan(f.message)] == []
     first = check_section(summary, RULE["project-summary"], RULE["project-summary"].limit, R21.page, (), "", model)
     assert [f.severity for f in first] == sorted((f.severity for f in first), key=lambda s: s != "error")
+
+GOLDSMITH = Fact(2, "reference", "Goldsmith A. Heart cells in mice. 2021. doi:10.1000/xyz PMID 41234567", label="goldsmith2021")
+STORED = Fact(3, "reference", "Lee K. A study.", label="lee", detail={"pmid": "998877", "doi": "10.5555/abc"})
+
+def _model_cited(text: str) -> bool:
+    words = tuple((word, "draft") for word in text.split())
+    return any(f.code == "unknown-citation" for f in check_section(text, RULE["specific-aims"], Limit(1, "pages"), R21.page, (GOLDSMITH, STORED), "", words))
+
+def test_a_model_wrote_citation_is_known_only_when_it_matches_a_reference_exactly() -> None:
+    for made_up in ("Smith et al. 2021 held.", "Gold et al. (2021) held.", "PMID: 123 held.", "PMID: 2 held.", "See 10.1000/xy for it.", "Goldsmith et al. 2020 held."):
+        assert _model_cited(made_up), made_up
+    for known in ("Goldsmith et al. (2021) held.", "PMID 41234567 held.", "See 10.1000/xyz.", "PMID: 998877 held.", "See 10.5555/ABC for it."):
+        assert not _model_cited(known), known
+
+def test_a_section_full_of_model_citations_checks_quickly() -> None:
+    text = " ".join(f"PMID: {n}" for n in range(4000))
+    started = perf_counter()
+    check_section(text, RULE["specific-aims"], Limit(1, "pages"), R21.page, (GOLDSMITH,), "", tuple((word, "draft") for word in text.split()))
+    assert perf_counter() - started < 1
+
+def test_a_roman_numeral_is_not_the_first_person() -> None:
+    for text in ("The Phase I trial ends.", "Patients with type I diabetes enrol.", "MHC class I binds.", "Aim I tests the dose."):
+        assert "first-person" not in _codes(text, key="project-summary"), text
+    assert "first-person" in _codes("Then I will test it.", key="project-summary")
+
+def test_the_mostly_drafted_message_is_two_sentences() -> None:
+    (finding,) = [f for f in check_section("one two", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", (("one", "draft"), ("two", "draft"))) if f.code == "mostly-drafted"]
+    assert estimate(finding.message, "sentences", R21.page) == 2
+    assert all(part in finding.message for part in ("NOT-OD-25-132", "not NIH's", "AI detector", "polished"))

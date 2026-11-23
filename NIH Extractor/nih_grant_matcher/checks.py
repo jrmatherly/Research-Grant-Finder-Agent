@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+from bisect import bisect_left, bisect_right
 from itertools import accumulate
 from typing import Sequence
 from .models import Fact, Finding
@@ -10,9 +11,11 @@ from .rules import Limit, PageFormat, SectionRule
 _PLACEHOLDER = re.compile(r"\[NEEDS INPUT:[^\]]*\]")
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
 _CITATION_LIKE = re.compile(r"(?P<doi>10\.\d{4,9}/\S+)|PMID:?\s*(?P<pmid>\d+)|(?P<author>[A-Z][a-z]+) et al\.?,? \(?(?P<year>\d{4})\)?")
+_DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)")
 _FIGURE = re.compile(r"!\[|<img|^[ \t]*(?:Figure|Table)[ \t]+\d", re.M)
 _URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+", re.I)
-_FIRST_PERSON = re.compile(r"\b(?:I|[Ww]e|[Mm]y|[Oo]ur)\b")
+# A roman numeral after one of these words is not the pronoun.
+_FIRST_PERSON = re.compile(r"\b(?:" + "".join(f"(?<!(?i:{w}) )" for w in ("phase", "aim", "type", "class", "stage", "grade", "part")) + r"I|[Ww]e|[Mm]y|[Oo]ur)\b")
 _NUMBER = re.compile(r"(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)%?")
 _ABBREVIATION = re.compile(r"\b(?:e\.g|i\.e|et al|vs|Fig|Dr|U\.S|[A-Z])\.")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
@@ -34,6 +37,16 @@ def _from(text: str, at: int) -> str:
 def _numbers(text: str) -> list[str]:
     return [n for n in _NUMBER.findall(text) if "." in n or "%" in n or sum(c.isdigit() for c in n) >= 2]
 
+def _doi(found: str) -> str:
+    return found.rstrip(".,;:)]").lower()
+
+def _cites(m: re.Match[str], reference: Fact) -> bool:
+    if m["doi"]:
+        return _doi(m["doi"]) in {_doi(str(reference.detail.get("doi", ""))), *map(_doi, _DOI.findall(reference.text))}
+    if m["pmid"]:
+        return m["pmid"] in {str(reference.detail.get("pmid", "")), *_PMID.findall(reference.text)}
+    return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (m["author"], m["year"]))
+
 def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, facts: Sequence[Fact], grounding: str, words: Sequence[tuple[str, str]]) -> tuple[Finding, ...]:
     references = [f for f in facts if f.kind == "reference" and f.retired_at is None]
     findings = [Finding("placeholder", "error", "The draft needed a fact from you here. Replace the placeholder with the fact or cut the sentence.", m.group()) for m in _PLACEHOLDER.finditer(text)]
@@ -45,12 +58,10 @@ def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, 
     findings += [Finding("unknown-citation", "error", f"The citation [@{key}] names no reference you listed. Add the reference to your facts or remove the citation.", f"[@{key}]")
                  for key in dict.fromkeys(m.group(1) for m in _CITATION.finditer(text) if m.group(1) not in labels)]
     joined, starts = " ".join(w for w, _ in words), list(accumulate((len(w) + 1 for w, _ in words), initial=0))
-    sources = [" ".join((f.text, f.label, *map(str, f.detail.values()))).lower() for f in references]
     unmatched: dict[str, None] = {}
     for m in _CITATION_LIKE.finditer(joined):
-        by_model = any(origin != "applicant" and start < m.end() and start + len(word) > m.start() for start, (word, origin) in zip(starts, words))
-        keys = [m["doi"].rstrip(".,;:)]").lower()] if m["doi"] else [m["pmid"]] if m["pmid"] else [m["author"].lower(), m["year"]]
-        if by_model and not any(all(k in source for k in keys) for source in sources):
+        by_model = any(origin != "applicant" for _, origin in words[bisect_right(starts, m.start()) - 1:bisect_left(starts, m.end())])
+        if by_model and not any(_cites(m, f) for f in references):
             unmatched[m.group()] = None
     findings += [Finding("unknown-citation", "error", "A model wrote this citation and it matches no reference you listed. Add the reference to your facts or remove the citation.", c) for c in unmatched]
     count, amount = estimate(text, limit.unit, page), f"{limit.amount:g}"
@@ -68,5 +79,5 @@ def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, 
     invented = dict.fromkeys(n for word, origin in words if origin != "applicant" for n in _numbers(_CITATION.sub("", word)) if n.replace(",", "").rstrip("%") not in supplied)
     findings += [Finding("number-not-in-inputs", "warning", f"A model wrote {n}, and that number is in nothing you supplied. Check it against your data and correct it or remove it.", n) for n in invented]
     if (written := share(words).written_share) > 0.5:
-        findings.append(Finding("mostly-drafted", "warning", f"A model drafted or revised {round(written * 100)}% of the words in this section. NOT-OD-25-132 says NIH will not count a section substantially developed by AI as your original idea, and the one-half line here is this tool's and not NIH's. Rewrite more of it in your own words, and know that an AI detector can still flag text a model only polished."))
+        findings.append(Finding("mostly-drafted", "warning", f"A model drafted or revised {round(written * 100)}% of the words in this section, and an AI detector can still flag text that a model only polished. NOT-OD-25-132 says NIH will not count a section substantially developed by AI as your original idea, and the one-half line here is this tool's and not NIH's, so rewrite more of it in your own words."))
     return tuple(sorted(findings + list(scan(text)), key=lambda f: f.severity != "error"))

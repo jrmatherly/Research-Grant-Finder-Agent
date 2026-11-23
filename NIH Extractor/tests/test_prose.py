@@ -26,3 +26,21 @@ def test_only_the_em_dash_and_curly_quotes_are_flagged() -> None:
 
 def test_the_hints_pass_their_own_rules() -> None:
     assert [rule.number for rule in PROSE_RULES if scan(rule.hint)] == []
+
+def test_rule_31_matches_inflections_and_rule_7_stays_exact() -> None:
+    for text in ("We utilized the cohort.", "The core facilitates the assay.", "We leveraged the data."):
+        assert "prose-31" in {finding.code for finding in scan(text)}, text
+    assert scan("The enhancer binds the promoter.") == ()
+
+def test_a_rule_that_matches_often_gives_one_finding_with_the_count() -> None:
+    (finding,) = scan("The ‘a’ and ‘b’ and ‘c")
+    assert finding.code == "prose-19" and finding.excerpt == "‘" and "5 times" in finding.message and scan(finding.message) == ()
+
+def test_the_month_may_is_not_a_hedge() -> None:
+    assert scan("In May we could test.") == ()
+
+def test_a_long_run_of_letters_scans_quickly() -> None:
+    from time import perf_counter
+    started = perf_counter()
+    scan("a" * 20000 + " " + "A" * 20000)
+    assert perf_counter() - started < 1

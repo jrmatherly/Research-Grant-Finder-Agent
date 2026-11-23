@@ -11,15 +11,17 @@ class ProseRule:
     hint: str
     pattern: re.Pattern[str] | None
 
-def _words(*words: str) -> re.Pattern[str]:
-    return re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + r")\b", re.I)
+# No closing boundary, so an inflection matches. Rule 7 closes it, so that enhancer is not enhance.
+def _words(*words: str, end: str = "") -> re.Pattern[str]:
+    return re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + ")" + end, re.I)
 
-_HEDGES = r"(?:may|might|could|possibly|potentially|perhaps|arguably|somewhat)"
+# The month May is not a hedge.
+_HEDGES = r"(?:(?-i:may)|might|could|possibly|potentially|perhaps|arguably|somewhat)"
 # Rules 15 to 18 are left out because NIH headings are title case by rule and the editor is plain text.
 PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(3, "-ing opener", "A clause after a comma opens with a word like highlighting or ensuring and adds no fact. Cut it or state the fact.", re.compile(r", (?:highlighting|ensuring|reflecting|showcasing|fostering)\b", re.I)),
     ProseRule(5, "vague attribution", "A claim rests on unnamed experts or studies. Name the source or cut the claim.", None),
-    ProseRule(7, "marked word", "This word marks text as written by a model. Use a plain word in its place.", _words("additionally", "crucial", "delve", "enduring", "enhance", "fostering", "garner", "interplay", "intricate", "landscape", "pivotal", "showcase", "tapestry", "testament", "underscore", "vibrant")),
+    ProseRule(7, "marked word", "This word marks text as written by a model. Use a plain word in its place.", _words("additionally", "crucial", "delve", "enduring", "enhance", "fostering", "garner", "interplay", "intricate", "landscape", "pivotal", "showcase", "tapestry", "testament", "underscore", "vibrant", end=r"\b")),
     ProseRule(8, "grand verb", "A grand verb stands in for a plain is or has. Write is or has.", _words("serves as", "stands as", "boasts")),
     ProseRule(9, "denied claim", "The sentence denies a claim nobody made before it makes its own. State the claim directly.", re.compile(r"\bnot (?:just|only) .{1,60}, but\b", re.I)),
     ProseRule(10, "forced triple", "A list of three is there for rhythm and not for content. Keep only the items that carry a fact.", None),
@@ -27,7 +29,7 @@ PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(12, "false range", "A range from one thing to another joins things that sit on no common scale. Name the items plainly.", None),
     ProseRule(13, "em dash", "An em dash joins two thoughts. Use a period, a comma or parentheses.", re.compile("—")),
     # A heading at the start of a line, with an optional label, may take a colon. A time or a ratio has no space after its colon.
-    ProseRule(14, "colon join", "A colon joins two clauses in mid-sentence. Make them two sentences.", re.compile(r"^(?![ \t]*(?:(?:[A-Za-z]|\d+)[.)][ \t]*)?(?:[A-Z][\w/'-]*[ \t]+)*[A-Z][\w/'-]*:)[^\n]*?(?P<hit>\w*[a-z]: +[a-z]\w*)", re.M)),
+    ProseRule(14, "colon join", "A colon joins two clauses in mid-sentence. Make them two sentences.", re.compile(r"^(?![ \t]*(?:(?:[A-Za-z]|\d+)[.)][ \t]*)?(?:[A-Z][\w/'-]*[ \t]+)*[A-Z][\w/'-]*:)[^\n]*?(?P<hit>\b\w*[a-z]: +[a-z]\w*)", re.M)),
     ProseRule(19, "curly quotes", "Curly quotation marks come from a model or a word processor. Use straight quotes.", re.compile("[‘’“”]")),
     ProseRule(20, "chat phrase", "This phrase belongs in a chat reply and not in an application. Delete it.", re.compile(r"\b(?:I hope this helps|Let me know if|Of course!|Certainly!|Great question)", re.I)),
     ProseRule(23, "padded phrase", "A long phrase stands where one word would do. Write to or because, or cut the phrase.", _words("in order to", "due to the fact that", "it is important to note that")),
@@ -43,5 +45,9 @@ PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(33, "over-compression", "Words a reader needs to follow the sentence are missing. Write the full sentence.", None))
 
 def scan(text: str) -> tuple[Finding, ...]:
-    return tuple(Finding(f"prose-{rule.number}", "warning", rule.hint, m.group("hit") if "hit" in rule.pattern.groupindex else m.group())
-                 for rule in PROSE_RULES if rule.pattern for m in rule.pattern.finditer(text))
+    findings = []
+    for rule in PROSE_RULES:
+        if rule.pattern and (matches := list(rule.pattern.finditer(text))):
+            first = matches[0].group("hit") if "hit" in rule.pattern.groupindex else matches[0].group()
+            findings.append(Finding(f"prose-{rule.number}", "warning", rule.hint + (f" It comes up {len(matches)} times in this section." if len(matches) > 1 else ""), first))
+    return tuple(findings)
