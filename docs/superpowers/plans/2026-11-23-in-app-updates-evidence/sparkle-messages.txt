@@ -1,0 +1,9 @@
+What Sparkle 2.10.1 showed in each run of NIH Extractor/macos/rehearse-update.sh on 2026-11-23, macOS 27.2, Apple silicon.
+The text was read from Sparkle's window through the accessibility interface. Each run exited 0.
+
+(default)        "A new version of Grant Matcher is available! Grant Matcher 0.0.2 is now available—you have 0.0.1. Would you like to download it now?"
+                 After Install Update and Install and Relaunch: "rehearse: updated to 0.0.2 and relaunched with its server. No launchd job or LaunchAgents file is left."
+--bad-signature  After Install Update: "Update Error! The update is improperly signed and could not be validated. Please try again later or contact the app developer."
+                 No screenshot: the capture caught another window.
+--stop-feed      No window but the app's own at launch. After Check for Updates…: "Update Error! An error occurred in retrieving update information. Please try again later."
+--from-dmg       "Grant Matcher can’t be updated because it was opened from a read-only or a temporary location. Use Finder to copy Grant Matcher to the Applications folder, relaunch it from there, and try again."
