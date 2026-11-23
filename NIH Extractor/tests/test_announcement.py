@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 from pathlib import Path
 import pytest
@@ -85,3 +86,21 @@ def test_a_grants_gov_page_that_only_links_to_the_announcement_is_not_one() -> N
 def test_a_section_title_in_lower_case_still_names_its_limit() -> None:
     sentence = "The research strategy is limited to 12 pages."
     assert [(r.text, r.section, r.limit.amount, r.quote) for r in parse_requirements(_announcement(_in_section_iv(sentence)))] == [("Research Strategy: at most 12 pages.", "research-strategy", 12, sentence)]
+
+def test_a_guide_text_of_white_space_is_not_an_announcement() -> None:
+    assert fetch_announcement(OPP, Guide("   "), Grants("<p>Section IV. Application and Submission Information</p>" + FILLER)).origin == "grants.gov"
+
+def test_a_record_with_no_grants_gov_id_says_grants_gov_was_not_asked() -> None:
+    unlinked = Opportunity(source_id="nih-guide:9", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active")
+    class Down:
+        def doctext(self, number): raise clients.ApiError("timed out")
+    with pytest.raises(clients.ApiError) as failed:
+        fetch_announcement(unlinked, Down(), Grants(FILLER))
+    assert str(failed.value) == "No announcement text for PAR-27-090. The request to the NIH Guide failed (timed out). Grants.gov was not asked, because the record has no Grants.gov id."
+
+def test_the_guide_text_is_saved_without_html_entities() -> None:
+    assert html.unescape(TEXT) == TEXT
+    found = fetch_announcement(OPP, Guide(_in_section_iv("NEI&#146;s Research Strategy is limited to 6&nbsp;pages.")), Grants(""))
+    assert "&" not in found.text and "NEI’s" in found.text
+    [limit] = parse_requirements(found)
+    assert limit.limit.amount == 6 and quoted_in(limit.quote, found.text)

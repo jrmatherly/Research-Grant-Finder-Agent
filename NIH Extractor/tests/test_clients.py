@@ -181,6 +181,15 @@ def test_a_full_announcement_without_a_numeric_id_is_an_api_error_and_is_not_req
     assert reads == [GRANTSGOV_FETCH_URL]
 
 
+@pytest.mark.parametrize("folders", [5, [{"synopsisAttachments": 5}]], ids=["folders", "attachments"])
+def test_an_attachment_list_that_is_not_a_list_is_an_api_error(monkeypatch, folders) -> None:
+    import json
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: json.dumps({"errorcode": 0, "data": {"synopsisAttachmentFolders": folders}}).encode())
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    with pytest.raises(clients.ApiError, match="not a list"):
+        clients.GrantsGovClient().full_announcement("360675")
+
+
 def test_doctext_takes_the_hit_for_the_number_when_another_document_ranks_first(monkeypatch) -> None:
     import json
     hits = [{"_source": {"docnum": "NOT-OD-27-001", "doctext": "A notice that cites PAR-27-090.", "ggid": "1"}}, {"_source": {"docnum": "PAR-27-090", "doctext": "Body", "ggid": "360675"}}]

@@ -305,6 +305,18 @@ def test_an_apply_mistake_is_one_line_and_exit_1(tmp_path, monkeypatch, capsys, 
     assert cli.main(["--db", db, "apply", "list"]) == 0 and "PAR-1" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("argv", [["write", "1", "specific-aims", "--file", "latin1.txt"], ["add", "1", "--kind", "aim", "--file", "latin1.txt"]])
+def test_an_apply_file_that_is_not_utf8_is_a_file_error(tmp_path, monkeypatch, capsys, argv) -> None:
+    db = _apply_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "latin1.txt").write_bytes(b"caf\xe9")
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", *argv]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("File error:") and err.count("\n") == 1
+
+
 def test_apply_delete_with_yes_deletes(tmp_path, capsys) -> None:
     db = _apply_db(tmp_path)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])

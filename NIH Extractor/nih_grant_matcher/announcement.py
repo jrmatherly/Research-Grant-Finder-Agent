@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, re
+import hashlib, html, re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -97,22 +97,23 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
     guide, grants, number = guide or NihGuideClient(), grants or GrantsGovClient(), opportunity.opportunity_number
     try:
         text, guide_ggid = guide.doctext(number)
-        guide_says = "has no text for it"
+        guide_says = "The NIH Guide has no text for it."
     except ApiError as exc:
-        text, guide_ggid, guide_says = "", "", f"failed: {exc}"
-    if text:
+        text, guide_ggid, guide_says = "", "", f"The request to the NIH Guide failed ({exc})."
+    # The Guide serves its text with HTML entities and no tags.
+    if (text := html.unescape(text).replace("\xa0", " ")).strip():
         return _announcement(opportunity, text, "nih-guide", _nih_guide_url(number))
     ggid = str((opportunity.raw.get("guide_item") or {}).get("ggid") or guide_ggid or ("" if opportunity.source_id.startswith("nih-guide:") else opportunity.source_id))
     try:
-        html = grants.full_announcement(ggid) if ggid else ""
-        grants_says = "has no full announcement attached" if ggid else "has no record of it"
+        page = grants.full_announcement(ggid) if ggid else ""
+        grants_says = "Grants.gov has no full announcement attached." if ggid else "Grants.gov was not asked, because the record has no Grants.gov id."
     except ApiError as exc:
-        html, grants_says = "", f"failed: {exc}"
-    if html and len(text := html_to_text(html)) >= _SHORTEST_ANNOUNCEMENT:
+        page, grants_says = "", f"The request to Grants.gov failed ({exc})."
+    if page and len(text := html_to_text(page)) >= _SHORTEST_ANNOUNCEMENT:
         return _announcement(opportunity, text, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
-    if html:
-        grants_says = "has only a link to the announcement"
-    raise ApiError(f"No announcement text for {number}. The NIH Guide {guide_says}, and Grants.gov {grants_says}.")
+    if page:
+        grants_says = "Grants.gov has only a link to the announcement."
+    raise ApiError(f"No announcement text for {number}. {guide_says} {grants_says}")
 
 def quoted_in(quote: str, text: str) -> bool:
     return " ".join(quote.split()) in " ".join(text.split())
