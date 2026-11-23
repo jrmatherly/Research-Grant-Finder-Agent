@@ -6,7 +6,7 @@ The image `ghcr.io/jrmatherly/nih-grant-matcher` holds the dashboard and the com
 
 - Install [Docker Desktop](https://docs.docker.com/get-started/get-docker/) or Docker Engine. Start it.
 - The image supports `linux/amd64` and `linux/arm64`. It runs on Intel and Apple silicon Macs, Windows with WSL 2, and Linux.
-- The image is about 800 MB.
+- The image is about 860 MB.
 - The tool calls public NIH and Grants.gov services, so the container needs internet access.
 
 ## Quick start
@@ -50,7 +50,7 @@ docker compose up -d --no-build
 
 Open http://localhost:8501. The results are written to `NIH Extractor/data`, `NIH Extractor/outputs`, and `NIH Extractor/digests`.
 
-To build the image from the source in the clone, run `docker compose up --build -d`.
+To build the image from the source in the clone, run `docker compose up --build -d`. To stop the dashboard, run `docker compose down`.
 
 On Linux, if your user ID is not 1000, start it as yourself: `APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d --no-build`. To keep the two values, write them as `APP_UID=...` and `APP_GID=...` in a file named `.env` beside `compose.yaml`.
 
@@ -130,7 +130,7 @@ Saved opportunities are scored again each time they are read, so an update that 
 | --- | --- | --- |
 | `port is already allocated` | Another program uses port 8501. | Change the first number: `-p 127.0.0.1:8502:8501`, then open http://localhost:8502. |
 | `Conflict. The container name "/nih-grant-matcher" is already in use` | A container from an earlier start still exists. | `docker rm -f nih-grant-matcher`, then start again. |
-| The page does not load in the first seconds | The dashboard is still starting. | Wait until `docker ps` shows `(healthy)`. This took 10 to 30 seconds in testing. |
+| The page does not load in the first seconds | The dashboard is still starting. | Wait until `docker ps` shows `(healthy)`. This took 5 to 30 seconds in testing. |
 | `Search failed` with a web address in the message | The named service did not answer after three attempts. | Check your internet connection and try again. |
 | `unable to open database file`, `attempt to write a readonly database`, or `Permission denied` on Linux | The folders or the files in them belong to another user. | Run the `chown` command in "Where the results are saved", and start the container with the `--user` option shown there. |
 | `no matching manifest` | The computer's processor is not `amd64` or `arm64`. | Build from source on that computer: `docker compose up --build -d`. |
