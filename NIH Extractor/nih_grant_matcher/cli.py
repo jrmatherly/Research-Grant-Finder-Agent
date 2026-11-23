@@ -7,9 +7,11 @@ from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
+from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
+from .writer import NotReady, StaleEdit, Workspace, describe
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -43,6 +45,36 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_parser("export", help="Write the profile in use to a file.").add_argument("--out", required=True)
     actions.add_parser("import", help="Save a profile from an exported file.").add_argument("path")
     actions.add_parser("reset", help="Go back to the built-in profile.")
+    apply = sub.add_parser("apply", help="Start, write, check, sign off and export an application.").add_subparsers(dest="action", required=True)
+    apply.add_parser("list", help="List the applications in the database.")
+    start = apply.add_parser("start", help="Start an application for a saved opportunity.")
+    start.add_argument("number", help="The opportunity number, such as PAR-25-123.")
+    start.add_argument("--type", required=True, help="The activity code, such as R21.")
+    start.add_argument("--resubmission", action="store_true", help="Add the Introduction of a resubmission.")
+    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands.")):
+        apply.add_parser(name, help=text).add_argument("id", type=int)
+    add = apply.add_parser("add", help="Add one of your inputs, such as an aim or a reference.")
+    add.add_argument("id", type=int)
+    add.add_argument("--kind", required=True, help=f"One of {', '.join(FACT_KINDS)}.")
+    given = add.add_mutually_exclusive_group(required=True)
+    given.add_argument("--text")
+    given.add_argument("--file", help="A UTF-8 text file that holds the input.")
+    add.add_argument("--label", default="", help="The key of a reference, which a section cites as [@key].")
+    write = apply.add_parser("write", help="Save a section from a UTF-8 text file as the newest revision.")
+    write.add_argument("id", type=int)
+    write.add_argument("section")
+    write.add_argument("--file", required=True)
+    sign = apply.add_parser("sign", help="Sign off the newest revision of a section.")
+    sign.add_argument("id", type=int)
+    sign.add_argument("section")
+    sign.add_argument("--signer", required=True)
+    sign.add_argument("--acknowledge", action="store_true", help="Confirm that you rewrote a section that a model mostly drafted.")
+    export = apply.add_parser("export", help="Write the sections, the requirements and the provenance log to a folder.")
+    export.add_argument("id", type=int)
+    export.add_argument("--out", required=True)
+    delete = apply.add_parser("delete", help="Delete an application and everything logged for it.")
+    delete.add_argument("id", type=int)
+    delete.add_argument("--yes", action="store_true", help="Confirm the delete.")
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
     except ApiError as exc:
         # A failed request is not a bug, so it gets one line and no traceback.
         print(f"Request failed: {exc}", file=sys.stderr)
+        return 1
+    except (NotReady, StaleEdit) as exc:
+        print(exc, file=sys.stderr)
+        for finding in getattr(exc, "findings", ()):
+            print(f"  {finding.severity}  {finding.code}  {finding.message}", file=sys.stderr)
         return 1
     except ProfileError as exc:
         print(exc if isinstance(exc, ReadOnlyProfile) else f"Profile not valid: {exc}", file=sys.stderr)
@@ -76,6 +113,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _rarity_table(args)
     if args.command == "profile":
         return _profile(args)
+    if args.command == "apply":
+        return _apply(args)
     raise ValueError(args.command)
 
 def _run(args: argparse.Namespace) -> int:
@@ -136,6 +175,79 @@ def _profile(args: argparse.Namespace) -> int:
             print(f"Reset {args.db} to the built-in profile.")
     finally:
         store.close()
+    return 0
+
+def _apply(args: argparse.Namespace) -> int:
+    store = OpportunityStore(args.db)
+    try:
+        return _apply_action(store, args)
+    except ProfileError:
+        raise
+    except ValueError as exc:
+        # An unknown application, section, kind or grant type is the user's mistake, so it gets one line.
+        print(exc, file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
+    if args.action == "list":
+        for app in store.applications():
+            print(f"{app.id}  {app.opportunity_number}  {app.grant_type.split(':')[-1]}{'  resubmission' if app.resubmission else ''}  {app.title}")
+        if not store.applications():
+            print("No applications yet. Start one with apply start NUMBER --type CODE.")
+        return 0
+    if args.action == "start":
+        opportunity = next((s.opportunity for s in store.top_scored(limit=-1) if s.opportunity.opportunity_number == args.number), None)
+        if opportunity is None:
+            raise ValueError(f"{args.db} holds no open opportunity {args.number}. Run a search that finds it first.")
+        ws = Workspace.start(store, opportunity, f"NIH:{args.type}", args.resubmission)
+        print(f"Application {ws.application_id} is {args.number} as {args.type}{', a resubmission' if args.resubmission else ''}.")
+        return 0
+    ws = Workspace(store, args.id)
+    if args.action == "fetch":
+        announcement = ws.fetch_announcement()
+        added = sum(r.confirmed is None for r in ws.view().requirements)
+        print(f"Saved the announcement from {'the NIH Guide' if announcement.origin == 'nih-guide' else 'Grants.gov'}. It adds {added} requirement{'' if added == 1 else 's'} to confirm or reject in the dashboard.")
+    elif args.action == "requirements":
+        view = ws.view()
+        for s in view.sections:
+            print(f"standing  {s.rule.title}  at most {describe(s.rule.limit)}")
+        status = {None: "undecided", True: "confirmed", False: "rejected"}
+        for r in view.requirements:
+            print(f"{r.id}  {status[r.confirmed]}  {r.text}")
+        if view.announcement is None:
+            print(f"The announcement has not been fetched. Run apply fetch {args.id}.")
+    elif args.action == "add":
+        text = Path(args.file).read_text(encoding="utf-8") if args.file else args.text
+        fact = ws.add_fact(args.kind, text, args.label)
+        print(f"Added input {fact.id} under {fact.kind}.")
+    elif args.action == "write":
+        text, before = Path(args.file).read_text(encoding="utf-8"), ws.view().section(args.section).revision_id
+        revision = ws.write(args.section, text, before)
+        print(f"The {args.section} section is unchanged at revision {revision.id}." if revision.id == before else f"Saved revision {revision.id} of {args.section}.")
+    elif args.action == "check":
+        view, blocked = ws.view(), False
+        for notice in view.notices:
+            print(notice)
+        for s in view.sections:
+            print(f"{s.rule.key}  {s.state}  {len(s.text.split())} words" + (f"  needs {', '.join(s.gaps)}" if s.gaps else ""))
+            for finding in s.findings:
+                print(f"  {finding.severity}  {finding.code}  {finding.message}")
+            blocked = blocked or any(f.severity == "error" for f in s.findings)
+        return 1 if blocked else 0
+    elif args.action == "sign":
+        signed = ws.sign(args.section, args.signer, ws.view().section(args.section).revision_id or 0, args.acknowledge)
+        print(f"Signed off {args.section} at revision {signed.revision_id}.")
+        print(signed.attestation)
+    elif args.action == "export":
+        print(f"Wrote the application to {ws.export(Path(args.out))}.")
+    else:
+        if not args.yes:
+            print(f"Nothing was deleted. Add --yes to delete application {args.id} and everything logged for it.", file=sys.stderr)
+            return 1
+        ws.delete()
+        print(f"Deleted application {args.id}.")
     return 0
 
 def _rarity_table(args: argparse.Namespace) -> int:

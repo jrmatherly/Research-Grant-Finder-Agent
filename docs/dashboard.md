@@ -8,7 +8,7 @@ To start the dashboard, see the [README](../README.md#getting-started) for a loc
 
 ## The layout
 
-- **The sidebar** on the left starts with **View**, which switches between **Find** and **Profile**, and the **Database** path. In the Find view it holds three groups of controls: **Run Search**, **Display**, and **Export**.
+- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, and **Profile**, and the **Database** path. In the Find view it holds three groups of controls: **Run Search**, **Display**, and **Export**.
 - **The filter row** at the top of the page narrows the results that are already loaded.
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
@@ -148,6 +148,45 @@ Select **Save profile** on any step to keep the draft, the step on screen includ
 | **Export profile** | Downloads the profile in use as a JSON file, the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text, and references. |
 | **Import a profile** | Paste the contents of an exported file. A line names the investigator and the number of terms, or a red message says what is wrong. Select **Import profile** to save it. |
 | **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. When a saved profile cannot be read, a red message says so, ranking uses the built-in profile, and **Export profile** is turned off. This button then deletes the saved profile, and the database file holds its only copy. |
+
+## Write an application
+
+Grant Matcher holds an application for an NIH opportunity while you write it. It shows the full announcement, the limits and the parts that each section needs, and it checks the text you save. In this version no model writes or edits your text, so every word of a section is yours.
+
+It writes applications for the activity codes R01, R03, R15, R16, R21, R34, RF1, and U01. It does not write a phased award such as an R21/R33, or a notice from FDA or NIOSH, which review by their own criteria.
+
+1. **Start the application.** In the Find view, select the **Details** tab and choose an opportunity. Under the two link buttons, choose the **Grant type**, select **This is a resubmission** if it is one, and select **Start application**. The dashboard opens the **Apply** view on the new application. Starting the same opportunity and grant type again opens the application you already have. When the opportunity lists no activity code that Grant Matcher writes, the button is turned off and a line names the codes.
+2. **Read the announcement.** Under **Announcement**, select **Fetch the full announcement**. Sections I, IV, and V of the announcement open in panels of their own. When the announcement cannot be fetched, a red message says so, and the standing rules of the grant type still apply.
+3. **Decide the requirements.** Under **Requirements**, the standing rules give each section's limit, with the NIH pages they come from. Below them, each requirement that Grant Matcher found in the announcement shows the sentence it comes from. Select **Confirm** or **Reject**. A page limit that you confirm replaces the standing one for its section.
+4. **Enter your inputs.** Under **Your inputs**, add your aims, hypotheses, preliminary data, methods, and the rest, one at a time. Give a reference a key and cite it in a section as `[@key]`. The prior work of your profile is already there as references. A line names the inputs that each section still needs. **Retire** takes an input out of the checks and keeps it in the record.
+5. **Write each section.** Under **Sections**, choose a section, write in the box, and select **Save**. Each save adds a revision. The checks run on the saved revision and list the errors first, then the warnings. A line gives the share of the words that you wrote.
+6. **Sign off.** Keep the name from your profile or type yours, and select **Sign off**. A section with an error cannot be signed off. The sign-off records a statement that the section states your own ideas, with the revision and a hash of its text. A later save makes the section a draft again.
+7. **Export.** Under **Log and export**, select **Export**. Grant Matcher writes one Markdown file for each section, `requirements.md`, and `provenance-log.md` to the **Export folder**. The file of a section that is not signed off starts with `DRAFT-`.
+
+The checks look for a section over its limit, a missing Significance, Innovation, or Approach heading in the Research Strategy, a figure where the section takes none, a citation that names no reference you entered, a link, the first person in the Project Summary, and wording that marks text as written by a model. A page or line count is an estimate at NIH's densest legal format, so the final PDF decides. The Project Narrative counts sentences, and a fourth sentence is an error.
+
+Each revision stays in the log. **Restore** on an earlier revision saves its text again as the newest. When the section was saved somewhere else after you opened it, **Save** keeps your text in the box, shows the newest revision beside it, and saves nothing. Copy what you need and select **Load the newest revision**.
+
+From the sixth application that Grant Matcher starts in a calendar year, a yellow line says that NIH accepts six per investigator in a calendar year (NOT-OD-25-132). Grant Matcher counts only the applications it started.
+
+Your text and your inputs are stored in the database file that the line under **Application** names. Anyone who can read that file can read them. To delete an application, type its opportunity number under **Delete this application** and select the button. The text, the inputs, the sign-offs, and the log go with it, and the delete cannot be undone.
+
+Grant Matcher does not submit an application or fill in the application forms. Read the announcement in full, because it can set rules that Grant Matcher does not find.
+
+The same steps run on the command line, from `NIH Extractor/`. Confirm or reject a requirement in the dashboard.
+
+| Command | Result |
+| --- | --- |
+| `uv run python -m nih_grant_matcher apply start PAR-27-074 --type R03` | Starts an application for a saved opportunity and prints its number. Add `--resubmission` for a resubmission, which adds the Introduction. |
+| `uv run python -m nih_grant_matcher apply list` | Lists the applications. |
+| `uv run python -m nih_grant_matcher apply fetch 1` | Fetches the full announcement of application 1. |
+| `uv run python -m nih_grant_matcher apply requirements 1` | Prints the standing rules and what the announcement adds. |
+| `uv run python -m nih_grant_matcher apply add 1 --kind reference --label smith2021 --text "Smith J. Heart cells. 2021."` | Adds an input. `--file PATH` reads the text from a UTF-8 file. |
+| `uv run python -m nih_grant_matcher apply write 1 project-narrative --file narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. |
+| `uv run python -m nih_grant_matcher apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
+| `uv run python -m nih_grant_matcher apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. Add `--acknowledge` for a section that a model mostly drafted. |
+| `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, and the provenance log to the folder. |
+| `uv run python -m nih_grant_matcher apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
 ## Use the command line
 

@@ -442,6 +442,10 @@ Add `--help` to a command to see its options. Saved opportunities whose expirati
 
 Ranking starts from a built-in profile for machine learning and data science. A researcher in another field sets a profile of their own. In the dashboard, select **Profile** in the sidebar, then **Set up my profile**. The wizard asks for your research aims, proposes terms from them, and previews how the saved opportunities would move before you save. The same view exports the profile to a JSON file and imports one. On the command line, `profile show`, `profile export --out PATH`, `profile import PATH`, and `profile reset` print, export, import, and reset the profile. See [Set your profile](docs/dashboard.md#set-your-profile).
 
+### Write an application
+
+Grant Matcher holds an NIH application while you write it, for the activity codes R01, R03, R15, R16, R21, R34, RF1, and U01. In the dashboard, open an opportunity under **Details** and select **Start application**. The **Apply** view then fetches the full announcement, lists the standing limits and what the announcement adds for you to confirm, and keeps your aims, methods, and references as inputs. You write each section yourself. Each save is a revision in a log, and the checks flag a section over its limit, a missing heading, a citation to a reference you did not enter, and wording that marks text as written by a model. You sign off a section that has no error, and the export writes one Markdown file per section with the requirements and the provenance log. In this version no model writes or edits your text. On the command line, `apply start`, `apply fetch`, `apply write`, `apply check`, `apply sign`, and `apply export` do the same. See [Write an application](docs/dashboard.md#write-an-application).
+
 ---
 
 ## Research Software Status
