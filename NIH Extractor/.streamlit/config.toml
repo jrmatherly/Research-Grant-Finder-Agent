@@ -1,0 +1,6 @@
+# Start without the first-run email prompt. A launcher that hides its window cannot answer it, and the server waits for it.
+[server]
+showEmailPrompt = false
+
+[browser]
+gatherUsageStats = false

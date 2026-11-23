@@ -90,10 +90,16 @@ Add `--help` to a command to see its options. Do not run `rarity-table` in the c
 
 The `-v` options connect these folders to folders on your computer. Without them, the results are lost when the container is removed.
 
-On Linux, the container writes as user 1000. If your user has a different ID, or if Docker created the folders for you as root, give the folders to user 1000:
+On Linux, the container writes as user 1000. If your user has a different ID, create the folders yourself and add `--user "$(id -u):$(id -g)"` after `docker run` in each command, so that the container writes as you:
 
 ```bash
-sudo chown -R 1000:1000 data outputs digests
+mkdir -p data outputs digests
+```
+
+If Docker already created the folders as root, give them to your user first:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" data outputs digests
 ```
 
 Docker Desktop on macOS and Windows does not need this step.
