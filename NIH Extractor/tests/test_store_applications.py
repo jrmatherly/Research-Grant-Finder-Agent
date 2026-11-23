@@ -135,6 +135,7 @@ def test_deleting_an_application_removes_every_kind_of_row(store) -> None:
         store.add_signoff(app, "specific-aims", child.id, "A. Applicant", "I wrote this.", (), "0.3.0")
         store.replace_requirements(app, "model", (Requirement("must", "Name a mentor.", "q", "model", call_id=call.id),), call_id=call.id)
         store.add_fact(app, "aim", "Aim one.")
+        store.add_call(app, "specific-aims", "polish", "anthropic", "claude-opus-5-5", "s", "p", "r", parent_id=child.id)
     before = (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep))
     store.delete_application(gone)
     assert (store.calls(gone), store.revisions(gone), store.signoffs(gone), store.requirements(gone), store.facts(gone)) == ([], [], [], [], [])
@@ -160,3 +161,18 @@ def test_a_revision_that_must_follow_the_head_is_not_written_after_another(store
     assert store.add_revision(app, "specific-aims", None, "applicant", "write", "d", only_on_head=True) is None
     assert store.add_revision(app, "project-narrative", None, "applicant", "write", "e", only_on_head=True).text == "e"
     assert [r.text for r in store.revisions(app)] == ["a", "b", "e"]
+
+def test_a_model_call_names_the_revision_it_read(store) -> None:
+    app, other = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    read = store.add_revision(app, "specific-aims", None, "applicant", "write", "mine")
+    assert store.add_call(app, "specific-aims", "polish", "anthropic", "claude-opus-5-5", "s", "p", "r", parent_id=read.id).parent_id == read.id
+    assert store.add_call(app, "specific-aims", "draft", "anthropic", "claude-opus-5-5", "s", "p", "r").parent_id is None
+    for owner, section in ((other, "specific-aims"), (app, "project-narrative")):
+        with pytest.raises(ValueError):
+            store.add_call(owner, section, "polish", "anthropic", "claude-opus-5-5", "s", "p", "r", parent_id=read.id)
+    assert [c.parent_id for c in store.calls(app)] == [read.id, None] and store.calls(other) == []
+
+def test_a_new_application_after_a_delete_gets_a_new_id(store) -> None:
+    first = _app(store)
+    store.delete_application(first)
+    assert _app(store) != first
