@@ -8,12 +8,16 @@ R21 = GRANT_TYPES["NIH:R21"]
 RULE = {section.key: section for section in R21.sections}
 
 class Guide:
-    def __init__(self, text: str) -> None: self.text = text
-    def doctext(self, docnum: str) -> tuple[str, str]: return self.text, "360675"
+    def __init__(self, text: str, ggid: str = "360675") -> None: self.text, self.ggid, self.asked = text, ggid, []
+    def doctext(self, docnum: str) -> tuple[str, str]:
+        self.asked.append(docnum)
+        return self.text, self.ggid
 
 class Grants:
-    def __init__(self, html: str) -> None: self.html = html
-    def full_announcement(self, opportunity_id: str) -> str: return self.html
+    def __init__(self, html: str) -> None: self.html, self.asked = html, []
+    def full_announcement(self, opportunity_id: str) -> str:
+        self.asked.append(opportunity_id)
+        return self.html
 
 def opportunity(number: str = "PAR-1", instruments: tuple[str, ...] = ("R21",)) -> Opportunity:
     return Opportunity(f"nih-guide:{number}", number, "Heart cells in failure", "NHLBI", "NIH NHLBI", "active", description="Heart cells.", funding_instruments=instruments)

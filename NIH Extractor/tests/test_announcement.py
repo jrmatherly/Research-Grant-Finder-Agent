@@ -104,3 +104,8 @@ def test_the_guide_text_is_saved_without_html_entities() -> None:
     assert "&" not in found.text and "NEI’s" in found.text
     [limit] = parse_requirements(found)
     assert limit.limit.amount == 6 and quoted_in(limit.quote, found.text)
+
+def test_a_record_with_a_bare_grants_gov_id_asks_grants_gov_for_it() -> None:
+    grants = Grants(FILLER)
+    record = Opportunity(source_id="361234", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active")
+    assert fetch_announcement(record, Guide("", ggid=""), grants).origin == "grants.gov" and grants.asked == ["361234"]

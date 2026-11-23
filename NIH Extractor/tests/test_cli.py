@@ -55,12 +55,14 @@ def test_each_command_scores_saved_rows_again(sources, tmp_path, command: str) -
     # A saved row that the sources do not return, with no deadline, holding a score that no rule gives it.
     fresh = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:77", opportunity_number="RFA-STALE", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active"))
     db = tmp_path / "g.sqlite3"
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         store.upsert_scored(replace(fresh, score=1.0))
     finally:
         store.close()
     assert cli.main(["--db", str(db), command, "--out", str(tmp_path / ("out.xlsx" if command == "excel" else "out.md"))]) == 0
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         assert {item.opportunity.source_id: item.score for item in store.top_scored(limit=-1)}["nih-guide:77"] == fresh.score != 1.0
@@ -138,6 +140,7 @@ def test_digest_replaces_a_saved_deadline_reason(tmp_path) -> None:
     from nih_grant_matcher.store import OpportunityStore
     saved = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:5", opportunity_number="RFA-OLD", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active", close_date=CLOSE))
     db, out = tmp_path / "g.sqlite3", tmp_path / "d.md"
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         store.upsert_scored(replace(saved, reasons=(f"Deadline is still active: {CLOSE.isoformat()}",)))
@@ -182,6 +185,7 @@ def test_run_and_save_ranks_with_the_saved_profile(sources, tmp_path) -> None:
     from nih_grant_matcher.profile import Profile
     from nih_grant_matcher.store import OpportunityStore
     db = str(tmp_path / "g.sqlite3")
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         store.save_profile(Profile(keywords={"biomedical imaging": 12}, examples=("Deep learning for biomedical imaging data.",), focus="profile", examples_name="your example sentences"))
@@ -199,6 +203,7 @@ def test_profile_import_show_export_and_reset(tmp_path, capsys) -> None:
     profile = Profile(investigator="Ada Lovelace", keywords={"mitochondria": 18}, examples=("Study mitochondria.",), focus="profile", examples_name="your example sentences")
     path.write_text(to_export(profile), encoding="utf-8")
     assert cli.main(["--db", db, "profile", "import", str(path)]) == 0
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         assert store.profile() == profile
@@ -210,6 +215,7 @@ def test_profile_import_show_export_and_reset(tmp_path, capsys) -> None:
     assert cli.main(["--db", db, "profile", "export", "--out", str(tmp_path / "out.json")]) == 0
     assert (tmp_path / "out.json").read_text(encoding="utf-8") == to_export(profile) + "\n"
     assert cli.main(["--db", db, "profile", "reset"]) == 0
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         assert store.profile() == BUILTIN_PROFILE
@@ -290,6 +296,12 @@ def test_apply_adds_a_fact_and_lists_the_requirements(tmp_path, capsys) -> None:
     assert cli.main(["--db", db, "apply", "add", "1", "--kind", "aim", "--text", "Map heart cells."]) == 0
     assert cli.main(["--db", db, "apply", "requirements", "1"]) == 0
     assert "Research Strategy" in capsys.readouterr().out
+    from nih_grant_matcher.store import OpportunityStore
+    store = OpportunityStore(db)
+    try:
+        assert [(f.kind, f.text) for f in store.facts(1)] == [("aim", "Map heart cells.")]
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize("argv", [["start", "PAR-1", "--type", "R01"], ["start", "PAR-9", "--type", "R21"], ["check", "7"], ["write", "1", "budget", "--file", "x.txt"], ["add", "1", "--kind", "budget", "--text", "x"], ["write", "1", "specific-aims", "--file", "missing.txt"], ["delete", "1"]])
@@ -348,6 +360,7 @@ def test_apply_check_prints_a_signed_section_with_a_new_error_as_a_draft(tmp_pat
     assert cli.main(["--db", db, "apply", "sign", "1", "specific-aims", "--signer", "A. Applicant"]) == 0
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "check", "1"]) == 0 and "specific-aims  final" in capsys.readouterr().out
+    from nih_grant_matcher.store import OpportunityStore
     store = OpportunityStore(db)
     try:
         store.retire_fact(store.facts(1)[0].id)
