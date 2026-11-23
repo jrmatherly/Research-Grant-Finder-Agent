@@ -571,3 +571,32 @@ def test_the_wizard_warns_about_the_terms_it_dropped_or_merged(tmp_path, monkeyp
     assert not app.exception and app.session_state["profile_draft"].keywords == {"cardiac": 18, "valve": 9}
     (warning,) = [w.value for w in app.warning if "fibrosis" in w.value]
     assert "fibrosis had no weight" in warning and "cardiac and Cardiac are one term" in warning and "18" in warning
+
+
+def test_a_refused_start_stays_in_the_find_view_with_the_error(tmp_path, monkeypatch) -> None:
+    import os
+    path = _r21_database(tmp_path, start=True)
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.checkbox[0].check().run(timeout=30)
+    path.chmod(0o444)
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    try:
+        app.button(key="start_application").click().run(timeout=30)
+    finally:
+        path.chmod(0o644)
+    assert not app.exception and app.session_state["view"] == "Find"
+    assert any("readonly" in error.value.replace("\\", "") for error in app.error)
+    app.sidebar.radio[0].set_value("Apply").run(timeout=30)
+    assert not any("readonly" in error.value.replace("\\", "") for error in app.error)
+
+
+def test_a_saved_section_of_white_space_is_not_called_clean(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("   ")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert not app.exception and any("Saved revision 1" in success.value for success in app.success)
+    assert "No text saved yet." in [info.value for info in app.info] and not any("found nothing to fix" in success.value for success in app.success)

@@ -20,7 +20,11 @@ def _notice(kind: str, text: str) -> None:
 def _findings(findings: tuple[Finding, ...]) -> str:
     return " ".join(escape_markdown(f.message) for f in findings)
 
-def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> None:
+def show_notices() -> None:
+    for kind, text in st.session_state.pop("apply_notices", []):
+        getattr(st, kind)(text)
+
+def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> bool:
     # A callback runs before the page is drawn, so its outcome waits in session state for the page to show.
     store = None
     try:
@@ -35,9 +39,11 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> None
     else:
         if done:
             _notice("success", done)
+        return True
     finally:
         if store is not None:
             store.close()
+    return False
 
 def _on(db_path: str, app_id: int, action: Callable[[Workspace], str | None], stale: str = "save") -> None:
     def run(store: OpportunityStore) -> str | None:
@@ -55,10 +61,11 @@ def _open_first_tab() -> None:
 def start_application(db_path: str, opportunity: Opportunity, grant_type: str, resubmission: bool) -> None:
     def start(store: OpportunityStore) -> None:
         st.session_state["application_id"] = Workspace.start(store, opportunity, grant_type, resubmission).application_id
-    _act(db_path, start)
-    _open_first_tab()
-    # A widget's key may be set only in a callback, which runs before the radio is drawn again.
-    st.session_state["view"] = "Apply"
+    # A refused start leaves the Find view, which shows the error under the button.
+    if _act(db_path, start):
+        _open_first_tab()
+        # The radio is already drawn in the run that shows this button, so its key can change only here, in the callback.
+        st.session_state["view"] = "Apply"
 
 def _keys(app_id: int, section: str) -> tuple[str, str]:
     return f"apply_text_{app_id}_{section}", f"apply_base_{app_id}_{section}"
@@ -113,8 +120,7 @@ def apply_page(db_path: str) -> None:
     st.header("Apply")
     # The frontend matches the tabs by their place on the page, so a notice that came and went would reopen the first tab. Each container holds its place whether or not it has a notice.
     with st.container():
-        for kind, text in st.session_state.pop("apply_notices", []):
-            getattr(st, kind)(text)
+        show_notices()
     # Opening a store creates the file, so a path with no database yet has no application either.
     if not Path(db_path).exists():
         st.info(HOW_TO_START)
@@ -235,7 +241,10 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         for f in s.findings:
             (st.error if f.severity == "error" else st.warning)(escape_markdown(f.message) + (f"\n\n_{escape_markdown(f.excerpt)}_" if f.excerpt else ""))
         if s.revision_id is not None and not s.findings:
-            st.success(f"The checks found nothing to fix in revision {s.revision_id}.")
+            if s.text.strip():
+                st.success(f"The checks found nothing to fix in revision {s.revision_id}.")
+            else:
+                st.info("No text saved yet.")
     with log_tab:
         st.subheader("Revisions")
         titles, heads = {s.rule.key: s.rule.title for s in view.sections}, {s.revision_id for s in view.sections}
