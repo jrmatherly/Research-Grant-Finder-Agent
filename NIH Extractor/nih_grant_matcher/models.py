@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal, Protocol
 
 @dataclass(frozen=True)
 class Opportunity:
@@ -46,3 +46,93 @@ class ScoredOpportunity:
     matched_terms: tuple[str, ...]
     breakdown: ScoreBreakdown
     scored_at: datetime
+
+@dataclass(frozen=True)
+class Finding:
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    excerpt: str = ""
+
+@dataclass(frozen=True)
+class Completion:
+    text: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    truncated: bool
+
+class Model(Protocol):
+    provider: str
+    name: str
+    host: str
+    def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion: ...
+
+@dataclass(frozen=True)
+class Application:
+    id: int
+    opportunity_number: str
+    grant_type: str
+    title: str
+    resubmission: bool
+    disclosure_on: bool
+    created_at: datetime
+
+@dataclass(frozen=True)
+class Fact:
+    id: int
+    kind: str
+    text: str
+    label: str = ""
+    detail: dict[str, Any] = field(default_factory=dict)
+    retired_at: datetime | None = None
+
+@dataclass(frozen=True)
+class ModelCall:
+    id: int
+    section: str
+    purpose: str
+    provider: str
+    model: str
+    system: str
+    prompt: str
+    response: str
+    input_tokens: int
+    output_tokens: int
+    created_at: datetime
+
+@dataclass(frozen=True)
+class Revision:
+    id: int
+    section: str
+    parent_id: int | None
+    author: Literal["applicant", "model"]
+    action: Literal["write", "polish", "revise", "draft"]
+    text: str
+    call_id: int | None
+    created_at: datetime
+
+@dataclass(frozen=True)
+class Signoff:
+    section: str
+    revision_id: int
+    signer: str
+    attestation: str
+    findings: tuple[str, ...]
+    tool_version: str
+    signed_at: datetime
+
+@dataclass(frozen=True)
+class Attribution:
+    applicant_words: int
+    written_words: int
+    polished_words: int
+    @property
+    def model_words(self) -> int:
+        return self.written_words + self.polished_words
+    @property
+    def written_share(self) -> float:
+        return self.written_words / (self.applicant_words + self.model_words or 1)
+    @property
+    def polished_share(self) -> float:
+        return self.polished_words / (self.applicant_words + self.model_words or 1)
