@@ -10,6 +10,7 @@ from .clients import GrantsGovClient, NihGuideClient
 from .config import MatcherConfig
 from .filters import is_current_nih_hhs_opportunity
 from .models import Opportunity, ScoredOpportunity
+from .profile import BUILTIN_PROFILE, ProfileError
 from .scoring import MLRelevanceScorer
 from .store import OpportunityStore
 
@@ -23,7 +24,13 @@ class RunSummary:
 
 
 def config_for(store: OpportunityStore, base: MatcherConfig | None = None) -> MatcherConfig:
-    return store.profile().matcher_config(base)
+    try:
+        profile = store.profile()
+    except ProfileError as exc:
+        # A profile row from a later or an older build must not stop the ranking, and Reset to built-in clears it.
+        warnings.warn(f"Could not read the saved profile, so ranking uses the built-in profile: {exc}", RuntimeWarning, stacklevel=2)
+        profile = BUILTIN_PROFILE
+    return profile.matcher_config(base)
 
 
 def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", keyword: str = "") -> tuple[list[ScoredOpportunity], int, bool]:

@@ -133,21 +133,21 @@ To refresh the list, select **Run Search** with an empty keyword. The NIH Guide 
 
 ## Set your profile
 
-Ranking starts from a built-in profile for machine learning and data science. While it is in use, a line under the page title says so. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
+Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
 
 1. **You.** Your name, institution, and career stage.
 2. **Your research.** A summary, then three to six sentences, as a paragraph or one per line, that state the aims of recent or planned work. Ranking compares each opportunity with these sentences.
 3. **Your terms.** Terms proposed from the text of step 2, each with a weight from 1 to 30. Keep, remove, re-weight, or add terms. A term is saved in lower case.
 4. **Preview.** The saved opportunities scored with your draft beside the current profile. The table shows the ten largest rises and the ten largest falls, each with its reasons. Nothing is saved yet.
-5. **What the writer reuses.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and a PMID or DOI. A key holds only letters, digits, and hyphens.
+5. **Your background.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and a PMID or DOI. A key holds only letters, digits, and hyphens.
 
-Select **Save profile** on any step to keep the draft, the step on screen included. The Find view then scores the saved opportunities again with your profile.
+Select **Save profile** on any step to keep the draft, the step on screen included. A profile needs the example sentences of step 2 and the terms of step 3, and a red message names a step that is still missing. The Find view then scores the saved opportunities again with your profile.
 
 | Control | What it does |
 | --- | --- |
-| **Export profile** | Downloads the saved profile as a JSON file. The file holds your name and your example sentences. It holds no API key. |
+| **Export profile** | Downloads the saved profile as a JSON file. The file holds your name and your example sentences. |
 | **Import a profile** | Paste the contents of an exported file. A line names the investigator and the number of terms, or a red message says what is wrong. Select **Import profile** to save it. |
-| **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. |
+| **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. When a saved profile cannot be read, a red message says so, ranking uses the built-in profile, and this button clears it. |
 
 ## Use the command line
 

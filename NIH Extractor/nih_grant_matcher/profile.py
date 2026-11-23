@@ -6,6 +6,8 @@ from .scoring import _term_frequency
 
 EXPORT_FORMAT = "grant-matcher-profile/1"
 REFERENCE_KEY_RE = re.compile(r"[A-Za-z0-9-]+")
+# focus and examples_name land in every reason line, which the dashboard renders as Markdown.
+LABEL_RE = re.compile(r"[A-Za-z0-9 /,'-]{1,60}")
 TEXT_FIELDS = ("investigator", "institution", "career_stage", "research_summary", "focus", "examples_name", "expertise", "resources")
 
 class ProfileError(ValueError):
@@ -57,6 +59,9 @@ def from_export(text: str) -> Profile:
     for name in TEXT_FIELDS:
         if not isinstance(raw.get(name, ""), str):
             raise ProfileError(f"{name}: expected text")
+    for name in ("focus", "examples_name"):
+        if name in raw and not LABEL_RE.fullmatch(raw[name]):
+            raise ProfileError(f"{name}: expected 1 to 60 letters, digits, spaces or / , ' - on one line")
     keywords = raw.get("keywords", DEFAULT_KEYWORDS)
     if not isinstance(keywords, dict) or len(keywords) > 200:
         raise ProfileError("keywords: expected an object of at most 200 terms")

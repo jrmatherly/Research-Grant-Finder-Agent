@@ -9,7 +9,7 @@ from ..scoring import MLRelevanceScorer
 from ..store import OpportunityStore
 from ..workflow import config_for
 
-STEPS = ("You", "Your research", "Your terms", "Preview", "What the writer reuses")
+STEPS = ("You", "Your research", "Your terms", "Preview", "Your background")
 CAREER_STAGES = ("early-stage investigator", "new investigator", "established")
 BLANK = Profile(keywords={}, examples=(), focus="profile", examples_name="your example sentences")
 
@@ -23,6 +23,12 @@ def saved_profile(db_path: str) -> Profile | None:
     finally:
         store.close()
     return None if profile == BUILTIN_PROFILE else profile
+
+def profile_sentence(profile: Profile) -> str:
+    return f"Ranking uses the profile of {profile.investigator or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
+
+def show_unreadable(exc: ProfileError) -> None:
+    st.error(f"The saved profile cannot be read, so ranking uses the built-in profile. Reset to built-in under Profile clears it. {exc}")
 
 def _apply(db_path: str, make, done: str) -> None:
     try:
@@ -107,6 +113,10 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         cells = [["" if pd.isna(value) else str(value).strip() for value in row] for row in refs[["Key", "Citation", "PMID", "DOI"]].itertuples(index=False)]
         draft = replace(draft, expertise=expertise.strip(), resources=resources.strip(), prior_work=tuple(Reference(*row) for row in cells if any(row)))
     st.session_state["profile_draft"] = draft
+    missing = " and ".join(text for text, have in ((f"example sentences under step 2 ({STEPS[1]})", draft.examples), (f"terms under step 3 ({STEPS[2]})", draft.keywords)) if not have)
+    if save and missing:
+        st.error(f"A profile needs {missing}. Nothing was saved.")
+        return
     if save:
         _apply(db_path, lambda: replace(draft, focus="profile", examples_name="your example sentences"), "Saved your profile. The Find view now ranks with it.")
     else:
@@ -118,11 +128,15 @@ def profile_page(db_path: str) -> None:
     kind, text = st.session_state.pop("profile_notice", (None, ""))
     if kind:
         getattr(st, kind)(text)
-    saved = saved_profile(db_path)
+    try:
+        saved, unreadable = saved_profile(db_path), False
+    except ProfileError as exc:
+        saved, unreadable = None, True
+        show_unreadable(exc)
     if saved is None:
         st.info("Ranking uses the built-in profile (machine learning and data science).")
     else:
-        st.caption(f"Ranking uses the profile of {saved.investigator or 'an unnamed investigator'}, with {len(saved.keywords)} terms and {len(saved.examples)} example sentences.")
+        st.caption(profile_sentence(saved))
     step = st.session_state.get("profile_step")
     if step is None:
         st.button("Set up my profile" if saved is None else "Edit my profile", type="primary", on_click=lambda: st.session_state.update(profile_step=0, profile_draft=saved or BLANK))
@@ -132,7 +146,7 @@ def profile_page(db_path: str) -> None:
     st.divider()
     st.subheader("Export and import")
     st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json")
-    st.caption("The file holds your name and your example sentences. It holds no API key.")
+    st.caption("The file holds your name and your example sentences.")
     pasted = st.text_area("Import a profile", key="profile_import_text", placeholder="Paste the contents of an exported profile file.")
     incoming = None
     if pasted.strip():
@@ -143,4 +157,4 @@ def profile_page(db_path: str) -> None:
         else:
             st.caption(f"This profile names {incoming.investigator or 'no investigator'} and holds {len(incoming.keywords)} terms.")
     st.button("Import profile", key="profile_import_save", disabled=incoming is None, on_click=_apply, args=(db_path, lambda: from_export(st.session_state.get("profile_import_text", "")), "Imported the profile. The Find view now ranks with it."))
-    st.button("Reset to built-in", disabled=saved is None, on_click=_apply, args=(db_path, lambda: None, "Reset to the built-in profile."))
+    st.button("Reset to built-in", disabled=saved is None and not unreadable, on_click=_apply, args=(db_path, lambda: None, "Reset to the built-in profile."))

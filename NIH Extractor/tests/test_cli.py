@@ -177,6 +177,20 @@ def test_run_and_save_reports_a_capped_source(sources, tmp_path) -> None:
     assert workflow.run_and_save(MatcherConfig(rows=3, db_path=str(tmp_path / "b.sqlite3")))[1].capped is False
 
 
+def test_run_and_save_ranks_with_the_saved_profile(sources, tmp_path) -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    from nih_grant_matcher.profile import Profile
+    from nih_grant_matcher.store import OpportunityStore
+    db = str(tmp_path / "g.sqlite3")
+    store = OpportunityStore(db)
+    try:
+        store.save_profile(Profile(keywords={"biomedical imaging": 12}, examples=("Deep learning for biomedical imaging data.",), focus="profile", examples_name="your example sentences"))
+    finally:
+        store.close()
+    items, _ = workflow.run_and_save(MatcherConfig(db_path=db))
+    assert any(reason.startswith("Matched profile terms") for item in items for reason in item.reasons)
+
+
 def test_profile_export_then_import_round_trips(tmp_path, capsys) -> None:
     db, out = str(tmp_path / "g.sqlite3"), tmp_path / "p.json"
     assert cli.main(["--db", db, "profile", "export", "--out", str(out)]) == 0

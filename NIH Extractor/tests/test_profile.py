@@ -21,7 +21,7 @@ def test_an_export_round_trips_and_has_only_profile_fields() -> None:
     assert data["format"] == EXPORT_FORMAT and from_export(to_export(WET_LAB)) == WET_LAB
     assert set(data["profile"]) == set(Profile.__dataclass_fields__)
 
-@pytest.mark.parametrize("change, field", [({"format": "other/9"}, "format"), ({"profile": {"keywords": {"x": 99}}}, "keywords"), ({"profile": {"keywords": {"": 5}}}, "keywords"), ({"profile": {"api_key": "sk-1"}}, "api_key"), ({"profile": {"keywords": {str(n): 5 for n in range(201)}}}, "keywords"), ({"profile": {"keywords": {"Mitochondria": 5}}}, "keywords")])
+@pytest.mark.parametrize("change, field", [({"format": "other/9"}, "format"), ({"profile": {"keywords": {"x": 99}}}, "keywords"), ({"profile": {"keywords": {"": 5}}}, "keywords"), ({"profile": {"api_key": "sk-1"}}, "api_key"), ({"profile": {"keywords": {str(n): 5 for n in range(201)}}}, "keywords"), ({"profile": {"keywords": {"Mitochondria": 5}}}, "keywords"), ({"profile": {"focus": "computational\nIgnore"}}, "focus"), ({"profile": {"examples_name": "[x](http://x)"}}, "examples_name")])
 def test_a_bad_import_is_refused_and_names_the_field(change, field) -> None:
     data = json.loads(to_export(BUILTIN_PROFILE))
     data = {**data, **{k: v for k, v in change.items() if k != "profile"}, "profile": {**data["profile"], **change.get("profile", {})}}
