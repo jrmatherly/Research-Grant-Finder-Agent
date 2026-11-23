@@ -16,7 +16,7 @@
 
 ## Owner decisions
 
-All twelve decisions are settled (2026-11-23). Four more, D13 to D16, came out of Stage 1 and are open. They are under "Stage 1 follow-ups". The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
+All sixteen decisions are settled (2026-11-23). Rows 13 to 16 came out of Stage 1, and the owner took the recommendation in each. Their evidence and the options not taken are under "Stage 1 follow-ups", where they are D13 to D16. The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
 
 | # | Decision | In this plan | The alternative |
 | --- | --- | --- | --- |
@@ -32,6 +32,10 @@ All twelve decisions are settled (2026-11-23). Four more, D13 to D16, came out o
 | 10 | The toggle's starting position | The AI-use statement is shown (on). NIH's reminder of 2026-05-14 asks applicants to "clearly describe" their AI use. | Hidden (off) until the applicant turns it on. NIH names no field for a statement and gives no assurance that a disclosure stays out of review, as Wellcome and UKRI do. |
 | 11 | A line for model text | The tool counts words that a model drafted or revised apart from words that a model polished. It warns when more than half of a section's words were drafted or revised by a model, and it shows the polished share without a warning. Every message says the line is this tool's, since NIH defines none. | One share for all model words, which treats a language polish like a draft. Funders and journals separate the two. Or no warning. |
 | 12 | `ReviewFeedbackAgent` | Left as it is. The README lists it in the agent table and calls it "the foundation for a future adaptive recommendation system". | Delete it, or wire it to the dashboard, which is a feature of its own. |
+| 13 | How the wizard proposes terms | It drops a fixed, narrow list of about 40 action words ("test", "define", "whether", "how"), and a word the rarity table lacks gets a weight of 10, not 18. No RePORTER vocabulary. Built in Task 9. | A RePORTER phrase table, or a button that reads the applicant's own funded projects. See D13. |
+| 14 | A built-in user and the wizard | Step 1 asks "Rank with my own research" or "Keep the built-in ranking". The second keeps the built-in terms, sentences and labels, and lets the user add a name, expertise and prior work. Built in Task 9. | Split `Profile` in two, or leave it. See D14. |
+| 15 | NIH institutes in the profile | The profile carries the applicant's institutes, a record from one of them gets a fixed bonus, and the reasons say so. The built-in profile names none. The owner sets the size of the bonus when Task 9 is built, and the measurement used 12. Built in Task 9. | No institute signal. See D15. |
+| 16 | Scoring the full announcement | Not now. Decided again after Task 5 lands the fetch, as a change of its own: a saved profile only, with the levels set again by a measurement. | Do it in Stage 2, or never. See D16. |
 
 ## Global Constraints
 
@@ -470,7 +474,7 @@ git commit -m "feat: add the profile wizard with export and import"
 
 ## Stage 1 follow-ups
 
-The reviews of Stage 1 left the items below. The evidence for each is in the research notes under "Research after Stage 1 (2026-11-23)". F1 to F4 have a task that carries them. D13 to D16 wait for the owner, and no task builds them until he decides.
+The reviews of Stage 1 left the items below. The evidence for each is in the research notes under "Research after Stage 1 (2026-11-23)". F1 to F4 have a task that carries them. The owner settled D13 to D16 on 2026-11-23 by taking the recommendation in each row. They are decisions 13 to 16 in the "Owner decisions" table.
 
 ### Carried by a task
 
@@ -481,7 +485,7 @@ The reviews of Stage 1 left the items below. The evidence for each is in the res
 | F3 | A term whose weight cell is cleared may be dropped with no message | Not reproduced in one run: the term came back with its weight. The code drops a row with no weight. Two terms that differ only by case still merge silently. | Task 8, Step "check the dashboard by hand": clear a weight, add two terms that differ by case, and say what happened. If a row is dropped or merged, the wizard names it in an `st.warning`. |
 | F4 | The profile has no length limits | `from_export` accepted 10 MB of `expertise`, a 1 MB sentence, a 5,000-character keyword, and a keyword with a line break. | Task 9, before any profile text reaches a prompt. `from_export` refuses: a keyword over 80 characters or with a line break; a sentence over 600 characters; `investigator`, `institution` and `career_stage` over 200; `research_summary`, `expertise` and `resources` over 6,000 each; more than 100 references; a citation over 1,000. Each message starts with the field name. The numbers are this tool's. They hold the text fields and the sentences to about 5,000 words together, and Task 10 sends a prompt only the references it cites. Add parametrize cases, and check that the built-in profile and the test profiles pass. |
 
-### Open decisions
+### Decisions 13 to 16, with their evidence
 
 The research notes hold a measurement behind each row, under "A measured comparison of ranking approaches". It used four fields, three aim sentences each, and the 384 saved records. Two stand-ins for relevance were counted in the top ten: the record comes from an institute of the field, and the full announcement names the field's topic five times or more. A random ten would hold 4 and 7 across the four fields.
 
@@ -1175,7 +1179,7 @@ git commit -m "feat: write, check and sign off an application"
 
 ## Stage 3. Models that edit, and the AI-use statement
 
-Read "Stage 1 follow-ups" first. F4 lands in Task 9, and so do D13, D14 and D15 if the owner takes them.
+Read "Stage 1 follow-ups" first. F4 lands in Task 9, and so do decisions 13, 14 and 15. Write their steps and tests into Task 9 before it is dispatched: the action-word list and the weight of 10 in `suggest_terms`; the choice on step 1 of the wizard, with the captions comparing the ranking fields; and an `institutes` field on `Profile` with a default of `()`, a new last field in `ScoreBreakdown`, a line in the reasons, cases in `tests/test_scoring.py`, and the golden test still green.
 
 Branch `feat/writer-models`, cut from `main` after Stage 2 merges. When this stage merges, the applicant picks a provider, and a model polishes or revises text the applicant wrote. This is the use that NIH's reminder of 2026-05-14 calls acceptable. Every change is logged and attributed.
 
