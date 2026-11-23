@@ -197,6 +197,25 @@ def test_a_second_application_for_the_announcement_gets_its_requirements(tmp_pat
     Workspace.start(ws.store, ws.opportunity, "NIH:R21", resubmission=True)
     assert [r.confirmed for r in other.view().requirements] == [False] and [r.confirmed for r in ws.view().requirements] == [True]
 
+def test_a_fetch_in_one_application_reads_the_announcement_for_another_of_its_number(tmp_path) -> None:
+    a = start(tmp_path)
+    b = Workspace.start(a.store, a.opportunity, "NIH:R21", resubmission=True)
+    a.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 4 pages.", None)]
+    b.decide(b.view().requirements[0].id, True)
+    assert b.view().section("research-strategy").limit.amount == 4
+    a.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
+    assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 5 pages.", None)]
+    assert b.view().section("research-strategy").limit.amount == 6
+
+def test_a_decision_in_another_application_stays_while_its_quote_is_in_the_text(tmp_path) -> None:
+    a = start(tmp_path)
+    b = Workspace.start(a.store, a.opportunity, "NIH:R21", resubmission=True)
+    a.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    b.decide(b.view().requirements[0].id, False)
+    a.fetch_announcement(Guide(FOUR_PAGES + " More text."), Grants(""))
+    assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 4 pages.", False)]
+
 def test_a_blank_section_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path)
     revision = ws.write("project-narrative", "  \n ", parent=None)
