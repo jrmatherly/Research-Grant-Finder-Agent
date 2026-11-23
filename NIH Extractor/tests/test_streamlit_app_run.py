@@ -704,3 +704,72 @@ def test_a_fetch_from_grants_gov_replaces_a_saved_guide_copy_and_names_a_dropped
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     app.button(key="apply_fetch_button").click().run(timeout=30)
     assert not app.exception and any("Grant Matcher kept the copy it saved from Grants.gov" in text.replace("\\", "") and "The announcement saved earlier still applies" in text for text in (error.value for error in app.error))
+
+
+def _subheaders(app):
+    return [subheader.value for subheader in app.subheader]
+
+
+def _ranking(app):
+    return next(radio for radio in app.radio if radio.label == "Ranking")
+
+
+def test_keeping_the_built_in_ranking_saves_a_name_and_changes_no_score(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import ranks_like_builtin
+    path = tmp_path / "data" / "grants.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(1, "Machine learning for imaging")), MLRelevanceScorer().score(_opp(2, "Mitochondria in cardiac muscle"))])
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    before = app.dataframe[0].value[["Opportunity Number", "Score"]].to_dict("records")
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    assert _ranking(app).options == ["Rank with my own research", "Keep the built-in ranking"] and _ranking(app).value == "Rank with my own research"
+    _ranking(app).set_value("Keep the built-in ranking")
+    app.text_input[0].set_value("Ada Lovelace")
+    _press(app, "Next")
+    assert not app.exception and "5. Your background" in _subheaders(app)
+    _press(app, "Back")
+    assert "1. You" in _subheaders(app)
+    _press(app, "Save profile")
+    assert not app.exception
+    store = OpportunityStore(path)
+    try:
+        saved = store.profile()
+        assert saved.investigator == "Ada Lovelace" and ranks_like_builtin(saved)
+    finally:
+        store.close()
+    sentence = "Ranking uses the built-in profile (machine learning and data science) for Ada Lovelace."
+    assert sentence in [caption.value for caption in app.caption]
+    _press(app, "Edit my profile")
+    assert _ranking(app).value == "Keep the built-in ranking"
+    _ranking(app).set_value("Rank with my own research")
+    _press(app, "Next")
+    assert "2. Your research" in _subheaders(app)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    assert not app.exception and app.dataframe[0].value[["Opportunity Number", "Score"]].to_dict("records") == before
+    captions = [caption.value for caption in app.caption]
+    assert sentence in captions and captions[0] == "Run NIH Guide and Grants.gov searches, rank computational opportunities, and explore the results interactively."
+
+
+def test_the_terms_step_offers_up_to_three_institutes(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    _press(app, "Next")
+    app.text_area[0].set_value("Mitochondria in the heart.")
+    app.text_area[1].set_value("Measure mitochondrial fission in heart failure. Map cardiac muscle energetics. Test mitophagy in cardiomyocytes.")
+    _press(app, "Next")
+    assert "3. Your terms" in _subheaders(app)
+    institutes = next(select for select in app.multiselect if select.label == "Your NIH institutes")
+    assert "NHLBI, National Heart, Lung, and Blood Institute" in institutes.options and not any(option.startswith(("NIH,", "OD,")) for option in institutes.options)
+    assert any("A record issued by NIH for several institutes gets no bonus." in caption.value for caption in app.caption)
+    # The browser refuses a fourth choice, and Streamlit raises on one that reaches the server.
+    assert institutes.max_selections == 3
+    institutes.set_value(["NHLBI"])
+    _press(app, "Next")
+    assert not app.exception and "4. Preview" in _subheaders(app) and app.session_state["profile_draft"].institutes == ("NHLBI",)

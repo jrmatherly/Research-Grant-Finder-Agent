@@ -46,7 +46,7 @@ Each opportunity has a score from 0 to 100 and a level. The meanings below are t
 | Medium | 35 to 69 | The opportunity has room for a data-science contribution. |
 | Watchlist | Below 35 | The computational signal is weak. The row is kept so that you can watch it. |
 
-The score comes from fixed rules and uses no language model. It rises when the title or the description names terms of the profile, when the text is close to its example sentences, and when the record is complete. The [README](../README.md#how-the-intelligence-engine-thinks) describes each part.
+The score comes from fixed rules and uses no language model. It rises when the title or the description names terms of the profile, when the text is close to its example sentences, when the record is complete, and by 8 points when one of the NIH institutes in your profile issued the record. The [README](../README.md#how-the-intelligence-engine-thinks) describes each part.
 
 The score ranks opportunities for a first look. It does not judge scientific fit. Read the announcement before you decide.
 
@@ -135,9 +135,9 @@ To refresh the list, select **Run Search** with an empty keyword. The NIH Guide 
 
 Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. Once a profile is saved, the button reads **Edit my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
 
-1. **You.** Your name, institution, and career stage.
+1. **You.** Choose **Rank with my own research** or **Keep the built-in ranking**, then your name, institution, and career stage. **Keep the built-in ranking** keeps the built-in terms and sentences and skips steps 2 to 4, so you can add your name and background and every score stays as it was. A line under the page title then says that ranking uses the built-in profile, for you.
 2. **Your research.** A summary, then three to six sentences, as a paragraph or one per line, that state the aims of recent or planned work. Ranking compares each opportunity with these sentences.
-3. **Your terms.** Terms proposed from the text of step 2, each with a weight from 1 to 30. Keep, remove, re-weight, or add terms. A term is saved in lower case.
+3. **Your terms.** Terms proposed from the text of step 2, each with a weight from 1 to 30. Keep, remove, re-weight, or add terms. A term is saved in lower case. Words that say what a study does, such as "test", "whether" and "how", are not proposed. Below the table, choose up to three **NIH institutes**. A record issued by one of them gets 8 points, and its reasons say so. A record issued by NIH for several institutes gets no bonus.
 4. **Preview.** The saved opportunities scored with your draft beside the current profile. The table shows the ten largest rises and the ten largest falls, each with its reasons. Nothing is saved yet.
 5. **Your background.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and an optional PMID and DOI. A key holds only letters, digits, and hyphens.
 

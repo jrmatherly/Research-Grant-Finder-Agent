@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, math, re
 from collections import Counter
 from datetime import date, datetime, timezone
-from .config import GENERIC_BIOMEDICAL_TERMS, KEYWORD_PATTERNS, TERM_RARITY_PATH, MatcherConfig
+from .config import GENERIC_BIOMEDICAL_TERMS, INSTITUTE_BONUS, KEYWORD_PATTERNS, TERM_RARITY_PATH, MatcherConfig
 from .models import Opportunity, ScoreBreakdown, ScoredOpportunity
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -77,8 +77,9 @@ class MLRelevanceScorer:
         urgency_score = self._deadline_score(opportunity.close_date, today)
         completeness_score = self._completeness_score(opportunity)
         generic_penalty = self._generic_penalty(text, matched_terms)
-        score = max(0.0, min(100.0, keyword_score + semantic_score + nih_score + urgency_score + completeness_score + min(centrality_score, 18) - generic_penalty))
-        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(round(score, 1)), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty, shared_terms)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1)), scored_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        institute_score = INSTITUTE_BONUS if opportunity.agency_code in self.config.institutes else 0.0
+        score = max(0.0, min(100.0, keyword_score + semantic_score + nih_score + urgency_score + completeness_score + min(centrality_score, 18) - generic_penalty + institute_score))
+        return ScoredOpportunity(opportunity=opportunity, score=round(score, 1), classification=self._classification(round(score, 1)), reasons=tuple(self._reasons(opportunity, matched_terms, semantic_score, urgency_score, generic_penalty, shared_terms, institute_score)), matched_terms=tuple(matched_terms), breakdown=ScoreBreakdown(round(keyword_score, 1), round(semantic_score, 1), round(nih_score, 1), round(urgency_score, 1), round(completeness_score, 1), round(min(centrality_score, 18), 1), round(generic_penalty, 1), round(institute_score, 1)), scored_at=datetime.now(timezone.utc).replace(tzinfo=None))
     @staticmethod
     def _is_nih_hhs(opportunity: Opportunity) -> bool:
         combined = f"{opportunity.agency_code} {opportunity.agency_name}".lower()
@@ -107,7 +108,7 @@ class MLRelevanceScorer:
     @staticmethod
     def _classification(score: float) -> str:
         return "High" if score >= 70 else "Medium" if score >= 35 else "Watchlist"
-    def _reasons(self, opportunity: Opportunity, matched_terms: list[str], semantic_score: float, urgency_score: float, generic_penalty: float, shared_terms: list[str]) -> list[str]:
+    def _reasons(self, opportunity: Opportunity, matched_terms: list[str], semantic_score: float, urgency_score: float, generic_penalty: float, shared_terms: list[str], institute_score: float) -> list[str]:
         reasons = []
         if matched_terms:
             reasons.append(f"Matched {self.config.focus} terms: " + ", ".join(matched_terms[:6]))
@@ -115,6 +116,8 @@ class MLRelevanceScorer:
             reasons.append(f"Description is close to {self.config.examples_name} (shared terms: " + ", ".join(shared_terms) + ")")
         if MLRelevanceScorer._is_nih_hhs(opportunity):
             reasons.append("Source agency appears to be NIH/HHS")
+        if institute_score:
+            reasons.append(f"Issued by {opportunity.agency_code}, an institute in your profile")
         if opportunity.close_date and urgency_score > 0:
             reasons.append(f"Open until {opportunity.close_date.isoformat()}")
         if generic_penalty > 0 and not matched_terms:

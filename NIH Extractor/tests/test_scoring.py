@@ -135,3 +135,41 @@ def test_ai_counts_for_a_profile_with_artificial_intelligence() -> None:
     from nih_grant_matcher.config import MatcherConfig
     scored = MLRelevanceScorer(MatcherConfig(keywords={"artificial intelligence": 5})).score(_nih("AI for imaging", ""), today=date(2026, 7, 6))
     assert (scored.matched_terms, scored.breakdown.keyword_score, scored.breakdown.centrality_score) == (("AI",), 5, 4.0)
+
+def _institute_record(code: str, title: str = "Program", description: str = "Cardiac muscle studies in heart failure.") -> Opportunity:
+    from dataclasses import replace
+    return replace(_nih(title, description), agency_code=code, agency_name=f"NIH {code}")
+
+def test_a_record_from_a_profile_institute_scores_eight_more() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    record = _institute_record("NHLBI")
+    plain = MLRelevanceScorer().score(record, today=date(2026, 7, 6))
+    scored = MLRelevanceScorer(MatcherConfig(institutes=("NHLBI",))).score(record, today=date(2026, 7, 6))
+    assert round(scored.score - plain.score, 1) == 8.0 and scored.score < 100
+    assert (scored.breakdown.institute_score, plain.breakdown.institute_score) == (8.0, 0.0)
+    reasons = list(scored.reasons)
+    assert reasons.index("Issued by NHLBI, an institute in your profile") == reasons.index("Source agency appears to be NIH/HHS") + 1
+
+@pytest.mark.parametrize("code", ["NCI", "NIH"])
+def test_a_record_from_another_institute_gets_no_bonus(code: str) -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    record = _institute_record(code)
+    scored = MLRelevanceScorer(MatcherConfig(institutes=("NHLBI",))).score(record, today=date(2026, 7, 6))
+    assert scored.score == MLRelevanceScorer().score(record, today=date(2026, 7, 6)).score and scored.breakdown.institute_score == 0.0
+    assert not any(reason.startswith("Issued by") for reason in scored.reasons)
+
+def test_the_bonus_stays_inside_the_clamp() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    record = _institute_record("NHLBI", "Machine learning and deep learning for clinical prediction from EHR data", "Artificial intelligence, predictive modeling, natural language processing, computer vision, bioinformatics and data science for patient outcomes.")
+    assert MLRelevanceScorer().score(record, today=date(2026, 7, 6)).score == 100.0
+    scored = MLRelevanceScorer(MatcherConfig(institutes=("NHLBI",))).score(record, today=date(2026, 7, 6))
+    assert (scored.score, scored.classification, scored.breakdown.institute_score) == (100.0, "High", 8.0)
+
+def test_a_record_with_no_topical_signal_stays_on_the_watchlist_with_the_bonus() -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.config import MatcherConfig
+    # Every part that does not depend on the topic is at its most: an NIH record, 60 days from its deadline, with every field filled.
+    record = replace(_institute_record("NHLBI", "Heart failure cohort", "Supports a cohort of adults with heart failure at several clinical sites."), close_date=date(2026, 9, 4), eligibility=("Higher education",), funding_instruments=("R01",), funding_categories=("Health",), award_ceiling=500000.0, source_url="https://grants.nih.gov/x")
+    scored = MLRelevanceScorer(MatcherConfig(institutes=("NHLBI",))).score(record, today=date(2026, 7, 6))
+    assert scored.matched_terms == () and scored.breakdown.institute_score == 8.0 and scored.breakdown.completeness_score == 7.0
+    assert scored.classification == "Watchlist", scored.score

@@ -10,7 +10,7 @@ import streamlit as st
 from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.excel import write_excel
 from nih_grant_matcher.models import ScoredOpportunity
-from nih_grant_matcher.profile import ProfileError
+from nih_grant_matcher.profile import ProfileError, ranks_like_builtin
 from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for, why_not_covered
 from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.ui.apply_page import apply_page, show_notices, start_application
@@ -152,7 +152,7 @@ except ProfileError as exc:
     saved, unreadable = None, exc
 except sqlite3.Error as exc:
     saved, unreadable, db_error = None, None, exc
-st.caption(f"Run NIH Guide and Grants.gov searches, rank {'computational ' if saved is None else ''}opportunities, and explore the results interactively.")
+st.caption(f"Run NIH Guide and Grants.gov searches, rank {'computational ' if saved is None or ranks_like_builtin(saved) else ''}opportunities, and explore the results interactively.")
 
 if view == "Profile":
     profile_page(db_path)

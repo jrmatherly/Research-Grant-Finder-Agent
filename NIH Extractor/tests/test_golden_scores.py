@@ -15,8 +15,9 @@ def load_golden() -> list[tuple[Opportunity, dict]]:
     opportunities = [build(row) for row in json.loads((FIXTURES / "golden_opportunities.json").read_text(encoding="utf-8"))]
     return list(zip(opportunities, json.loads((FIXTURES / "golden_scores.json").read_text(encoding="utf-8")), strict=True))
 
+# The frozen file predates institute_score, which the built-in profile leaves at 0.0.
 def as_golden(scored) -> dict:
-    return {"source_id": scored.opportunity.source_id, "score": scored.score, "classification": scored.classification, "reasons": list(scored.reasons), "matched_terms": list(scored.matched_terms), "breakdown": asdict(scored.breakdown)}
+    return {"source_id": scored.opportunity.source_id, "score": scored.score, "classification": scored.classification, "reasons": list(scored.reasons), "matched_terms": list(scored.matched_terms), "breakdown": {k: v for k, v in asdict(scored.breakdown).items() if not (k == "institute_score" and v == 0.0)}}
 
 def test_builtin_scores_match_the_frozen_file() -> None:
     scorer = MLRelevanceScorer()
@@ -38,3 +39,9 @@ def test_a_saved_copy_of_the_builtin_profile_scores_the_same(tmp_path) -> None:
     scorer = MLRelevanceScorer(from_export(to_export(BUILTIN_PROFILE)).matcher_config())
     for opportunity, expected in load_golden():
         assert as_golden(scorer.score(opportunity, today=TODAY)) == expected
+
+def test_the_builtin_profile_names_no_institute() -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    from nih_grant_matcher.profile import BUILTIN_PROFILE, to_export
+    assert BUILTIN_PROFILE.institutes == () == MatcherConfig().institutes
+    assert "institutes" not in json.loads(to_export(BUILTIN_PROFILE))["profile"]
