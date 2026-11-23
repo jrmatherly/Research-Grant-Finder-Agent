@@ -99,13 +99,24 @@ def test_read_reports_a_certificate_error_once_without_a_retry(monkeypatch, wrap
     with pytest.raises(clients.ApiError, match=r"https://example\.invalid/data failed after 1 attempt\(s\): .*unable to get local issuer certificate"):
         clients._read(REQUEST, timeout=1)
     assert len(calls) == 1
+    # The error says what to do, because the usual cause is a proxy that the user can configure.
+    with pytest.raises(clients.ApiError, match="SSL_CERT_FILE"):
+        clients._read(REQUEST, timeout=1)
 
 
-def test_a_reply_that_is_not_json_is_an_api_error(monkeypatch) -> None:
-    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: b"<html>blocked</html>")
-    with pytest.raises(clients.ApiError, match=r"https://example\.invalid/search did not return JSON"):
+def test_a_failed_request_names_the_address_without_its_query(monkeypatch) -> None:
+    _fail_then(monkeypatch, [_http_error(404)])
+    with pytest.raises(clients.ApiError) as raised:
+        clients._read(urllib.request.Request("https://example.invalid/data?perpage=100&sort=reldate"), timeout=1)
+    assert str(raised.value).startswith("https://example.invalid/data failed after 1 attempt(s)")
+
+
+@pytest.mark.parametrize("body, reason", [(b"<html>blocked</html>", r"did not return JSON\. The reply starts with b'<html>blocked"), (b"\xff<html>", "did not return JSON"), (b"[]", "returned JSON that is not an object"), (b"null", "returned JSON that is not an object")], ids=["html", "not-utf8", "list", "null"])
+def test_a_reply_that_is_not_a_json_object_is_an_api_error(monkeypatch, body, reason) -> None:
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: body)
+    with pytest.raises(clients.ApiError, match=r"https://example\.invalid/search " + reason):
         clients._post_json("https://example.invalid/search", {})
-    with pytest.raises(clients.ApiError, match="did not return JSON"):
+    with pytest.raises(clients.ApiError, match=reason):
         clients.NihGuideClient().search(rows=1)
 
 

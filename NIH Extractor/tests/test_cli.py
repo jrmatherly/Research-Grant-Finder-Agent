@@ -163,8 +163,15 @@ def test_digest_escapes_markup_in_a_title_and_a_summary() -> None:
     from nih_grant_matcher.models import Opportunity
     from nih_grant_matcher.scoring import MLRelevanceScorer
     # A Markdown viewer reads "<" as the start of an HTML tag, and then hides or runs what follows.
-    scored = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:9", opportunity_number="PAR-TEST-9", title="Models with p<0.05 and n>30", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="<img src=x onerror=alert(1)> & more"))
+    scored = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:9", opportunity_number="PAR<9", title="Models with p<0.05 and n>30", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="<img src=x onerror=alert(1)> & more"))
     digest = render_digest([scored], min_score=0)
     assert "## 1. Models with p&lt;0.05 and n>30" in digest
     assert "&lt;img src=x onerror=alert(1)> & more" in digest
+    assert "- Opportunity number: PAR&lt;9" in digest
     assert "<" not in digest
+
+
+def test_run_and_save_reports_a_capped_source(sources, tmp_path) -> None:
+    from nih_grant_matcher.config import MatcherConfig
+    assert workflow.run_and_save(MatcherConfig(rows=2, db_path=str(tmp_path / "a.sqlite3")))[1].capped is True
+    assert workflow.run_and_save(MatcherConfig(rows=3, db_path=str(tmp_path / "b.sqlite3")))[1].capped is False

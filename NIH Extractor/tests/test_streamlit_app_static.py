@@ -28,3 +28,9 @@ def test_streamlit_app_reads_500_rows_by_default_and_warns_at_the_limit() -> Non
 
     assert 'limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25)' in app_text
     assert "if summary.capped:" in app_text
+
+
+def test_streamlit_results_table_labels_the_date_as_an_expiration() -> None:
+    app_text = Path("streamlit_app.py").read_text(encoding="utf-8")
+
+    assert '"Close Date": st.column_config.DateColumn("Expires"' in app_text

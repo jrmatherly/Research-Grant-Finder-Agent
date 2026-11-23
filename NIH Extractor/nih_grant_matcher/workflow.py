@@ -27,7 +27,7 @@ def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", 
     relevance = MLRelevanceAgent(MLRelevanceScorer(config))
     opportunities: list[Opportunity] = []
     fetched = 0
-    # The count below is the sum over the sources, so each source's own count is compared to the limit.
+    # fetched sums the sources, so the limit is compared to each source's own count.
     capped = False
 
     if source in ("nih-guide", "both"):
@@ -59,7 +59,7 @@ def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str 
 
 
 def rescore_saved(store: OpportunityStore) -> None:
-    # A saved score goes stale when the scoring rules change, and as a deadline nears. Scoring needs no network, so score the open rows again before every read.
+    # A saved score goes stale when the scoring rules change, and as the expiration date nears. Scoring needs no network, so score the open rows again before every read.
     # The default rules, as every caller of the scorer uses today. A caller that sets its own keywords must pass them here too.
     scorer = MLRelevanceScorer()
     try:
