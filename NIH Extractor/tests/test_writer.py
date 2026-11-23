@@ -12,6 +12,12 @@ GRANTS_PAGE = "<p>Section IV. Application and Submission Information</p><p>The R
 class GuideDown:
     def doctext(self, number): raise ApiError("timed out")
 
+class GrantsDown:
+    def full_announcement(self, opportunity_id): raise ApiError("HTTP 503")
+
+DROPPED_FOUR = 'Your decision on "Research Strategy: at most 4 pages." was dropped, because the new text no longer has the sentence it came from.'
+MUST = "Section IV. Application and Submission Information\nPHS 398 Research Plan\nAll instructions must be followed, with the following additional instructions: Describe the cohort in 2 tables.\nSection V. Review\nx" + " More text." * 100
+
 def test_a_new_application_lists_its_sections_and_gaps(tmp_path) -> None:
     view = start(tmp_path).view()
     assert [s.rule.key for s in view.sections] == ["specific-aims", "research-strategy", "project-summary", "project-narrative"]
@@ -228,9 +234,32 @@ def test_a_grants_gov_text_replaces_a_saved_guide_copy_and_the_guide_text_does_n
     official, _ = ws.fetch_announcement(GuideDown(), Grants(GRANTS_PAGE))
     assert official.origin == "grants.gov" and ws.view().announcement == official
     # Grants.gov is down or attaches nothing this time, and the Guide can serve an older text.
-    with pytest.raises(ApiError, match="kept the copy it saved from there"):
-        ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
-    assert ws.view().announcement == official
+    ws.decide(ws.view().requirements[0].id, True)
+    with pytest.raises(ApiError, match="Grants.gov has no full announcement attached. Grant Matcher kept the copy it saved from Grants.gov on"):
+        ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
+    assert ws.view().announcement == official and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+
+def test_a_guide_text_saved_while_grants_gov_is_down_says_it_may_not_be_the_official_one(tmp_path) -> None:
+    ws = start(tmp_path)
+    announcement, notes = ws.fetch_announcement(Guide(FOUR_PAGES), GrantsDown())
+    assert announcement.origin == "nih-guide" and len(notes) == 1 and "The request to Grants.gov failed (HTTP 503)" in notes[0] and "may not be the official one" in notes[0]
+    assert ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))[1] == []
+
+def test_a_decision_on_instructions_that_changed_in_one_number_is_dropped(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(MUST), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    assert ws.fetch_announcement(Guide(MUST + " More text."), Grants(""))[1] == [] and ws.view().requirements[0].confirmed is True
+    _, notes = ws.fetch_announcement(Guide(MUST.replace("2 tables", "3 tables")), Grants(""))
+    assert notes == ['Your decision on "Follow the announcement\'s additional instructions for the Research Plan." was dropped, because the new text no longer has the sentence it came from.']
+    assert [(r.confirmed, "3 tables" in r.quote) for r in ws.view().requirements] == [(None, True)]
+
+def test_a_decision_whose_sentence_stays_but_is_no_longer_read_as_a_requirement_is_dropped(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    _, notes = ws.fetch_announcement(Guide("A notice with no headings. The Research Strategy is limited to 4 pages. " + "More text. " * 100), Grants(""))
+    assert notes == ['Your decision on "Research Strategy: at most 4 pages." was dropped, because Grant Matcher no longer reads that requirement from the new text.'] and ws.view().requirements == ()
 
 def test_a_decision_moves_to_the_new_sentence_and_a_changed_limit_drops_it(tmp_path) -> None:
     ws = start(tmp_path)
@@ -241,7 +270,7 @@ def test_a_decision_moves_to_the_new_sentence_and_a_changed_limit_drops_it(tmp_p
     kept = ws.view().requirements
     assert dropped == [] and [(r.text, r.confirmed) for r in kept] == [("Research Strategy: at most 4 pages.", True)] and "first phase" in kept[0].quote
     _, dropped = ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages.", "4.5 pages.")), Grants(""))
-    assert [r.text for r in dropped] == ["Research Strategy: at most 4 pages."]
+    assert dropped == [DROPPED_FOUR]
     assert [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4.5 pages.", None)]
 
 def test_a_decision_made_on_the_guide_text_carries_to_the_grants_gov_text_of_the_same_sentence(tmp_path) -> None:
@@ -252,14 +281,14 @@ def test_a_decision_made_on_the_guide_text_carries_to_the_grants_gov_text_of_the
     _, dropped = ws.fetch_announcement(Guide(""), Grants(GRANTS_PAGE))
     assert dropped == [] and ws.view().announcement.origin == "grants.gov" and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
 
-def test_a_fetch_reports_the_decisions_it_dropped_for_this_application(tmp_path) -> None:
+def test_a_fetch_reports_the_decisions_it_dropped_in_every_application_of_the_number(tmp_path) -> None:
     a = start(tmp_path)
     b = Workspace.start(a.store, a.opportunity, "NIH:R21", resubmission=True)
     a.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
     a.decide(a.view().requirements[0].id, True)
     b.decide(b.view().requirements[0].id, False)
     _, dropped = a.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
-    assert [(r.text, r.confirmed) for r in dropped] == [("Research Strategy: at most 4 pages.", True)]
+    assert dropped == [DROPPED_FOUR, DROPPED_FOUR.replace("Your decision", f"Application {b.application_id} lost its decision").replace(" was dropped", "")]
 
 def test_a_blank_section_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path)

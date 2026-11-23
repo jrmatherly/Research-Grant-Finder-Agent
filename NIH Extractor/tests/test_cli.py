@@ -364,7 +364,7 @@ def test_apply_fetch_names_a_decision_it_dropped(tmp_path, monkeypatch, capsys) 
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (FOUR_PAGES.replace("4 pages", "5 pages"), "1"))
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "fetch", "1"]) == 0
-    assert "Your decision on Research Strategy: at most 4 pages. was dropped, because the new text no longer has the sentence it came from." in capsys.readouterr().out
+    assert "Your decision on \"Research Strategy: at most 4 pages.\" was dropped, because the new text no longer has the sentence it came from." in capsys.readouterr().out
 
 
 def test_apply_check_prints_a_signed_section_with_a_new_error_as_a_draft(tmp_path, capsys) -> None:

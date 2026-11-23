@@ -700,4 +700,7 @@ def test_a_fetch_from_grants_gov_replaces_a_saved_guide_copy_and_names_a_dropped
     app.button(key="apply_fetch_button").click().run(timeout=30)
     shown = [success.value for success in app.success]
     assert not app.exception and not app.error and any("Saved the announcement from Grants.gov." in text for text in shown)
-    assert any("Your decision on Research Strategy\\: at most 4 pages\\. was dropped, because the new text no longer has the sentence it came from." in text for text in shown)
+    assert any('Your decision on "Research Strategy: at most 4 pages." was dropped, because the new text no longer has the sentence it came from.' in text.replace("\\", "") for text in shown)
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    assert not app.exception and any("Grant Matcher kept the copy it saved from Grants.gov" in text.replace("\\", "") and "The announcement saved earlier still applies" in text for text in (error.value for error in app.error))
