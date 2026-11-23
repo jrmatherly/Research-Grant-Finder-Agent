@@ -8,12 +8,11 @@ from ..clients import ApiError
 from ..models import Finding, Opportunity
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import NotReady, StaleEdit, Workspace, describe
+from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
 from .profile_page import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
 HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application."
-STATUS = {None: "Not yet decided.", True: "Confirmed.", False: "Rejected."}
 
 def _notice(kind: str, text: str) -> None:
     st.session_state["apply_notices"] = [*st.session_state.get("apply_notices", []), (kind, text)]
@@ -40,13 +39,13 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> None
         if store is not None:
             store.close()
 
-def _on(db_path: str, app_id: int, action: Callable[[Workspace], str | None]) -> None:
+def _on(db_path: str, app_id: int, action: Callable[[Workspace], str | None], stale: str = "save") -> None:
     def run(store: OpportunityStore) -> str | None:
         try:
             return action(Workspace(store, app_id))
         except StaleEdit as exc:
             # The Sections tab shows both texts for this section, which says more than the message.
-            st.session_state["apply_stale"] = (app_id, exc.head.section)
+            st.session_state["apply_stale"] = (app_id, exc.head.section, stale)
             return None
     _act(db_path, run)
 
@@ -80,6 +79,10 @@ def _sign(ws: Workspace, section: str, title: str) -> str:
         raise NotReady("Save your text before you sign off. A sign-off covers the revision you saved.")
     signed = ws.sign(section, st.session_state.get("apply_signer", ""), base or 0, st.session_state.get(f"apply_acknowledge_{ws.application_id}_{section}", False))
     return f"Signed off the {title} at revision {signed.revision_id}."
+
+def _fetch(ws: Workspace) -> str:
+    origin = ORIGINS[ws.fetch_announcement().origin]
+    return f"Saved the announcement from {origin}. " + (NO_SECTION_IV if ws.view().no_section_iv else "Confirm or reject what it adds under Requirements.")
 
 def _restore(ws: Workspace, section: str, revision_id: int) -> str:
     restored = ws.restore(section, revision_id)
@@ -146,13 +149,15 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     # The open tab is the browser's and follows the key, so a tab click needs no rerun. A start or a delete changes the key, which opens the first tab.
     announcement_tab, requirements_tab, inputs_tab, sections_tab, log_tab = st.tabs(["Announcement", "Requirements", "Your inputs", "Sections", "Log and export"], key=f"apply_tabs_{st.session_state.get('apply_tabs_opened', 0)}")
     with announcement_tab:
-        st.button("Fetch the full announcement", key="apply_fetch_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w: f"Saved the announcement from {'the NIH Guide' if w.fetch_announcement().origin == 'nih-guide' else 'Grants.gov'}. Confirm or reject what it adds under Requirements."))
+        st.button("Fetch the full announcement", key="apply_fetch_button", type="primary", on_click=_on, args=(db_path, app_id, _fetch))
         a = view.announcement
         if a is None:
             st.info("The announcement has not been fetched yet. The standing rules of the grant type apply until it is.")
         else:
-            st.caption(f"Fetched from {'the NIH Guide' if a.origin == 'nih-guide' else 'Grants.gov'} on {a.fetched_at:%Y-%m-%d}.")
+            st.caption(f"Fetched from {ORIGINS[a.origin]} on {a.fetched_at:%Y-%m-%d}.")
             st.link_button("Open the announcement", a.url, key="apply_announcement_button")
+            if view.no_section_iv:
+                st.info(NO_SECTION_IV)
             parts = [(f"Section {n}. {SECTION_TITLES[n]}", a.section(n)) for n in ("I", "IV", "V") if a.section(n)]
             for title, text in parts or [("Full text", a.text)]:
                 with st.expander(title):
@@ -165,10 +170,12 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         for source in view.grant_type.sources:
             st.caption(f"[{source.url}]({source.url}), read on {source.read_on}. {source.says}")
         st.subheader("What the announcement adds")
-        if not view.requirements:
+        if view.no_section_iv:
+            st.info(NO_SECTION_IV)
+        elif not view.requirements:
             st.info("Fetch the full announcement to see what it adds." if a is None else "Grant Matcher found no added requirement in the announcement. Read Section IV under Announcement.")
         for r in view.requirements:
-            st.markdown(f"**{escape_markdown(r.text)}** {STATUS[r.confirmed]}")
+            st.markdown(f"**{escape_markdown(r.text)}** {DECISIONS[r.confirmed].capitalize()}.")
             st.text(r.quote)
             confirm, reject = st.columns(2)
             confirm.button("Confirm", key=f"apply_confirm_{r.id}_button", disabled=r.confirmed is True, on_click=_on, args=(db_path, app_id, lambda w, rid=r.id: w.decide(rid, True)))
@@ -206,8 +213,8 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         st.caption(f"{s.rule.title}. At most {describe(s.limit)}. " + {"empty": "No text saved yet.", "draft": f"Draft at revision {s.revision_id}.", "final": f"Signed off at revision {s.revision_id}."}[s.state])
         if s.gaps:
             st.info(f"This section still needs {', '.join(s.gaps)}. Add them under Your inputs.")
-        if st.session_state.get("apply_stale") == (app_id, key):
-            st.warning("This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision.")
+        if (stale := st.session_state.get("apply_stale")) and stale[:2] == (app_id, key):
+            st.warning("This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off." if stale[2] == "sign" else "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision.")
             newest, yours = st.columns(2)
             newest.caption(f"Revision {s.revision_id}")
             newest.text(s.text)
@@ -222,7 +229,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
             st.text_input("Your name", key="apply_signer")
             if any(f.code == "mostly-drafted" for f in s.findings):
                 st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}")
-            st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title)))
+            st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title), "sign"))
         words = s.attribution
         st.caption(f"You wrote {round(100 * words.applicant_words / (words.applicant_words + words.model_words or 1))}% of the words. A model drafted or revised {round(100 * words.written_share)}%, and a model polished {round(100 * words.polished_share)}%.")
         for f in s.findings:
@@ -246,7 +253,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         st.button("Export", key="apply_export_button", on_click=_on, args=(db_path, app_id, lambda w, export_key=export_key: f"Wrote the application to {escape_markdown(str(w.export(Path(st.session_state[export_key]))))}."))
         st.subheader("Delete this application")
         number = view.application.opportunity_number
-        st.caption("Delete removes this application with its text, its inputs, its sign-offs and every model call logged for it. It cannot be undone.")
+        st.caption("Delete removes this application with its text, its inputs, its sign-offs and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
         typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}")
         st.button("Delete this application", key="apply_delete_button", disabled=typed.strip() != number, on_click=_on, args=(db_path, app_id, lambda w, number=number: _delete(w, number)))
 

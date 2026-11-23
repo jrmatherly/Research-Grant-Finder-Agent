@@ -461,3 +461,92 @@ def test_a_phased_award_says_why_it_cannot_be_started(tmp_path, monkeypatch) -> 
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert not app.exception and app.button(key="start_application").disabled
     assert any("phased award" in caption.value for caption in app.caption)
+
+
+SECTION_IV = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Application Review Information\nx"
+
+
+def _page_text(app):
+    return " ".join(element.value for element in [*app.markdown, *app.caption, *app.info, *app.success, *app.warning, *app.error]).replace("\\", "")
+
+
+def test_an_announcement_with_no_section_iv_is_named_on_each_tab(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.clients import NihGuideClient
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("A notice with no headings at all. " * 40, "1"))
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    assert not app.exception
+    said = "found no Section IV in this text and read no requirement from it"
+    assert any(said in success.value for success in app.success)
+    assert sum(said in info.value for info in app.info) == 2 and not any("found no added requirement" in info.value for info in app.info)
+
+
+def test_each_apply_button_does_its_one_thing(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.clients import NihGuideClient
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    assert not app.exception and any("Saved the announcement from the NIH Guide" in s.value for s in app.success)
+    assert "Research Strategy: at most 4 pages." in _page_text(app) and "Not yet decided." in _page_text(app)
+    app.button(key="apply_confirm_1_button").click().run(timeout=30)
+    assert not app.exception and "Confirmed." in _page_text(app) and app.button(key="apply_confirm_1_button").disabled
+    app.button(key="apply_reject_1_button").click().run(timeout=30)
+    assert not app.exception and "Rejected." in _page_text(app) and app.button(key="apply_reject_1_button").disabled
+    app.selectbox(key="apply_fact_kind").set_value("aim")
+    app.text_area(key="apply_fact_text").set_value("Map heart cells.")
+    app.button(key="apply_add_fact_button").click().run(timeout=30)
+    assert not app.exception and any("Added input 1 under aim." in s.value for s in app.success) and "Map heart cells" in _page_text(app)
+    app.button(key="apply_retire_1_button").click().run(timeout=30)
+    assert not app.exception and "Map heart cells" not in _page_text(app)
+    for text in ("Aim 1.", "Aim 2."):
+        app.text_area(key="apply_text_1_specific-aims").set_value(text)
+        app.button(key="apply_save_button").click().run(timeout=30)
+    app.button(key="apply_restore_1_button").click().run(timeout=30)
+    assert not app.exception and any("Restored the text of revision 1 as revision 3." in s.value for s in app.success)
+    assert app.text_area(key="apply_text_1_specific-aims").value == "Aim 1."
+    app.text_input(key="apply_export_1").set_value("out").run(timeout=30)
+    app.button(key="apply_export_button").click().run(timeout=30)
+    folder = (tmp_path / "out").resolve()
+    assert not app.exception and (folder / "DRAFT-specific-aims.md").exists()
+    assert any(str(folder) in s.value.replace("\\", "") for s in app.success)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 3, "applicant", "write", "Aim 1 from elsewhere.")
+    finally:
+        store.close()
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1, mine.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert any("changed after you opened it" in w.value for w in app.warning)
+    app.button(key="apply_load_newest_button").click().run(timeout=30)
+    assert not app.exception and app.text_area(key="apply_text_1_specific-aims").value == "Aim 1 from elsewhere."
+    assert not any("changed after you opened it" in w.value for w in app.warning)
+
+
+def test_a_stale_sign_off_says_nothing_was_signed(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-narrative").run(timeout=30)
+    app.text_area(key="apply_text_1_project-narrative").set_value("One. Two.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "project-narrative", 1, "applicant", "write", "One. Two. Three.")
+    finally:
+        store.close()
+    app.text_input(key="apply_signer").set_value("A. Applicant")
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert not app.exception
+    assert any("nothing was signed" in w.value for w in app.warning) and not any("not saved" in w.value for w in app.warning)
+    store = OpportunityStore(path)
+    try:
+        assert store.signoffs(1) == []
+    finally:
+        store.close()
+
+
+def test_the_delete_caption_says_exported_files_stay(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    assert any("Files you exported stay where you exported them." in caption.value for caption in app.caption)

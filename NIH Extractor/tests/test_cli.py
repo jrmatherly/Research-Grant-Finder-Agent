@@ -312,3 +312,44 @@ def test_apply_delete_with_yes_deletes(tmp_path, capsys) -> None:
     capsys.readouterr()
     cli.main(["--db", db, "apply", "list"])
     assert "PAR-1" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), ("Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx", False)])
+def test_apply_fetch_and_requirements_say_when_the_text_has_no_section_iv(tmp_path, monkeypatch, capsys, text, said) -> None:
+    from nih_grant_matcher.clients import NihGuideClient
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    for action in ("fetch", "requirements"):
+        capsys.readouterr()
+        assert cli.main(["--db", db, "apply", action, "1"]) == 0
+        assert ("found no Section IV" in capsys.readouterr().out) == said
+
+
+def test_apply_check_prints_a_signed_section_with_a_new_error_as_a_draft(tmp_path, capsys) -> None:
+    from nih_grant_matcher.store import OpportunityStore
+    db, text = _apply_db(tmp_path), tmp_path / "aims.txt"
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    cli.main(["--db", db, "apply", "add", "1", "--kind", "reference", "--text", "Smith J. Heart cells. 2021.", "--label", "smith2021"])
+    text.write_text("As we showed [@smith2021].", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(text)])
+    assert cli.main(["--db", db, "apply", "sign", "1", "specific-aims", "--signer", "A. Applicant"]) == 0
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "check", "1"]) == 0 and "specific-aims  final" in capsys.readouterr().out
+    store = OpportunityStore(db)
+    try:
+        store.retire_fact(store.facts(1)[0].id)
+    finally:
+        store.close()
+    assert cli.main(["--db", db, "apply", "check", "1"]) == 1
+    out = capsys.readouterr().out
+    assert "specific-aims  draft" in out and "draft again" in out
+
+
+def test_apply_export_prints_the_absolute_folder(tmp_path, monkeypatch, capsys) -> None:
+    db = _apply_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "export", "1", "--out", "out"]) == 0
+    assert f"Wrote the application to {(tmp_path / 'out').resolve()}." in capsys.readouterr().out
