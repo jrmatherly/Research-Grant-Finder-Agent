@@ -515,6 +515,10 @@ Grant types and the announcement:
 - `NihGuideClient.doctext` asks for five hits and takes the one whose `docnum` matches. A malformed reply from either source is an `ApiError`, so `fetch_announcement` goes on to the other source.
 - A Grants.gov attachment with under 1,000 characters of text is not an announcement. The attachment for PA-25-253 is a page that only redirects to the NIH page, and it was saved as the announcement before this rule.
 - A limit sentence is matched on the section title, the verb and the number only. Its quote is the whole sentence, a title matches in any case, and two limits in one sentence both come back.
+- The Guide serves its text with HTML entities and no tags, so `fetch_announcement` unescapes it and turns a no-break space into a space before the text is hashed and saved. A Guide text of only white space is no text.
+- The Guide answered requests for open notices without their text for some minutes on 2026-11-23 and then with it. A quick retry did not help while it lasted, so the message says to try again later.
+- A fetch does not replace a saved NIH Guide copy with a Grants.gov one. It raises an `ApiError` that names the date of the kept copy.
+- The Guide returns no text for an expired notice under any `types` value (asked for PA-20-185 on 2026-11-23), so a closed notice with no Grants.gov id cannot be fetched.
 
 The store and the log:
 
@@ -523,6 +527,7 @@ The store and the log:
 - `add_revision` and `add_signoff` refuse a revision of another application or section. `add_revision(only_on_head=True)` writes only when the parent is the head, in one statement, and `Workspace.write` uses it for `StaleEdit`.
 - A write to a read-only database from an earlier version raises `store.ReadOnlyDatabase` (follow-up F2). A profile save raises `store.ReadOnlyProfile`, a `ProfileError`, and both say to open a copy that can be written to. `cli.main` prints one line for any `sqlite3.Error`.
 - `set_setting` refuses the key `deleting`. `share` and `attribution` raise `ValueError` for an origin or a parent they do not know.
+- `requirements.id` is `AUTOINCREMENT`, so a Confirm from a page drawn before a fetch cannot decide another requirement.
 - `facts()` returns retired facts too. `Workspace.view` shows and checks the live ones.
 
 The checks:
@@ -535,7 +540,9 @@ The workspace, the CLI and the view:
 
 - A section is `final` only when its head is signed and no error stands. A signed section that gains an error is a draft again, with a notice, and it exports with `DRAFT-`. A blank section and a blank signer are refused at sign-off.
 - `write` with unchanged text adds no revision. A confirmed limit applies only when its unit is the unit of the section's own limit, and the smaller of two wins.
-- A second application for an announcement that is already saved gets the requirements parsed from it at `start`. A decided requirement is kept across a new fetch while its quote is in the text.
+- A second application for an announcement that is already saved gets the requirements parsed from it at `start`. A fetch reads the requirements again for every application of that opportunity number. A decided requirement is kept across a new fetch while its quote is in the text.
+- `attribution` runs no diff through the leading run of applicant revisions. With word frequencies like those of prose, a 6,000-word section took 5.9 s for each `view()` after 30 saves, and it now takes about 0.01 s. The cost comes back after the first model revision in a chain, so Task 10 measures it again.
+- A refused Start stays in the Find view and shows its error under the button.
 - When the saved text has no Section IV, the view and the CLI say so (`ApplicationView.no_section_iv`).
 - The Details tab has a `This is a resubmission` checkbox beside `Start application`.
 - The Apply widgets have `apply_*` keys. The loop in `streamlit_app.py` that keeps them across a view switch runs only when the Apply view is not drawn. In an Apply run it would send each saved value over text that the applicant is typing. The tabs have a key and no `on_change`.
@@ -550,6 +557,7 @@ Carried into Stage 3:
 - Task 10 or 11 widens the author and year pattern to `Smith and Jones (2021)`, `(Smith, 2021)` and accented surnames. The check runs only on words a model wrote, so it cannot fire before then.
 - `Workspace` gets an error class of its own, in place of the `ValueError` that the CLI and the view catch.
 - `docs/docker.md` gets the `apply` commands after this stage merges, each run against the published image.
+- From the review of pull request 11, each with the model revisions in Task 10: `add_revision` checks that a `call_id` belongs to the same application and section; `restore` and the two-revision accept carry the head check that `write` has; `Requirement` refuses a `limit` kind with no limit and a limit with no positive amount.
 
 Not fixed, for the owner:
 
@@ -557,6 +565,11 @@ Not fixed, for the owner:
 - A narrative that has `Gen.`, `cf.`, `Univ.` or `approx.` before a capital letter counts one sentence too many, and the error has no override.
 - An export writes a folder on the machine that runs the dashboard, with no download.
 - A saved announcement stays after its last application is deleted.
+- A start that fails between two of its commits is not finished by the next start, so its references or requirements can be missing.
+- `apply start` prints nothing when the saved profile cannot be read, and the application then starts with no reference.
+- `--db` with a path that does not exist creates a database there, as the `profile` commands did before this stage.
+- A section can be signed off while the page says it still needs an input such as an aim.
+- The Guide's own text lacks some opening brackets and spaces (seen in PAR-25-357), and a quote shows them as served.
 
 ### Task 4: Grant types as data
 
