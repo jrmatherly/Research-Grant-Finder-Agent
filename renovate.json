@@ -71,6 +71,18 @@
       "automerge": false
     },
     {
+      "description": "PyInstaller and pywebview build the macOS app, which CI does not build. Their own PR, so that a local macos/build.sh run can check it.",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchDepNames": [
+        "pyinstaller",
+        "pywebview"
+      ],
+      "groupName": "macOS build tools",
+      "automerge": false
+    },
+    {
       "description": "The hadolint and Trivy images, in the same PR as the workflow actions",
       "matchManagers": [
         "custom.regex"
