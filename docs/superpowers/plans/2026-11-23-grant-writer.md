@@ -16,7 +16,7 @@
 
 ## Owner decisions
 
-All sixteen decisions are settled (2026-11-23). Rows 13 to 16 came out of Stage 1, and the owner took the recommendation in each. Their evidence and the options not taken are under "Stage 1 follow-ups", where they are D13 to D16. The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
+All seventeen decisions are settled (2026-11-23). Row 17 came out of research after Stage 2. Rows 13 to 16 came out of Stage 1, and the owner took the recommendation in each. Their evidence and the options not taken are under "Stage 1 follow-ups", where they are D13 to D16. The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
 
 | # | Decision | In this plan | The alternative |
 | --- | --- | --- | --- |
@@ -34,8 +34,9 @@ All sixteen decisions are settled (2026-11-23). Rows 13 to 16 came out of Stage 
 | 12 | `ReviewFeedbackAgent` | Left as it is. The README lists it in the agent table and calls it "the foundation for a future adaptive recommendation system". | Delete it, or wire it to the dashboard, which is a feature of its own. |
 | 13 | How the wizard proposes terms | It drops a fixed, narrow list of about 40 action words ("test", "define", "whether", "how"), and a word the rarity table lacks gets a weight of 10, not 18. No RePORTER vocabulary. Built in Task 9. | A RePORTER phrase table, or a button that reads the applicant's own funded projects. See D13. |
 | 14 | A built-in user and the wizard | Step 1 asks "Rank with my own research" or "Keep the built-in ranking". The second keeps the built-in terms, sentences and labels, and lets the user add a name, expertise and prior work. Built in Task 9. | Split `Profile` in two, or leave it. See D14. |
-| 15 | NIH institutes in the profile | The profile carries the applicant's institutes, a record from one of them gets a fixed bonus, and the reasons say so. The built-in profile names none. The owner sets the size of the bonus when Task 9 is built, and the measurement used 12. Built in Task 9. | No institute signal. See D15. |
+| 15 | NIH institutes in the profile | The profile carries the applicant's institutes, a record from one of them gets a fixed bonus, and the reasons say so. The built-in profile names none. The bonus is 8 (decided 2026-11-23, see row 17 and the research notes). Built in Task 9. | No institute signal. See D15. |
 | 16 | Scoring the full announcement | Not now. Decided again after Task 5 lands the fetch, as a change of its own: a saved profile only, with the levels set again by a measurement. | Do it in Stage 2, or never. See D16. |
+| 17 | Which copy of the announcement is kept | Decided on 2026-11-23, after Stage 2 merged. A real Grants.gov attachment wins over the NIH Guide text, the newest attachment is taken, and a fetch replaces the saved copy in either direction. A decided requirement is kept while its sentence is in the new text, compared on letters and digits, and the message names each decision that was dropped. Built on `fix/announcement-refetch`. The size of the institute bonus of decision 15 is 8, decided the same day. | Keep a saved NIH Guide copy and refuse a Grants.gov one, as pull request 11 left it. NOT-OD-25-143 makes Grants.gov the single official source from fiscal 2026, and PAR-26-121 has a revision there that the Guide does not serve. Or refuse a replacement that drops a decision, which leaves the applicant on the stale text with no way forward. |
 
 ## Global Constraints
 
@@ -517,7 +518,7 @@ Grant types and the announcement:
 - A limit sentence is matched on the section title, the verb and the number only. Its quote is the whole sentence, a title matches in any case, and two limits in one sentence both come back.
 - The Guide serves its text with HTML entities and no tags, so `fetch_announcement` unescapes it and turns a no-break space into a space before the text is hashed and saved. A Guide text of only white space is no text.
 - The Guide answered requests for open notices without their text for some minutes on 2026-11-23 and then with it. A quick retry did not help while it lasted, so the message says to try again later.
-- A fetch does not replace a saved NIH Guide copy with a Grants.gov one. It raises an `ApiError` that names the date of the kept copy.
+- Superseded by decision 17: a fetch did not replace a saved NIH Guide copy with a Grants.gov one. Since `fix/announcement-refetch` a real Grants.gov attachment wins, and a fetch replaces the saved copy and reports the decisions it dropped.
 - The Guide returns no text for an expired notice under any `types` value (asked for PA-20-185 on 2026-11-23), so a closed notice with no Grants.gov id cannot be fetched.
 
 The store and the log:
