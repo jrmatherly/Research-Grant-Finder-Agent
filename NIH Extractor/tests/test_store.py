@@ -1,4 +1,6 @@
+import os
 from datetime import date
+import pytest
 from nih_grant_matcher.models import Opportunity
 from nih_grant_matcher.scoring import MLRelevanceScorer
 from nih_grant_matcher.store import OpportunityStore
@@ -64,18 +66,20 @@ def test_a_read_scores_saved_rows_again(tmp_path) -> None:
     from dataclasses import replace
     from nih_grant_matcher.workflow import load_saved
     # No deadline, so the score does not depend on the day the test runs.
-    opportunity = Opportunity(source_id="nih-guide:1", opportunity_number="RFA-ABC", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="Machine learning and predictive models for health data.", raw={"docnum": "RFA-ABC"})
-    fresh = MLRelevanceScorer().score(opportunity)
+    # More rows than the store reads by default, so that none is left out.
+    opportunities = [Opportunity(source_id=f"nih-guide:{n}", opportunity_number=f"RFA-{n}", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="Machine learning and predictive models for health data.", raw={"docnum": f"RFA-{n}"}) for n in range(51)]
+    fresh = MLRelevanceScorer().score(opportunities[0])
     store = OpportunityStore(tmp_path / "grants.sqlite3")
     try:
-        store.upsert_scored(replace(fresh, score=1.0, classification="Watchlist"))
+        store.upsert_many(replace(MLRelevanceScorer().score(opportunity), score=1.0, classification="Watchlist") for opportunity in opportunities)
     finally:
         store.close()
-    [loaded] = load_saved(str(tmp_path / "grants.sqlite3"))
-    assert (loaded.score, loaded.classification) == (fresh.score, fresh.classification) != (1.0, "Watchlist")
-    assert loaded.opportunity.raw == {"docnum": "RFA-ABC"}
+    loaded = load_saved(str(tmp_path / "grants.sqlite3"))
+    assert len(loaded) == 51
+    assert {(item.score, item.classification) for item in loaded} == {(fresh.score, fresh.classification)} != {(1.0, "Watchlist")}
+    assert all(item.opportunity.raw == {"docnum": item.opportunity.opportunity_number} for item in loaded)
 
-def test_a_read_only_database_still_reads(tmp_path, capsys) -> None:
+def test_a_read_only_database_still_reads(tmp_path) -> None:
     from dataclasses import replace
     from nih_grant_matcher.workflow import load_saved
     path = tmp_path / "grants.sqlite3"
@@ -85,6 +89,8 @@ def test_a_read_only_database_still_reads(tmp_path, capsys) -> None:
     finally:
         store.close()
     path.chmod(0o444)
-    [loaded] = load_saved(str(path))
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    with pytest.warns(RuntimeWarning, match="Could not update the saved scores"):
+        [loaded] = load_saved(str(path))
     assert loaded.score == 1.0
-    assert "Could not update the saved scores" in capsys.readouterr().err

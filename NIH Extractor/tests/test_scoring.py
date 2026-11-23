@@ -102,3 +102,9 @@ def test_rarity_table_is_present_and_plausible() -> None:
 
 def test_medium_starts_at_35_and_high_at_70() -> None:
     assert [MLRelevanceScorer._classification(score) for score in (34.9, 35, 69.9, 70)] == ["Watchlist", "Medium", "Medium", "High"]
+
+def test_the_level_follows_the_score_that_is_shown(monkeypatch) -> None:
+    # The parts add up to 69.96, which is shown as 70.0, so the level is High. The closed deadline takes 20 away.
+    monkeypatch.setattr(MLRelevanceScorer, "_completeness_score", staticmethod(lambda opportunity: 89.96))
+    scored = MLRelevanceScorer().score(Opportunity(source_id="1", opportunity_number="X", title="Notice", agency_code="", agency_name="", status="posted", close_date=date(2026, 1, 1)), today=date(2026, 7, 6))
+    assert (scored.score, scored.classification) == (70.0, "High")

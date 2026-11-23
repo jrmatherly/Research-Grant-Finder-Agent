@@ -14,7 +14,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41
 # Below the dependency layer, so that a weekly update does not download the dependencies again.
 ARG APT_REFRESH=""
 # The app runs from .venv, which has no pip. The base image's pip carries its own urllib3, msgpack and setuptools, and scanners report them.
-RUN echo "packages refreshed: ${APT_REFRESH}" && apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+RUN echo "packages refreshed: ${APT_REFRESH}" && apt-get -o APT::Update::Error-Mode=any update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
     && /usr/local/bin/python -m pip uninstall --yes --root-user-action=ignore pip
 
 COPY nih_grant_matcher ./nih_grant_matcher

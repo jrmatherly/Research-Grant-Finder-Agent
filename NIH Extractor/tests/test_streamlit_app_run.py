@@ -27,3 +27,21 @@ def test_dashboard_renders_saved_open_results(tmp_path, monkeypatch) -> None:
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert not app.exception
     assert app.metric[0].value == "1"
+
+
+def test_dashboard_says_when_it_shows_scores_as_last_saved(tmp_path, monkeypatch) -> None:
+    import os
+    path = tmp_path / "data" / "grants.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.upsert_scored(MLRelevanceScorer().score(Opportunity(source_id="nih-guide:1", opportunity_number="RFA-TEST-1", title="Machine learning for health", agency_code="NLM", agency_name="NIH NLM", status="active")))
+    finally:
+        store.close()
+    path.chmod(0o444)
+    if getattr(os, "geteuid", lambda: 1)() == 0:
+        pytest.skip("root writes to a read-only file")
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert not app.exception
+    assert app.metric[0].value == "1"
+    assert any("shown as last saved" in warning.value for warning in app.warning)

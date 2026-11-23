@@ -221,7 +221,7 @@ Each opportunity receives a relevance score from **0–100**.
 | 🟠 **MEDIUM**      | Potential opportunity for interdisciplinary data-science collaboration                                |
 | 🟡 **WATCHLIST**   | Weak or emerging computational signals; retained for monitoring                                       |
 
-A score of 70 or more is High, 35 to 69 is Medium, and below 35 is Watchlist. Saved opportunities are scored again each time they are read, so the dashboard, the digest, and the Excel file always use the current rules and today's date.
+A score of 70 or more is High, 35 to 69 is Medium, and below 35 is Watchlist. Saved opportunities are scored again each time they are read, so the dashboard, the digest, and the Excel file use the current rules and today's date. A database that cannot be written to is shown with the scores it holds, with a warning.
 
 The score is designed to **prioritize expert review—not replace scientific judgment**.
 

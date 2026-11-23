@@ -48,6 +48,28 @@ def test_digest_and_excel_commands_read_saved_results(sources, tmp_path, capsys)
     assert "Wrote Excel file" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("command", ["run", "digest", "excel"])
+def test_each_command_scores_saved_rows_again(sources, tmp_path, command: str) -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.models import Opportunity
+    from nih_grant_matcher.scoring import MLRelevanceScorer
+    from nih_grant_matcher.store import OpportunityStore
+    # A saved row that the sources do not return, with no deadline, holding a score that no rule gives it.
+    fresh = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:77", opportunity_number="RFA-STALE", title="Machine learning for health", agency_code="NIH", agency_name="National Institutes of Health", status="active"))
+    db = tmp_path / "g.sqlite3"
+    store = OpportunityStore(db)
+    try:
+        store.upsert_scored(replace(fresh, score=1.0))
+    finally:
+        store.close()
+    assert cli.main(["--db", str(db), command, "--out", str(tmp_path / ("out.xlsx" if command == "excel" else "out.md"))]) == 0
+    store = OpportunityStore(db)
+    try:
+        assert {item.opportunity.source_id: item.score for item in store.top_scored(limit=-1)}["nih-guide:77"] == fresh.score != 1.0
+    finally:
+        store.close()
+
+
 def test_run_and_save_reports_fetched_and_saved_counts(sources, tmp_path) -> None:
     items, summary = workflow.run_and_save(workflow.MatcherConfig(db_path=str(tmp_path / "g.sqlite3")), source="grants.gov")
     assert (summary.fetched, summary.saved, summary.source) == (2, 2, "grants.gov")
