@@ -5,7 +5,12 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metada
 
 root = os.path.dirname(SPECPATH)
 sys.path.insert(0, root)
-version = tomllib.load(open(os.path.join(root, "pyproject.toml"), "rb"))["project"]["version"]
+# macos/rehearse-update.sh sets the three variables to build throwaway versions under another bundle ID and key.
+version = os.environ.get("GRANT_MATCHER_VERSION") or tomllib.load(open(os.path.join(root, "pyproject.toml"), "rb"))["project"]["version"]
+key_file = os.path.join(SPECPATH, "sparkle-public-key.txt")
+public_key = os.environ.get("SPARKLE_PUBLIC_KEY") or (open(key_file).read().strip() if os.path.isfile(key_file) else "")
+if not public_key:
+    raise SystemExit(f"{key_file} is missing and SPARKLE_PUBLIC_KEY is not set. An app without the update key can never be updated.")
 st_datas, st_binaries, st_hidden = collect_all("streamlit")
 
 
@@ -54,7 +59,8 @@ app = BUNDLE(
     name="Grant Matcher.app",
     # Rendered from icon.svg. PyInstaller turns the PNG into an .icns file with Pillow, which Streamlit installs.
     icon=os.path.join(SPECPATH, "icon.png"),
-    bundle_identifier="net.matherly.grant-matcher",
+    bundle_identifier=os.environ.get("GRANT_MATCHER_BUNDLE_ID") or "net.matherly.grant-matcher",
     version=version,
-    info_plist={"CFBundleShortVersionString": version, "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True},
+    # Sparkle reads SUVerifyUpdateBeforeExtraction from the installed app, so a later release cannot add it for the users of this one.
+    info_plist={"CFBundleShortVersionString": version, "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True, "CFBundleVersion": version, "SUFeedURL": "https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases/latest/download/appcast.xml", "SUPublicEDKey": public_key, "SUEnableAutomaticChecks": True, "SUVerifyUpdateBeforeExtraction": True},
 )
