@@ -91,6 +91,16 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `profile export --out data/profile.json` | Writes that profile to a file. Give a path under `data/`, so that the file lands in the mounted folder. A path outside the mounted folders fails with "Permission denied". |
 | `profile import data/profile.json` | Saves the profile in the file, or refuses a file that is not a valid profile. |
 | `profile reset` | Deletes the saved profile, so ranking uses the built-in one. |
+| `apply start PAR-27-074 --type R03` | Starts an application for a saved opportunity and prints its number. Add `--resubmission` for a resubmission. |
+| `apply list` | Lists the applications. |
+| `apply fetch 1` | Fetches the full announcement of application 1. |
+| `apply requirements 1` | Prints the standing rules and what the announcement adds. |
+| `apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file data/aim.txt` reads the text from a UTF-8 file. |
+| `apply write 1 project-narrative --file data/narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. Put the file under `data/`, so that the container can read it. A file outside the mounted folders fails with "No such file or directory". |
+| `apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
+| `apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
+| `apply export 1 --out outputs/application-1` | Writes the section files, the requirements, and the provenance log to the folder. Give a path under `outputs/`, so that the files land in the mounted folder. A path outside the mounted folders fails with "Permission denied". |
+| `apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
 Add `--help` to a command to see its options. Do not run `rarity-table` in the container. It rewrites a file inside the image, and the container's user cannot write there.
 
