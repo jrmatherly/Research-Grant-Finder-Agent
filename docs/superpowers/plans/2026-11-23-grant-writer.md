@@ -6,7 +6,7 @@
 
 **Architecture:** One applicant profile ranks opportunities and feeds the writer, and a user who sets no profile gets today's scores. An application belongs to an opportunity. Its section text lives in an append-only `revisions` table in the same SQLite file, and every row names its author as `applicant` or `model`. A model never changes a section. A model produces a logged proposal, and the proposal becomes section text when the applicant accepts it. The current text, the attribution, the sign-off state, and the AI-use statement are all read from that one table. The rules for a grant type are data. Checks are pure functions. One class, `Workspace`, is the only writer surface that the dashboard and the CLI call.
 
-**Tech Stack:** Python 3.11 to 3.15, standard library only in the package (`urllib`, `sqlite3`, `difflib`, `html.parser`, `re`), Streamlit 1.50 and pandas for the dashboard, pytest, uv. Model calls are plain HTTPS to the Anthropic Messages API, the OpenAI Chat Completions API (which self-hosted servers also implement), and the Gemini Interactions API. Each call is sent once, by a request function of its own in `llm.py`.
+**Tech Stack:** Python 3.11 to 3.15, standard library only in the package (`urllib`, `sqlite3`, `difflib`, `html.parser`, `re`), Streamlit 1.50 and pandas for the dashboard, pytest, uv. Model calls are plain HTTPS to the Anthropic Messages API, the OpenAI Chat Completions API (which self-hosted servers also implement), and the Gemini Interactions API. Each call goes through a request function of its own in `llm.py`.
 
 **Spec:** Appendix A of this file. It holds the research findings, the design that three independent candidates converged on, and the owner's decisions. The detail behind the findings, with a label on each for who read it, is in `docs/superpowers/specs/2026-11-23-grant-writer-research.md`.
 
@@ -16,7 +16,7 @@
 
 ## Owner decisions
 
-Decisions 1 to 6 are settled (2026-11-23). Decisions 7 to 12 are defaults that this plan applies. Change one here before execution starts, and the tasks that name it follow.
+All twelve decisions are settled (2026-11-23). The owner made 1 to 6 before the plan was written. He made 7 to 12 after a second round of research, whose evidence is in the research notes under "Research for decisions 7 to 12". The last column of rows 7 to 12 keeps the option that was not taken, and why.
 
 | # | Decision | In this plan | The alternative |
 | --- | --- | --- | --- |
@@ -26,12 +26,12 @@ Decisions 1 to 6 are settled (2026-11-23). Decisions 7 to 12 are defaults that t
 | 4 | Provenance log | Kept always. | Settled. |
 | 5 | AI-use statement | Drafted from the log. Showing it is a toggle. | Settled. |
 | 6 | Prose rules | The unslop rules are embedded as a check on every section. | Settled. |
-| 7 | First scope | NIH only. R01, R21, R03. Specific Aims, Research Strategy, Project Summary/Abstract, Project Narrative, and the Introduction for a resubmission. | A wider first scope. Career (K) and fellowship (F) awards are Stage 6 and need their own research (Appendix B). |
-| 8 | How the package calls a model | Plain HTTPS with the standard library. No new dependency. | The vendors' Python packages. They add 15 (`anthropic`), 13 (`openai`) and 25 (`google-genai`) transitive packages, some compiled. The macOS build's licence check and the Docker scan must then cover them. Anthropic's guidance prefers its package for a Python project. |
-| 9 | Where an API key is stored | An environment variable, or `data/llm-keys.json` with mode 0600. Never the database, never a profile export. | The macOS Keychain through `/usr/bin/security`. Passing `-w <secret>` puts the key in the process arguments, and the behaviour from the notarized app is untested. |
-| 10 | The toggle's starting position | The AI-use statement is shown (on). | Hidden (off) until the applicant turns it on. |
-| 11 | A line for "mostly model text" | A warning when more than half of a section's words came from accepted model text. The message says the line is this tool's, since NIH defines none. | Show the share and no warning. |
-| 12 | `ReviewFeedbackAgent` | Left as it is. Nothing calls it, and this plan does not need it. | Delete it, or wire it to the dashboard. |
+| 7 | First scope | NIH only. Eight activity codes: R01, R21, R03, R15, R16, R34, RF1 and U01. Specific Aims, Research Strategy, Project Summary/Abstract, Project Narrative, and the Introduction for a resubmission. | Three codes only (R01, R21, R03), which cover 110 of the owner's 369 saved records against 153 for the eight. Phased awards (R61/R33, UG3/UH3) and U24 would reach 211, and they are Stage 6 because their announcements set their own structure. Career (K) and fellowship (F) awards are Stage 6 too (Appendix B). |
+| 8 | How the package calls a model | Plain HTTPS with the standard library, in each vendor's native format. No new dependency. | The vendors' Python packages: 22 new packages, 4 of them compiled, 68 MB. They froze with PyInstaller with no extra hook in a trial, so they are a sound fallback. Not taken: one OpenAI-style format for every provider (Anthropic calls its compatibility layer "not considered a long-term or production-ready solution", and a refusal is invisible through it), and LiteLLM (42 packages, 223 MB, and the frozen app crashed at start). |
+| 9 | Where an API key is stored | On macOS, the login Keychain, through `/usr/bin/security` with the value on standard input. This is how the owner's `claude-multipass` project and Claude Code store their secrets. Elsewhere, a file with mode 0600 beside the database. An environment variable, or a `<NAME>_FILE` variable that names a mounted secret, wins over both. Never the database, never a profile export. | A file on macOS too, as the AWS CLI and `llm` do. Any app that runs as the user can read such a file, and it travels with a copy or a backup of the data folder. Not taken: the Security framework through pyobjc (the module is not in the built app and has no licence file, and an item bound to the app's signature prompts after some updates), and the `keyring` package (five new packages, and no backend in a container). |
+| 10 | The toggle's starting position | The AI-use statement is shown (on). NIH's reminder of 2026-05-14 asks applicants to "clearly describe" their AI use. | Hidden (off) until the applicant turns it on. NIH names no field for a statement and gives no assurance that a disclosure stays out of review, as Wellcome and UKRI do. |
+| 11 | A line for model text | The tool counts words that a model drafted or revised apart from words that a model polished. It warns when more than half of a section's words were drafted or revised by a model, and it shows the polished share without a warning. Every message says the line is this tool's, since NIH defines none. | One share for all model words, which treats a language polish like a draft. Funders and journals separate the two. Or no warning. |
+| 12 | `ReviewFeedbackAgent` | Left as it is. The README lists it in the agent table and calls it "the foundation for a future adaptive recommendation system". | Delete it, or wire it to the dashboard, which is a feature of its own. |
 
 ## Global Constraints
 
@@ -45,7 +45,7 @@ Decisions 1 to 6 are settled (2026-11-23). Decisions 7 to 12 are defaults that t
 - The keyword weights, the example sentences and the level thresholds are product behaviour (`.claude/rules/scoring.md`). No task changes a score for a user with no saved profile. `tests/test_golden_scores.py` from Task 1 is the proof, and it stays green in every later task.
 - `ScoreBreakdown` does not change.
 - `tests/test_streamlit_app_static.py` asserts literal strings in `streamlit_app.py`. Run it after every edit to that file. Keep `st.session_state["scored_items"]` and the four score bin labels.
-- A request to a model is sent once and is never retried. `clients._read` retries three times and reduces an HTTP error to one line of text, which suits a free public API and does not suit a paid call. So `llm.py` does not use it.
+- A request to a model is never sent again once it may have reached the model. `llm.py` retries once, and only when the provider says it did not process the request: a 429 that is not a quota error, a 503, or a 529. It never retries after a timeout or a dropped connection. `clients._read` retries three times on any failure and reduces an HTTP error to one line of text, which suits a free public API and does not suit a paid call. So `llm.py` does not use it.
 - `OpportunityStore.__init__` runs `PRAGMA foreign_keys = ON` from Task 6 on, and it opens a read-only database that an earlier version wrote. A table that such a database lacks reads as empty.
 - An applicant can delete an application with everything logged for it. Nothing else removes a revision, a model call, or a sign-off.
 - A model reply is data. It becomes a `Proposal`, a list of `Requirement` rows, or a `Review`. No reply triggers an action, and no reply is written to a section without `Workspace.accept`.
@@ -53,7 +53,8 @@ Decisions 1 to 6 are settled (2026-11-23). Decisions 7 to 12 are defaults that t
 - A draft is built from what the applicant entered. A fact the applicant did not enter becomes `[NEEDS INPUT: <question>]`. A citation is `[@key]` for a reference the applicant listed, and nothing else.
 - The package holds no model identifier except the Claude default `claude-opus-5-5`. Every other model name comes from the provider's own list at run time.
 - No request to a model sends `temperature`, `top_p` or `top_k`. The Anthropic API version `2026-10-21` rejects them.
-- An API key never appears in a URL, a log line, an error message, the database, or an export.
+- An API key never appears in a URL, a log line, an error message, the database, an export, or the arguments of a process. On macOS it reaches `/usr/bin/security` on standard input.
+- The Keychain is read at most once per process for each provider, and the value is kept in memory. Streamlit runs the script again on every click, and a burst of `security` processes has crashed `securityd` for another tool (recorded in `claude-multipass`).
 - No task changes `version` in `pyproject.toml` or `__version__`. A release is the owner's step, after a stage merges. A sign-off records `__version__`, which nothing read before this plan.
 - Shared test helpers live in `NIH Extractor/tests/helpers.py` and are imported as `from helpers import ...`. Pytest puts the tests directory on the import path.
 - This repository is a fork. Push and open pull requests against `jrmatherly/Research-Grant-Finder-Agent` only. Each push, merge and tag needs the owner's word.
@@ -67,7 +68,7 @@ These five conditions are the ones most likely to hurt a user and that the tasks
 2. **A model reply is cut off, refused, or malformed.** A draft that stops at the token limit reads as a complete section. `Workspace.propose` must refuse to offer it. Pinned in Task 10 (`test_a_truncated_reply_is_not_offered`, `test_a_refusal_is_reported_and_logged`) and Task 11 (`test_a_requirement_whose_quote_is_not_in_the_announcement_is_dropped`).
 3. **The full announcement cannot be fetched, or it has no "Section IV" heading.** The Guide's `doctext` field is undocumented, and NIH stopped posting announcements in the Guide in fiscal 2026. The workspace must still open with the standing rules and say what is missing. Pinned in Task 5 (`test_fetch_falls_back_to_the_grants_gov_attachment`, `test_an_announcement_without_section_headings_yields_no_requirements`).
 4. **Two browser tabs edit the same section.** The second save must not silently replace the first. Pinned in Task 8 (`test_a_save_from_a_stale_revision_is_refused_and_keeps_both`).
-5. **An API key leaks.** Pinned in Task 9 (`test_an_http_error_never_contains_the_key`, `test_the_key_file_is_mode_0600`) and Task 2 (`test_an_export_round_trips_and_has_only_profile_fields`).
+5. **An API key leaks.** Pinned in Task 9 (`test_an_http_error_never_contains_the_key`, `test_on_a_mac_the_key_goes_to_the_keychain_on_standard_input`, `test_off_a_mac_the_key_file_is_mode_0600`) and Task 2 (`test_an_export_round_trips_and_has_only_profile_fields`).
 
 ---
 
@@ -474,7 +475,7 @@ Branch `feat/application-workspace`, cut from `main` after Stage 1 merges. When 
   - `Source(url: str, read_on: str, says: str)`
   - `GrantType(funder: str, code: str, title: str, sections: tuple[SectionRule, ...], factors: tuple[ReviewFactor, ...], page: PageFormat, sources: tuple[Source, ...])`
   - `FACT_KINDS = ("aim", "hypothesis", "preliminary", "method", "significance", "innovation", "team", "reference", "other")`
-  - `GRANT_TYPES: dict[str, GrantType]` with the keys `"NIH:R01"`, `"NIH:R21"`, `"NIH:R03"`.
+  - `GRANT_TYPES: dict[str, GrantType]` with the keys `"NIH:R01"`, `"NIH:R21"`, `"NIH:R03"`, `"NIH:R15"`, `"NIH:R16"`, `"NIH:R34"`, `"NIH:RF1"` and `"NIH:U01"`.
   - `grant_types_for(opportunity: Opportunity) -> tuple[GrantType, ...]`. Empty when no entry covers the opportunity. More than one when the announcement lists several covered codes.
 
 The values, each read from grants.nih.gov on 2026-11-23:
@@ -483,7 +484,7 @@ The values, each read from grants.nih.gov on 2026-11-23:
 | --- | --- | --- | --- |
 | `introduction` | Introduction to Application | 1 page | `resubmission_only=True`, `model="edit"`, needs nothing |
 | `specific-aims` | Specific Aims | 1 page | `figures=False`, needs `aim`, `hypothesis`, uses `preliminary`, `reference` |
-| `research-strategy` | Research Strategy | 12 pages for R01, 6 for R21 and R03 | `parts=("Significance", "Innovation", "Approach")`, needs `aim`, `significance`, `innovation`, `method`, uses `preliminary`, `team`, `reference` |
+| `research-strategy` | Research Strategy | 12 pages for R01, R15, R34, RF1 and U01. 6 pages for R21, R03 and R16 | `parts=("Significance", "Innovation", "Approach")`, needs `aim`, `significance`, `innovation`, `method`, uses `preliminary`, `team`, `reference` |
 | `project-summary` | Project Summary/Abstract | 30 lines | `figures=False`, `first_person=False`, needs `aim`, `method` |
 | `project-narrative` | Project Narrative | 3 sentences | `figures=False`, needs `significance` |
 
@@ -491,7 +492,9 @@ The Introduction answers a summary statement that the tool does not hold, so a m
 
 `PageFormat(chars_per_line=112, lines_per_page=60)` is NIH's densest legal page: 15 characters per inch over 7.5 inches, and 6 lines per inch over 10 inches. An estimate at that density is the most a page can hold, so a section under the estimate can still be over the limit in the applicant's own font.
 
-The three factors for all three codes (NOT-OD-24-010): `importance` "Importance of the Research" covers Significance and Innovation, scale `1-9`. `rigor` "Rigor and Feasibility" covers Approach, scale `1-9`. `expertise` "Expertise and Resources" covers Investigators and Environment, scale `appropriate`.
+The eight codes have the same sections and differ only in the Research Strategy limit. The page-limits table (read on 2026-11-23, page dated 2026-09-30) lists R01, R15, R34, RF1 and U01 in its 12-page row and R03, R16 and R21 in its 6-page row. NOT-OD-24-010 names all eight under the three-factor review. In the 211 saved announcements of these and the phased codes, 6 stated a Research Strategy limit of their own, so the table's value is the right default and Task 5 reads the exceptions.
+
+The three factors for all eight codes (NOT-OD-24-010): `importance` "Importance of the Research" covers Significance and Innovation, scale `1-9`. `rigor` "Rigor and Feasibility" covers Approach, scale `1-9`. `expertise` "Expertise and Resources" covers Investigators and Environment, scale `appropriate`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -502,9 +505,10 @@ from nih_grant_matcher.rules import FACT_KINDS, GRANT_TYPES, Limit, grant_types_
 def _opp(*codes: str) -> Opportunity:
     return Opportunity(source_id="nih-guide:1", opportunity_number="PAR-1", title="t", agency_code="NCI", agency_name="NIH NCI", status="active", funding_instruments=codes)
 
-def test_research_strategy_is_twelve_pages_for_r01_and_six_for_r21_and_r03() -> None:
-    limit = lambda key: next(s.limit for s in GRANT_TYPES[key].sections if s.key == "research-strategy")
-    assert (limit("NIH:R01"), limit("NIH:R21"), limit("NIH:R03")) == (Limit(12, "pages"), Limit(6, "pages"), Limit(6, "pages"))
+def test_research_strategy_follows_the_page_limit_table() -> None:
+    limit = lambda code: next(s.limit for s in GRANT_TYPES[f"NIH:{code}"].sections if s.key == "research-strategy")
+    assert {code: limit(code).amount for code in ("R01", "R15", "R34", "RF1", "U01", "R21", "R03", "R16")} == {"R01": 12, "R15": 12, "R34": 12, "RF1": 12, "U01": 12, "R21": 6, "R03": 6, "R16": 6}
+    assert set(GRANT_TYPES) == {f"NIH:{code}" for code in ("R01", "R15", "R34", "RF1", "U01", "R21", "R03", "R16")}
 
 def test_every_entry_names_its_sources_and_only_known_fact_kinds() -> None:
     for grant_type in GRANT_TYPES.values():
@@ -515,19 +519,24 @@ def test_every_entry_names_its_sources_and_only_known_fact_kinds() -> None:
 
 def test_an_opportunity_maps_to_the_covered_codes_it_lists() -> None:
     assert [g.code for g in grant_types_for(_opp("R21", "R01"))] == ["R21", "R01"]
-    assert grant_types_for(_opp("U01")) == () and grant_types_for(_opp()) == ()
+    assert [g.code for g in grant_types_for(_opp("U01"))] == ["U01"]
+    assert grant_types_for(_opp("R61", "R33")) == () and grant_types_for(_opp("UM1")) == () and grant_types_for(_opp()) == ()
 ```
 
-- [ ] **Step 2: Run to see them fail, write `rules.py`, run to see them pass**
+- [ ] **Step 2: Read one U01 announcement before the U01 entry is trusted**
+
+Nobody has read a U01 announcement for sections that a cooperative agreement adds. Fetch the full text of one saved U01 record (Task 5's Step 1 shows the request) and read its Section IV. Expected: the applicant writes the standard research plan, and the cooperative-agreement terms sit in Section VI as award terms, as one UG3/UH3 announcement showed. If Section IV asks for a section that `rules.py` has no entry for, leave U01 out of `GRANT_TYPES`, correct this task's tests, and note the finding in Appendix B.
+
+- [ ] **Step 3: Run to see them fail, write `rules.py`, run to see them pass**
 
 Run: `uv run --locked pytest -q tests/test_rules.py`
-Expected after the code: `3 passed`. R21 and R03 are `dataclasses.replace` of the R01 entry with their own limit, title and code, so a sibling code is one line.
+Expected after the code: `3 passed`. Each of the other seven codes is a `dataclasses.replace` of the R01 entry with its own code, title and limit, so a sibling code is one line.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add "NIH Extractor/nih_grant_matcher/rules.py" "NIH Extractor/tests/test_rules.py"
-git commit -m "feat: hold the rules of R01, R21 and R03 as data"
+git commit -m "feat: hold the rules of eight NIH grant types as data"
 ```
 
 ### Task 5: Fetch the full announcement and read its requirements
@@ -694,11 +703,11 @@ git commit -m "feat: fetch the full announcement and read its requirements"
   - `ModelCall(id: int, section: str, purpose: str, provider: str, model: str, system: str, prompt: str, response: str, input_tokens: int, output_tokens: int, created_at: datetime)`
   - `Revision(id: int, section: str, parent_id: int | None, author: Literal["applicant", "model"], action: Literal["write", "polish", "revise", "draft"], text: str, call_id: int | None, created_at: datetime)`
   - `Signoff(section: str, revision_id: int, signer: str, attestation: str, findings: tuple[str, ...], tool_version: str, signed_at: datetime)`
-  - `Attribution(applicant_words: int, model_words: int)` with the property `model_share -> float`.
+  - `Attribution(applicant_words: int, written_words: int, polished_words: int)`. `written_words` counts words from a model's draft or revision, and `polished_words` counts words from a model's polish. The properties `model_words` (their sum), `written_share` and `polished_share` are fractions of all words.
 - Produces, in `store.py`: the tables below, and on `OpportunityStore` one read method and one append method per table: `applications()`, `application(id)`, `add_application(...)`, `announcement(number)`, `save_announcement(a)`, `facts(app_id)`, `add_fact(...)`, `retire_fact(id)`, `requirements(app_id)`, `replace_requirements(app_id, origin, items, call_id=None)`, `decide_requirement(id, confirmed)`, `calls(app_id)`, `add_call(...)`, `revisions(app_id)`, `add_revision(...)`, `signoffs(app_id)`, `add_signoff(...)`, `setting(key)`, `set_setting(key, value)`, `set_disclosure(app_id, on)`, `delete_application(app_id)`. `add_application` returns the existing row when one has the same opportunity number, grant type and resubmission flag.
 - Produces, in `provenance.py` (pure):
   - `head(revisions: Sequence[Revision], section: str) -> Revision | None`
-  - `attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[str, str], ...]`. One `(word, author)` pair for each word of the revision.
+  - `attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[str, str], ...]`. One `(word, origin)` pair for each word of the revision. The origin is `"applicant"`, or the action of the model revision that brought the word in: `"draft"`, `"revise"` or `"polish"`.
   - `share(words: Sequence[tuple[str, str]]) -> Attribution`
   - `section_state(revisions, signoffs, section) -> Literal["empty", "draft", "final"]`
 
@@ -803,8 +812,14 @@ def _rev(id, parent, author, text, call=None) -> Revision:
 LOG = (_rev(1, None, "applicant", "We study heart cells."), _rev(2, 1, "model", "We study cardiac muscle cells.", call=7), _rev(3, 2, "applicant", "We study cardiac muscle cells in mice."))
 
 def test_each_word_keeps_the_author_who_first_wrote_it() -> None:
-    assert attribution(LOG, 3) == (("We", "applicant"), ("study", "applicant"), ("cardiac", "model"), ("muscle", "model"), ("cells", "applicant"), ("in", "applicant"), ("mice.", "applicant"))
-    assert share(attribution(LOG, 3)).model_words == 2 and round(share(attribution(LOG, 3)).model_share, 2) == 0.29
+    assert attribution(LOG, 3) == (("We", "applicant"), ("study", "applicant"), ("cardiac", "polish"), ("muscle", "polish"), ("cells", "applicant"), ("in", "applicant"), ("mice.", "applicant"))
+    counted = share(attribution(LOG, 3))
+    assert (counted.polished_words, counted.written_words, counted.model_words) == (2, 0, 2) and round(counted.polished_share, 2) == 0.29
+
+def test_drafted_words_are_counted_apart_from_polished_words() -> None:
+    log = (Revision(1, "specific-aims", None, "model", "draft", "Aim one tests the drug.", 5, NOW), Revision(2, "specific-aims", 1, "applicant", "write", "Aim one tests our drug.", None, NOW), Revision(3, "specific-aims", 2, "model", "polish", "Aim one evaluates our drug.", 6, NOW))
+    counted = share(attribution(log, 3))
+    assert (counted.written_words, counted.polished_words, counted.applicant_words) == (3, 1, 1) and counted.written_share == 0.6
 
 def test_restoring_an_old_revision_restores_its_authors() -> None:
     restored = LOG + (_rev(4, 1, "applicant", "We study heart cells."),)
@@ -821,7 +836,7 @@ def test_a_section_is_final_only_while_a_signoff_names_its_head() -> None:
 
 Run: `uv run --locked pytest -q tests/test_store_applications.py tests/test_provenance.py`
 
-`attribution` walks the parent chain from the root. For each revision it runs `difflib.SequenceMatcher(a=parent_words, b=words, autojunk=False).get_opcodes()` over whitespace-split words. A word in an `equal` run keeps its author. A word in an `insert` or `replace` run takes the revision's author. A restore is a revision whose parent is the restored one, so every run is `equal` and it needs no special case.
+`attribution` walks the parent chain from the root. For each revision it runs `difflib.SequenceMatcher(a=parent_words, b=words, autojunk=False).get_opcodes()` over whitespace-split words. A word in an `equal` run keeps its author. A word in an `insert` or `replace` run takes the revision's origin: `applicant` for an applicant revision, and the revision's action for a model revision. A restore is a revision whose parent is the restored one, so every run is `equal` and it needs no special case.
 
 - [ ] **Step 3: Commit**
 
@@ -865,8 +880,8 @@ The findings of `check_section`:
 | `near-limit` | warning | An estimate is above 90 percent of a page or line limit. |
 | `url` | warning | A URL or hyperlink. NIH allows one only where the announcement says so. |
 | `first-person` | warning | "I", "we", "my" or "our" where `rule.first_person` is false. |
-| `number-not-in-inputs` | warning | A number of two or more digits, a decimal, or a percentage, in a word a model wrote, that is nowhere in `grounding`. A number the applicant typed is never flagged. |
-| `mostly-model` | warning | More than half of the words came from a model (decision 11). The message cites NOT-OD-25-132 and says the line is this tool's. |
+| `number-not-in-inputs` | warning | A number of two or more digits, a decimal, or a percentage, in a word whose origin is not `applicant`, that is nowhere in `grounding`. A number the applicant typed is never flagged. |
+| `mostly-drafted` | warning | More than half of the words came from a model's draft or revision (decision 11). Words that a model polished are not counted. The message cites NOT-OD-25-132, says the line is this tool's and not NIH's, and says that text a model polished can still be flagged by an AI detector. |
 | `prose-N` | warning | Rule N from `prose.scan`. |
 
 An error blocks a sign-off. A warning does not. Findings are computed on every read and never stored.
@@ -916,14 +931,15 @@ def test_research_strategy_needs_its_three_headings() -> None:
 
 def test_a_number_only_a_model_wrote_is_flagged() -> None:
     text = "We enrolled 412 patients."
-    model = tuple((word, "model") for word in text.split())
+    model = tuple((word, "draft") for word in text.split())
     assert "number-not-in-inputs" in _codes(text, words=model, grounding="A pilot cohort.")
     assert "number-not-in-inputs" not in _codes(text, words=model, grounding="We enrolled 412 patients in the pilot.")
     assert "number-not-in-inputs" not in _codes(text, grounding="A pilot cohort.")
 
-def test_a_section_that_is_mostly_model_text_gets_the_warning() -> None:
+def test_a_section_that_a_model_mostly_drafted_gets_the_warning_and_a_polished_one_does_not() -> None:
     text = "one two three four"
-    assert "mostly-model" in _codes(text, words=(("one", "applicant"),) + tuple((w, "model") for w in text.split()[1:]))
+    mostly = lambda origin: _codes(text, words=(("one", "applicant"),) + tuple((w, origin) for w in text.split()[1:]))
+    assert "mostly-drafted" in mostly("draft") and "mostly-drafted" in mostly("revise") and "mostly-drafted" not in mostly("polish")
 
 def test_the_abstract_flags_the_first_person_and_a_url() -> None:
     assert {"first-person", "url"} <= _codes("We will test this. See https://example.org.", key="project-summary")
@@ -979,7 +995,7 @@ git commit -m "feat: check a section against its rules and the prose rules"
     - `add_fact(self, kind: str, text: str, label: str = "", detail: dict | None = None) -> Fact`, `retire_fact(self, fact_id: int) -> None`
     - `write(self, section: str, text: str, parent: int | None) -> Revision`. Raises `StaleEdit` when `parent` is not the head.
     - `restore(self, section: str, revision_id: int) -> Revision`. Appends an applicant revision with the old text and the old revision as its parent. It is the one write whose parent is not the head, and `provenance.attribution` then gives each word the author it had.
-    - `sign(self, section: str, signer: str, revision_id: int, acknowledge: bool = False) -> Signoff`. `revision_id` is the revision the signer read. Raises `StaleEdit` when it is not the head. Raises `NotReady` while an error finding remains, and while the `mostly-model` warning stands and `acknowledge` is false.
+    - `sign(self, section: str, signer: str, revision_id: int, acknowledge: bool = False) -> Signoff`. `revision_id` is the revision the signer read. Raises `StaleEdit` when it is not the head. Raises `NotReady` while an error finding remains, and while the `mostly-drafted` warning stands and `acknowledge` is false.
     - `delete(self) -> None`. Calls `store.delete_application`.
     - `set_disclosure(self, on: bool) -> None`
     - `export(self, out_dir: Path) -> Path`
@@ -991,7 +1007,7 @@ Rules the view derives:
 - `gaps` are the fact kinds in `rule.needs` that have no live fact.
 - `notices` holds one line when this is the sixth or a later application that the tool has started in the calendar year: `This is application <n> that Grant Matcher has started in <year>. NIH accepts six per investigator per calendar year (NOT-OD-25-132). Grant Matcher counts only its own.`
 - `disclosure` is `""` in this stage. Task 10 fills it.
-- The attestation of a sign-off is: `I have read this section. It states my own ideas, and I take responsibility for every statement and reference in it. By Grant Matcher's record, <n> percent of its words came from model output that I accepted. Revision <id>, sha256 <hash>.` The hash is of the revision's text as UTF-8. The sign-off stores the codes of the warnings that stood, and `__version__`.
+- The attestation of a sign-off is: `I have read this section. It states my own ideas, and I take responsibility for every statement and reference in it. By Grant Matcher's record, <n> percent of its words came from a model's draft or revision that I accepted, and <m> percent from a model's polish of my text. Revision <id>, sha256 <hash>.` The hash is of the revision's text as UTF-8. The sign-off stores the codes of the warnings that stood, and `__version__`.
 - `export` writes one Markdown file per section, `requirements.md`, and `provenance-log.md`. A section that is not final gets `DRAFT-` at the start of its file name.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1093,12 +1109,12 @@ Run: `uv run --locked pytest -q tests/test_writer.py tests/test_cli.py`
 - `Announcement`. A `Fetch the full announcement` button, then Sections I, IV and V in expanders. On `ApiError` it shows the error and says the standing rules still apply.
 - `Requirements`. The standing rules of the grant type with their source links, then what the announcement adds, each with its quote and a Confirm or Reject choice.
 - `Your inputs`. One list per fact kind. Each section names the inputs it still needs.
-- `Sections`. A section picker, a text area on the head revision, `Save`, the findings (errors first), the share of words by author, and `Sign off` with a name field prefilled from the profile and, while the `mostly-model` warning stands, a checkbox "Most of this section's words came from a model. I have rewritten what I needed to, and it states my own ideas." The page keeps the id of the revision it showed and passes it to `sign`. `StaleEdit` shows both texts.
+- `Sections`. A section picker, a text area on the head revision, `Save`, the findings (errors first), the share of words that the applicant wrote, that a model drafted or revised, and that a model polished, and `Sign off` with a name field prefilled from the profile and, while the `mostly-drafted` warning stands, a checkbox "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas." The page keeps the id of the revision it showed and passes it to `sign`. `StaleEdit` shows both texts.
 - `Log and export`. The revision history with `Restore` on each row, `Export`, and `Delete this application`, which asks for the opportunity number to be typed before it deletes.
 
 The page says once, under the application picker: "Your text, your inputs and every model call for this application are stored in `<db path>`. Anyone who can read that file can read them."
 
-In `streamlit_app.py`, the radio's options become `["Find", "Apply", "Profile"]`, and `if view == "Apply": apply_page(db_path); st.stop()` joins the Profile branch. In the Details tab, under the two link buttons, show the covered grant types of the opportunity (`rules.grant_types_for`) in a select box with a `Start application` button, or the line "Grant Matcher writes R01, R21 and R03 applications. This opportunity lists <codes>." The button has the key `start_application` and an `on_click` callback that starts the application and then sets `st.session_state["view"] = "Apply"` and `st.session_state["application_id"]`. Streamlit runs a callback before it builds the widgets of the next run, which is the one time a widget's key may be assigned. An assignment in the body of the script, after the radio exists, raises an error (reproduced on Streamlit 1.67.0 on 2026-11-23). Do not call `st.rerun()`.
+In `streamlit_app.py`, the radio's options become `["Find", "Apply", "Profile"]`, and `if view == "Apply": apply_page(db_path); st.stop()` joins the Profile branch. In the Details tab, under the two link buttons, show the covered grant types of the opportunity (`rules.grant_types_for`) in a select box with a `Start application` button, or the line "Grant Matcher writes applications for <the codes in GRANT_TYPES, read from the table>. This opportunity lists <codes>." The button has the key `start_application` and an `on_click` callback that starts the application and then sets `st.session_state["view"] = "Apply"` and `st.session_state["application_id"]`. Streamlit runs a callback before it builds the widgets of the next run, which is the one time a widget's key may be assigned. An assignment in the body of the script, after the radio exists, raises an error (reproduced on Streamlit 1.67.0 on 2026-11-23). Do not call `st.rerun()`.
 
 - [ ] **Step 4: Run every test, build the app, check by hand**
 
@@ -1143,9 +1159,10 @@ Branch `feat/writer-models`, cut from `main` after Stage 2 merges. When this sta
   - `llm._send(url: str, headers: dict[str, str], body: dict, key: str | None, timeout: int = 600) -> dict`. One attempt.
   - `helpers.FakeModel(*replies: str, truncated: bool = False, error: ModelError | None = None)` for tests. `provider = "fake"`, `name = "fake-1"`, `host = "example.test"`. `complete` returns the replies in order, or raises `error`, and appends `types.SimpleNamespace(system=system, user=user)` to `seen`.
   - Settings: `llm.provider`, `llm.model`, `llm.base_url`, and `consent:<host>`.
-  - `llm.connect(store: OpportunityStore) -> Model | None`. `None` when no provider is set, or when the provider needs a key and has none. The key comes from `keys.get(provider, store.db_path.parent)`, so the key file sits beside the database.
+  - `llm.connect(store: OpportunityStore) -> Model | None`. `None` when no provider is set, or when the provider needs a key and has none. The key comes from `keys.get(provider, store.db_path.parent)`.
   - `llm.list_models(provider: Provider, base_url: str, key: str | None) -> list[str]`
-  - `keys.get(provider: Provider, data_dir: Path) -> str | None`, `keys.save(provider: Provider, key: str, data_dir: Path) -> Path`, `keys.delete(provider: Provider, data_dir: Path) -> None`. The file is `data_dir / "llm-keys.json"`.
+  - `keys.get(provider: Provider, data_dir: Path) -> str | None`, `keys.save(provider: Provider, key: str, data_dir: Path) -> str` (it returns where the key went, for the dashboard to say), `keys.delete(provider: Provider, data_dir: Path) -> None`, `keys.forget() -> None`, and `class keys.KeychainError(RuntimeError)`.
+  - `keys.PLATFORM = sys.platform` and `keys._run = subprocess.run`, two module attributes that the tests replace. `keys.SERVICE = "Grant Matcher"`.
 
 The wire shapes, as each vendor's documentation showed them on 2026-11-23. The Claude row was checked twice (vendor page and the Claude API reference). The other rows were read once by a research agent.
 
@@ -1157,7 +1174,7 @@ The wire shapes, as each vendor's documentation showed them on 2026-11-23. The C
 
 Error mapping, by HTTP status: 401 and 403 are `auth`. 429 is `rate`, or `quota` when the body's error code or type names quota, credit or a spend limit. 500, 503 and 529 are `overload`. Anything else is `other`. The message is the status and the provider's own `error.message`, with every occurrence of the key replaced by `[key]`. A provider can echo part of a key in an error, so the replacement also covers the key's last four characters after `...`.
 
-`_send` does not go through `clients._read`. That function retries a 429, a 5xx and a dropped connection three times, which would send a paid request three times and could wait 30 minutes, and it reduces an `HTTPError` to text, which leaves no status to map. `_send` calls `_open` once. It catches `urllib.error.HTTPError`, reads at most 2,000 characters of the body, and raises `ModelError` with the kind from the table. It catches `OSError` and `http.client.HTTPException` and raises `ModelError(kind="other")` whose message says that the request may have reached the provider, so the applicant knows a charge is possible. One retry is allowed, and it is not a second attempt at the same request: when an `openai`-wire server answers 400 and names `max_completion_tokens` in its message, `_send` is called once more with `max_tokens` in its place.
+`_send` does not go through `clients._read`. That function retries a 429, a 5xx and a dropped connection three times, which would send a paid request three times and could wait 30 minutes, and it reduces an `HTTPError` to text, which leaves no status to map. `_send` calls `_open`. It catches `urllib.error.HTTPError`, reads at most 2,000 characters of the body, and raises `ModelError` with the kind from the table. When the kind is `rate` or `overload`, the provider did not process the request, so `_send` waits and sends it once more: it waits the `retry-after` seconds when the header is there and at most 30, and 2 seconds otherwise, through the module attribute `llm._sleep = time.sleep`, which the tests replace. A second failure is raised. The vendors' own packages retry these same statuses twice. It catches `OSError` and `http.client.HTTPException` and raises `ModelError(kind="other")` whose message says that the request may have reached the provider, so the applicant knows a charge is possible. One more resend exists, and it changes the request: when an `openai`-wire server answers 400 and names `max_completion_tokens` in its message, `_send` is called once more with `max_tokens` in its place.
 
 - [ ] **Step 1: Read each vendor's page again, and save one reply of each as a fixture**
 
@@ -1167,7 +1184,7 @@ Also read `https://platform.claude.com/docs/en/build-with-claude/refusals-and-fa
 
 - [ ] **Step 2: Write the failing tests**
 
-`tests/conftest.py` gains the pytest fixture `post`, which replaces `llm._open` with a fake. `post.reply(data)` makes the next request return that JSON. `post.fail(status, data)` makes it raise `urllib.error.HTTPError(url, status, "", {}, io.BytesIO(json.dumps(data).encode()))`, which is what production raises. `post.fail_with(exc)` makes it raise that exception. Replies and failures queue in order. `post.url`, `post.headers` and `post.body` hold the last request, and `post.calls` counts them. `tests/helpers.py` gains `fixture(name)`, which loads `tests/fixtures/llm/<name>.json` without its `_source` key, `model(name, key="k", base_url="")`, which returns `HttpModel(PROVIDERS[name], PROVIDERS[name].default_model or "m", base_url or PROVIDERS[name].base_url, key)`, and `model_for(wire)`, which returns `model` for the first provider on that wire.
+`tests/conftest.py` gains the pytest fixture `post`, which replaces `llm._open` with a fake. `post.reply(data)` makes the next request return that JSON. `post.fail(status, data, headers=None)` makes it raise `urllib.error.HTTPError(url, status, "", headers or {}, io.BytesIO(json.dumps(data).encode()))`, which is what production raises. The fixture also replaces `llm._sleep` and records each wait in `post.slept`. `post.fail_with(exc)` makes it raise that exception. Replies and failures queue in order. `post.url`, `post.headers` and `post.body` hold the last request, and `post.calls` counts them. `tests/helpers.py` gains `fixture(name)`, which loads `tests/fixtures/llm/<name>.json` without its `_source` key, `model(name, key="k", base_url="")`, which returns `HttpModel(PROVIDERS[name], PROVIDERS[name].default_model or "m", base_url or PROVIDERS[name].base_url, key)`, and `model_for(wire)`, which returns `model` for the first provider on that wire.
 
 ```python
 @pytest.mark.parametrize("name, wire", [("claude", "anthropic"), ("openai", "openai"), ("gemini", "gemini"), ("compatible", "openai")])
@@ -1198,12 +1215,24 @@ def test_a_local_server_needs_no_key(post) -> None:
     model("compatible", key=None, base_url="http://localhost:11434/v1").complete("s", "u")
     assert "Authorization" not in post.headers and post.url == "http://localhost:11434/v1/chat/completions"
 
-@pytest.mark.parametrize("status, kind", [(401, "auth"), (429, "rate"), (529, "overload")])
-def test_an_http_error_has_a_kind_and_is_sent_once(status, kind, post) -> None:
+@pytest.mark.parametrize("status, kind, sent", [(401, "auth", 1), (429, "rate", 2), (529, "overload", 2)])
+def test_an_http_error_has_a_kind_and_only_an_unprocessed_request_is_sent_again(status, kind, sent, post) -> None:
+    post.fail(status, fixture("anthropic-error"))
     post.fail(status, fixture("anthropic-error"))
     with pytest.raises(ModelError) as failed:
         model("claude").complete("s", "u")
-    assert failed.value.kind == kind and post.calls == 1
+    assert failed.value.kind == kind and post.calls == sent
+
+def test_a_rate_limit_is_retried_once_after_the_wait_the_provider_names(post) -> None:
+    post.fail(429, fixture("anthropic-error"), headers={"retry-after": "7"})
+    post.reply(fixture("anthropic-ok"))
+    assert model("claude").complete("s", "u").text == "Hello." and post.calls == 2 and post.slept == [7]
+
+def test_a_quota_error_is_not_retried(post) -> None:
+    post.fail(429, {"error": {"type": "insufficient_quota", "message": "You exceeded your current quota."}})
+    with pytest.raises(ModelError) as failed:
+        model("openai").complete("s", "u")
+    assert failed.value.kind == "quota" and post.calls == 1
 
 def test_an_http_error_never_contains_the_key(post) -> None:
     post.fail(401, {"error": {"message": "Incorrect API key provided: sk-test-123. Key ending ...-123 is not valid."}})
@@ -1230,7 +1259,7 @@ def test_a_refusal_is_an_error_of_its_own_kind(post) -> None:
     assert failed.value.kind == "refused"
 ```
 
-`tests/test_keys.py`:
+`tests/test_keys.py`. `FakeSecurity` in `tests/helpers.py` stands in for `/usr/bin/security`. It is called as `keys._run` is, keeps the items in a dictionary, and records each call's argument list in `argv` and its standard input in `stdin`. It answers `find-generic-password ... -w` with the value, a newline, and exit code 0, or with exit code 44 when the item is absent. It reads an `add-generic-password -U -a "<account>" -s "<service>" -X <hex>` line from the standard input of a `-i` call. It can be told to exit with a code of the test's choice.
 
 ```python
 @pytest.fixture(autouse=True)
@@ -1238,30 +1267,82 @@ def no_keys_in_the_environment(monkeypatch) -> None:
     # A developer's own key would otherwise decide these tests.
     for provider in PROVIDERS.values():
         monkeypatch.delenv(provider.key_env, raising=False)
+        monkeypatch.delenv(provider.key_env + "_FILE", raising=False)
+    keys.forget()
 
-def test_the_environment_wins_over_the_file(tmp_path, monkeypatch) -> None:
-    keys.save(PROVIDERS["claude"], "from-file", tmp_path)
-    assert keys.get(PROVIDERS["claude"], tmp_path) == "from-file"
+@pytest.fixture
+def linux(monkeypatch) -> None:
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+
+@pytest.fixture
+def mac(monkeypatch) -> FakeSecurity:
+    fake = FakeSecurity()
+    monkeypatch.setattr(keys, "PLATFORM", "darwin")
+    monkeypatch.setattr(keys, "_run", fake)
+    return fake
+
+def test_the_environment_wins_then_the_secret_file_then_the_store(tmp_path, monkeypatch, linux) -> None:
+    keys.save(PROVIDERS["claude"], "from-store", tmp_path)
+    assert keys.get(PROVIDERS["claude"], tmp_path) == "from-store"
+    secret = tmp_path / "secret"
+    secret.write_text("from-secret-file\n", encoding="utf-8")
+    monkeypatch.setenv("ANTHROPIC_API_KEY_FILE", str(secret))
+    assert keys.get(PROVIDERS["claude"], tmp_path) == "from-secret-file"
     monkeypatch.setenv("ANTHROPIC_API_KEY", "from-env")
     assert keys.get(PROVIDERS["claude"], tmp_path) == "from-env"
 
-def test_the_key_file_is_mode_0600(tmp_path) -> None:
-    path = keys.save(PROVIDERS["openai"], "sk-1", tmp_path)
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+def test_on_a_mac_the_key_goes_to_the_keychain_on_standard_input(tmp_path, mac) -> None:
+    where = keys.save(PROVIDERS["claude"], "sk-test-123", tmp_path)
+    assert "Keychain" in where and list(tmp_path.iterdir()) == []
+    assert mac.items == {("Grant Matcher", "claude"): "sk-test-123"}
+    assert mac.argv[-1] == ["/usr/bin/security", "-i"] and "sk-test-123".encode().hex() in mac.stdin[-1]
+    assert not any("sk-test-123" in part or "sk-test-123".encode().hex() in part for call in mac.argv for part in call)
+    assert keys.get(PROVIDERS["claude"], tmp_path) == "sk-test-123"
+
+def test_the_keychain_is_read_once_per_process(tmp_path, mac) -> None:
+    keys.save(PROVIDERS["claude"], "sk-test-123", tmp_path)
+    before = len(mac.argv)
+    assert [keys.get(PROVIDERS["claude"], tmp_path) for _ in range(5)] == ["sk-test-123"] * 5
+    assert len(mac.argv) - before <= 1
+    keys.delete(PROVIDERS["claude"], tmp_path)
+    assert keys.get(PROVIDERS["claude"], tmp_path) is None and mac.items == {}
+
+def test_a_key_that_is_not_printable_ascii_is_refused(tmp_path, mac) -> None:
+    for bad in ("k\u00e9y", "two\nlines", ""):
+        with pytest.raises(ValueError):
+            keys.save(PROVIDERS["openai"], bad, tmp_path)
+    assert mac.items == {} and mac.argv == []
+
+def test_a_key_with_quotes_and_spaces_round_trips(tmp_path, mac) -> None:
+    keys.save(PROVIDERS["compatible"], 'a "quoted" key with spaces', tmp_path)
+    keys.forget()
+    assert keys.get(PROVIDERS["compatible"], tmp_path) == 'a "quoted" key with spaces'
+
+@pytest.mark.parametrize("code, words", [(36, "locked"), (51, "declined"), (128, "cancelled")])
+def test_a_keychain_that_cannot_answer_is_an_error_and_not_a_missing_key(tmp_path, mac, code, words) -> None:
+    mac.exit_with = code
+    with pytest.raises(keys.KeychainError, match=words):
+        keys.get(PROVIDERS["claude"], tmp_path)
+
+def test_off_a_mac_the_key_file_is_mode_0600(tmp_path, linux) -> None:
+    where = keys.save(PROVIDERS["openai"], "sk-1", tmp_path)
+    path = tmp_path / "llm-keys.json"
+    assert str(path) in where and stat.S_IMODE(path.stat().st_mode) == 0o600
     keys.delete(PROVIDERS["openai"], tmp_path)
     assert keys.get(PROVIDERS["openai"], tmp_path) is None
 
-def test_saving_a_second_key_keeps_the_first_and_fixes_a_loose_mode(tmp_path) -> None:
-    path = keys.save(PROVIDERS["openai"], "sk-1", tmp_path)
+def test_saving_a_second_key_keeps_the_first_and_fixes_a_loose_mode(tmp_path, linux) -> None:
+    keys.save(PROVIDERS["openai"], "sk-1", tmp_path)
+    path = tmp_path / "llm-keys.json"
     path.chmod(0o644)
     keys.save(PROVIDERS["claude"], "sk-2", tmp_path)
     assert (keys.get(PROVIDERS["openai"], tmp_path), keys.get(PROVIDERS["claude"], tmp_path)) == ("sk-1", "sk-2")
     assert stat.S_IMODE(path.stat().st_mode) == 0o600 and [p.name for p in tmp_path.iterdir()] == ["llm-keys.json"]
 
-def test_no_key_reaches_the_database(tmp_path) -> None:
+def test_no_key_reaches_the_database(tmp_path, linux) -> None:
     store = OpportunityStore(tmp_path / "g.sqlite3")
     keys.save(PROVIDERS["claude"], "sk-secret-9", tmp_path)
-    store.set_setting("provider", "claude")
+    store.set_setting("llm.provider", "claude")
     store.close()
     assert b"sk-secret-9" not in (tmp_path / "g.sqlite3").read_bytes()
 ```
@@ -1270,21 +1351,32 @@ def test_no_key_reaches_the_database(tmp_path) -> None:
 
 Each wire is one private function that builds `(url, headers, body)` and one that reads the reply into a `Completion`. No wire dictionary leaves `llm.py`. Requests go through `_send` with a timeout of 600 seconds. `urllib` reads the proxy settings from the environment by itself, as it does for the finder.
 
-`keys.save` reads the keys that are there, adds the new one, writes them to a new file beside the real one that it creates with `os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)`, and then calls `os.replace(temp, path)`. A crash then leaves the old file whole, and a file whose mode was loosened gets 0600 again. On Windows the mode has no effect. The dashboard says so there, and `docs/` says that the key file is protected by the user's own account only.
+`keys.get` looks in four places and takes the first that answers: the provider's environment variable, the file that `<variable>_FILE` names (its text, stripped), the store, and nothing. The store is the login Keychain when `keys.PLATFORM` is `darwin`, and the key file otherwise. A value read from the store is kept in a module dictionary for the life of the process, `keys.forget()` empties it, and `save` and `delete` update it.
+
+**The Keychain, on macOS.** The method is the one that `claude-multipass` uses and that it measured in Claude Code. It was run from Python on 2026-11-23 with a dummy value: store, read, update and delete all worked, with no prompt.
+
+- Write: run `["/usr/bin/security", "-i"]` with one line on standard input, `add-generic-password -U -a "<provider name>" -s "Grant Matcher" -X <the key as hex>`, and with standard output and standard error discarded. The hex form round-trips any value, and standard input keeps the key out of the process list. `security -i` keeps at most 4,019 bytes of a line and corrupts the rest, so `save` refuses a key whose line is longer than 4,000 bytes. No API key is near that length.
+- Read: `["/usr/bin/security", "find-generic-password", "-a", name, "-s", "Grant Matcher", "-w"]`. Exit code 44 means the item is absent. `security` prints a value that holds a non-ASCII or non-printable byte as hex, and a key made only of hex digits could not then be told from an encoded one. So `save` refuses a key that is empty or that holds a character outside printable ASCII, with `ValueError`, on every platform. Every provider's key is printable ASCII, and the reply is then always the key itself.
+- Delete: `delete-generic-password` with the same `-a` and `-s`. Exit code 44 is success.
+- Any other exit code raises `KeychainError`: 36 says the keychain is locked, 51 that the prompt was declined, 128 that it was cancelled. A locked keychain must not read as "no key", because the dashboard would then ask the applicant to enter a key they already saved.
+- Use `security` and nothing else. A Keychain item remembers the partition of the tool that last wrote it, and a reader from another partition is prompted even after "Always Allow". An item that `security` wrote is read by `security` with no prompt, and it does not depend on the app's own signature, so an update of the app cannot lock the applicant out of their key.
+- What this protects and what it does not: the key is encrypted at rest, it is locked when the login keychain is locked, and it does not travel with a copy or a backup of the data folder. Any process that runs as the applicant can still read it by running `security`. The dashboard says where the key is and does not claim more.
+
+**The file, elsewhere.** `keys.save` reads the keys that are there, adds the new one, writes them to a new file beside the real one that it creates with `os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)`, and then calls `os.replace(temp, path)`. A crash then leaves the old file whole, and a file whose mode was loosened gets 0600 again. On Windows the mode has no effect. The dashboard says so there, and `docs/` says that the key file is protected by the user's own account only.
 
 `# shortcut: no streaming, so a long reply shows a spinner. Add streaming when a section takes longer than the 600 second timeout.`
 
 - [ ] **Step 4: Add the `Model` expander and the `models` subcommand**
 
-`compose.yaml` passes the four key variables through to the container. They carry keys only. The provider, the model and the base URL are settings in the database, chosen in the dashboard or with `models --provider NAME --model NAME [--base-url URL]`.
+`compose.yaml` passes the four key variables and their `_FILE` forms through to the container, and `docs/docker.md` shows a Compose `secrets` entry mounted at `/run/secrets/<name>` with the `_FILE` variable pointing at it. Docker's documentation warns that a key in an environment variable can be exposed, and names the mounted file as the safer way. The variables carry keys only. The provider, the model and the base URL are settings in the database, chosen in the dashboard or with `models --provider NAME --model NAME [--base-url URL]`.
 
-The expander has a provider select box, a base URL field for `compatible`, a key field that shows "Saved, ends in ...4f2a" or "Read from ANTHROPIC_API_KEY" and never the key, a model select box filled from `list_models`, and `Test connection`. Under them it names the host that receives the applicant's text. For `gemini` it adds: "A free-tier Gemini key lets Google use what you send to improve its products. Use a paid key for unpublished work." A base URL that starts with `http://` and whose host is not `localhost`, `127.0.0.1` or `[::1]` gets a warning that the text and the key travel unencrypted.
+The expander has a provider select box, a base URL field for `compatible`, a key field that shows "Saved in the macOS Keychain, ends in ...4f2a", "Saved in <path>, ends in ...4f2a" or "Read from ANTHROPIC_API_KEY" and never the key, a model select box filled from `list_models`, and `Test connection`. Under them it names the host that receives the applicant's text. For `gemini` it adds: "A free-tier Gemini key lets Google use what you send to improve its products. Use a paid key for unpublished work." A base URL that starts with `http://` and whose host is not `localhost`, `127.0.0.1` or `[::1]` gets a warning that the text and the key travel unencrypted.
 
 No text goes to a host until the applicant has agreed to that host once. The agreement is the setting `consent:<host>`. In the dashboard it is a checkbox that names the host. In the CLI it is `models --consent`, which prints the host and records the setting. `Workspace.propose`, `extract_requirements` and `review` raise `NotReady` with the reason "Agree to send text to <host> first" while the setting is absent, so the rule holds for every caller. Add `test_no_text_is_sent_without_consent_for_the_host` to `tests/test_writer.py` in Task 10: a `FakeModel` with no consent setting raises `NotReady` and its `seen` stays empty. The `start` helper records consent for `example.test` unless it is called with `consent=False`.
 
 - [ ] **Step 5: Run every test, check each provider by hand, commit**
 
-Run: `uv run --locked pytest -q -W error::DeprecationWarning`. Then, with a real key for each hosted provider and Ollama running, `uv run python -m nih_grant_matcher models` and `Test connection` for each of the four. Record in the pull request which were tested and which were not. Each real call costs money, so ask the owner before the hosted three.
+Run: `uv run --locked pytest -q -W error::DeprecationWarning`. Then check the Keychain by hand on the Mac, with a made-up key: save it in the `Model` expander, run `security find-generic-password -s "Grant Matcher" -a claude` and expect the item with no value shown, quit and reopen the dashboard and expect "Saved in the macOS Keychain", then remove the key and expect exit code 44 from the same command. Then, with a real key for each hosted provider and Ollama running, `uv run python -m nih_grant_matcher models` and `Test connection` for each of the four. Record in the pull request which were tested and which were not. Each real call costs money, so ask the owner before the hosted three.
 
 ```bash
 git add "NIH Extractor" compose.yaml docs
@@ -1321,7 +1413,7 @@ The statement is built from the log, sentence by sentence. No model writes it. A
 | `I entered the <fact kinds, for example aims, hypotheses and methods> of this application myself.` | The application has live facts. The kinds are the ones it has. |
 | `I used <model> (<provider>) to <draft, revise or polish> the <section titles>.` | Once per model and action, for the calls whose proposal was accepted. |
 | `I edited <section titles> after I accepted model text.` | A section has an applicant revision that is newer than a model revision. |
-| `By the tool's word-level record, <n> percent of the <section title> text came from model output that I accepted.` | Once per section that has model words. |
+| `By the tool's word-level record, <n> percent of the <section title> text came from a model's draft or revision that I accepted, and <m> percent from a model's polish of my own text.` | Once per section that has model words. |
 | `The <section titles> were written without a model.` | A section has text and no model word. |
 | `I also sent text to <model> to <read the funding announcement's requirements, review drafts against NIH's review criteria, produce suggestions that I did not use (<n>)>.` | The log has calls of the purpose `extract` or `review`, or proposals that were discarded or failed. Each part appears only for what the log has. A proposal that is still waiting is not counted. |
 | `I read and signed off <section titles>.` | A sign-off names the head revision of the section. |
@@ -1376,7 +1468,7 @@ def test_the_statement_says_only_what_the_log_shows(tmp_path) -> None:
     assert "did not use" not in ws.view().disclosure and "polish the" not in ws.view().disclosure
     ws.accept(proposal.call_id)
     statement = ws.view().disclosure
-    assert "I used fake-1 (fake) to polish the Specific Aims." in statement and "40 percent of the Specific Aims text" in statement
+    assert "I used fake-1 (fake) to polish the Specific Aims." in statement and "0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and 40 percent from a model's polish" in statement
     assert "I entered the aims of this application myself." in statement and "The Project Narrative was written without a model." in statement
     assert "No AI model was used" not in statement and "signed off" not in statement and "I edited" not in statement
     ws.set_disclosure(False)
@@ -1417,7 +1509,7 @@ The `Sections` tab gains `Polish` and `Revise` with an instruction box, shown on
 
 - [ ] **Step 4: Build the app, check by hand, commit**
 
-Run: `macos/build.sh`. In the built app, polish one section with a real model and confirm the diff, the attribution, and the statement. The frozen app calls a new host in this stage, and CI does not build the app.
+Run: `macos/build.sh`. In the built app, save a key, quit, open the app again, and confirm that it still has the key and that no Keychain prompt appeared. Then polish one section with a real model and confirm the diff, the attribution, and the statement. The frozen app calls a new host and runs `/usr/bin/security` in this stage, and CI does not build the app. The app already runs `/usr/sbin/lsof` and `/usr/bin/osascript` the same way.
 
 ```bash
 git add "NIH Extractor"
@@ -1473,7 +1565,7 @@ def test_an_accepted_draft_with_gaps_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel("We enrolled 412 patients. [NEEDS INPUT: effect size]"), facts={"aim": "A pilot cohort.", "hypothesis": "It works."})
     ws.accept(ws.propose("specific-aims", "draft").call_id)
     codes = {f.code for f in ws.view().section("specific-aims").findings}
-    assert {"placeholder", "number-not-in-inputs", "mostly-model"} <= codes
+    assert {"placeholder", "number-not-in-inputs", "mostly-drafted"} <= codes
     with pytest.raises(NotReady):
         ws.sign("specific-aims", "A. Applicant")
 
@@ -1599,12 +1691,12 @@ What follows for the design is that the ideas must be the applicant's. A draft i
 
 Read on 2026-11-23. FORMS-I is in force.
 
-- Page limits (page updated 2026-09-30): Specific Aims 1 page. Research Strategy 12 pages for R01, 6 for R21 and R03. Introduction 1 page, for a resubmission or revision. Project Summary/Abstract 30 lines. Project Narrative three sentences. The announcement overrides the table, and a Guide notice overrides both.
+- Page limits (page updated 2026-09-30): Specific Aims 1 page. Research Strategy 12 pages for R01, R15, R34, RF1 and U01, and 6 for R21, R03 and R16. Introduction 1 page, for a resubmission or revision. Project Summary/Abstract 30 lines. Project Narrative three sentences. The announcement overrides the table, and a Guide notice overrides both.
 - Format: 11 points or larger, at most 15 characters per inch and six lines per inch, margins of at least half an inch, letter paper, no headers or footers. No figures in Specific Aims, the abstract or the narrative. A hyperlink or URL only where the announcement or the form allows it.
 - Research Strategy starts each part with the heading Significance, Innovation, or Approach.
 - The abstract avoids the first person and descriptions of past accomplishments.
 - Review (NOT-OD-24-010, due dates from 2025-01-25) covers R01, R03 and R21 among others, and no K or F code. Factor 1, Importance of the Research (Significance, Innovation), scored 1 to 9. Factor 2, Rigor and Feasibility (Approach), scored 1 to 9. Factor 3, Expertise and Resources, is "Appropriate" or names the gaps.
-- Of the 369 NIH Guide records in the owner's database on 2026-11-23, 70 list R01, 29 list R21 and 11 list R03.
+- Of the 369 NIH Guide records in the owner's database on 2026-11-23, 110 list R01, R21 or R03, and 153 list one of the eight codes in scope. With the phased codes and U24 the count is 211.
 
 ### Where the announcement text comes from
 
@@ -1660,7 +1752,8 @@ Three independent candidates designed the whole feature from the same grounding,
 - **The page estimate.** It assumes NIH's densest legal format. A section under the estimate can be over the limit in the applicant's font. Only the final PDF settles it.
 - **`doctext`.** The field is undocumented and NIH may remove it. The Grants.gov attachment is the fallback, and Task 5 tests it with made-up HTML, not with a download.
 - **Any 2026 Guide notice that amends NOT-OD-25-132.** A search found none, which may be the search. The check is the weekly index at `grants.nih.gov/funding/nih-guide-for-grants-and-contracts`.
-- **The frozen macOS app calling a model.** Task 10 Step 4 is the first time it does.
+- **The frozen macOS app calling a model and the Keychain.** Task 10 Step 4 is the first time it does either. The Keychain method was run from Python on this Mac, not from the notarized app.
+- **Sections specific to a U01 application.** Task 4 Step 2 reads one announcement before the entry is trusted.
 - **Data handling by the hosted providers.** A research agent read each vendor's policy page: none trains on API traffic by default on a paid plan, each keeps traffic for a period (30 days at Anthropic and OpenAI), and Gemini's free tier uses inputs and says not to send confidential content. The dashboard names the host and warns on Gemini. The owner should read the three policy pages before he recommends a provider to another researcher.
 
 ### Risks
@@ -1669,7 +1762,11 @@ Three independent candidates designed the whole feature from the same grounding,
 - **NIH's rules change.** Each grant type carries its sources and the date they were read. A rule that changes is one entry.
 - **Cost.** A draft of a twelve-page section is one call of a few thousand output tokens. The dashboard shows the token counts of each call from the log.
 
-### Stage 6: career and fellowship awards (not tasked)
+### Stage 6: phased awards, and career and fellowship awards (not tasked)
+
+**Phased awards and U24.** R61/R33, R33, UG3/UH3 and U24 are in the 12-page row of the page-limits table and under the three-factor review, and they are 57 of the owner's 369 saved records. They are not in the first scope because their announcements set their own structure: two UG3/UH3 announcements required aims labelled by phase and a 25-page Research Strategy (read by a research agent). In the saved sample, two of twelve U24 announcements stated a Research Strategy limit of their own (15 and 30 pages). UM1, P30 and R25 have no default in the table at all. A phased entry needs a section rule for phase-labelled aims, and a reading of several announcements first.
+
+**Career and fellowship awards.**
 
 The rules are data, so each of these is a `GrantType` entry and its tests. The research below was read by a research agent on 2026-11-23 from the page-limits table and the FORMS-I career and fellowship instructions. Read it again before the stage starts.
 

@@ -164,12 +164,9 @@ Checked against the Claude API reference that ships with Claude Code, for the en
 
 All list models at `{base}/models`. Whether each accepts `max_completion_tokens` or needs `max_tokens` is unverified. Test against a running server.
 
-### API keys on macOS
+### API keys
 
-- `/usr/bin/security add-generic-password -a <account> -s <service> -U -w <secret>` and `find-generic-password -a <account> -s <service> -w`. Read from `man security`.
-- With `-w <secret>` the key is in the process arguments for the life of the command.
-- The item's creator is `security`, not the app, so any local process that runs `security` as the user can read it. This is inferred from the man page.
-- How a signed, notarized, hardened-runtime PyInstaller app behaves when it runs these commands is unverified. The test is to build the app and run both.
+See "Research for decisions 7 to 12", decision 9, below. An earlier version of this section said that the `security` command exposes the key in its arguments and that the app's behaviour was untested. Both points are answered there.
 
 ## Existing grant-writing projects
 
@@ -212,3 +209,74 @@ Three candidates designed the whole feature from one grounding document, on thre
 - Candidate 2's Profile tab sat behind the dashboard's empty-results `st.stop()`, so a new user could not reach it. The plan uses a view selector that runs before that guard.
 - Candidate 3 kept the bare-word "AI" rule and the generic terms hard-coded, so a wet-lab profile would still get the AI bonus. The plan derives both from the profile.
 - The judge found that the fallback reason "Weak computational signal; included for monitoring only" kept its wording under a custom profile in all three. The plan relabels it.
+
+## Research for decisions 7 to 12
+
+A second round, on 2026-11-23, for the six decisions that the plan had applied as defaults. The owner then settled all six. The plan's "Owner decisions" table holds the outcome.
+
+### 7. First scope
+
+- **The page-limits table** (checked, page dated 2026-09-30). Research Strategy rows of the block "R01, R03, R21, RP1, S10, U01, and all other applications":
+  - 5 pages: DP1. 10 pages: DP2.
+  - 6 pages: R03, R13, U13, U43, R16, R21, R35, R36, R41, R43, SC2, SC3, X01, X02, R50, UT1.
+  - 12 pages: DP3, DP5, G08, G11, G13, RC2, RC4, RF1, R01, R15, R18, R21/R33, R24, R28, R33, R34, R42, R44, R61, R61/R33, RL1, SB0, SB1, SC1, SI2, UB1, UC2, UH2, UH3, UG1, UC4, UF1, UG3, U01, U18, U24, U2C, U34, U42, U44, UT2.
+  - All other codes: "Follow NOFO instructions". UM1 and P30 are not named. R25 is in another block, with a 25-page Research Education Program Plan (agent-read).
+  - Specific Aims is 1 page "for all Activity Codes that use an application form with the Specific Aims section".
+- **Coverage of the owner's 369 saved NIH Guide records** (checked, measured from `data/grants.sqlite3`): R01, R21 and R03 are 110 (30%). With R15, R16, R34 and RF1 they are 127. With U01 they are 153 (41%). Every code under the three-factor review is 202 (55%). Of the 43 records that the built-in profile ranks High or Medium, the three codes are 15, with U01 20, and the three-factor list 24.
+- **How often an announcement overrides the table** (checked: the full text of 211 saved announcements was fetched and searched). A Research Strategy limit was stated in 6: R01 three times (restating 12), U01 once (30 pages), U24 twice (15 and 30). None of 21 R61/R33 and none of 13 UG3/UH3 stated one in a form the search matched. About 200 of the 211 carry "additional instructions" for the research plan. The search was a pattern, so the count of overrides is a lower bound.
+- **Phased awards** (agent-read). Two UG3/UH3 announcements (PAR-25-072, RFA-CA-25-010) say "the Research Strategy section is limited to 25 pages", and one requires aims "clearly label[led] as UG3 specific aims and UH3 specific aims". The cooperative-agreement terms sit in Section VI as award terms, not as a section the applicant writes.
+- **Volume** (agent-read). NIH's "FY 2025 By the Numbers": 62,592 research project grant applications, 42,022 of them R01-equivalent. New and renewal awards in fiscal 2025 by the agent's own RePORTER queries: R01 4,097, R21 1,521, R35 820, R03 392, U01 260, R15 199, RF1 123, R61 122, UG3 105, R34 94, U24 68, R16 61.
+- **Unverified.** Sections specific to a U01 application. Per-code application counts (NIH report 565 holds them, and it was not downloaded).
+
+### 8. How the package calls a model
+
+All run or read by a research agent, except where marked.
+
+| Option | New packages | Compiled | Installed size | Frozen with PyInstaller 6.22.3 |
+| --- | --- | --- | --- | --- |
+| Plain HTTPS, native formats | 0 | 0 | 0 | n/a |
+| `anthropic` 2.12.0, `openai` 3.57.0, `google-genai` 3.6.1 together | 22 | 4 (jiter, pydantic-core, cryptography, cffi) | 68 MB | Ran with no extra hook, 49 MB folder |
+| One OpenAI-style format with the `openai` package | 10 | 2 | 25 MB | Ran |
+| `litellm` 1.110.2 | 42 | 13 | 223 MB | Crashed at start: a data file was missing |
+
+- All three vendor packages now depend on `httpx2`. `pip-audit` found no known vulnerability in any set. Trivy was not run.
+- **Anthropic's OpenAI-compatible layer** (checked, <https://platform.claude.com/docs/en/api/openai-sdk>): "primarily intended to test and compare model capabilities, and is not considered a long-term or production-ready solution for most use cases". `store` is ignored, `choices[].message.refusal` is "Always empty", and prompt caching is not supported.
+- **Google's OpenAI-compatible endpoint**: base URL `https://generativelanguage.googleapis.com/v1beta/openai/`, "still in beta", and "If you aren't already using the OpenAI libraries, we recommend that you call the Gemini API directly."
+- **What the packages do that the plan must write**: `anthropic` and `openai` retry twice, from 0.5 to 8 seconds, on 408, 409, 429 and the `x-should-retry` header, with a 600-second timeout. `google-genai` makes 5 attempts.
+- **How fast the formats moved in 2026**: Anthropic Messages gained one version, `2026-10-21`, with three breaking changes (the sampling parameters now return 400). OpenAI Chat Completions had none labelled breaking. Gemini Interactions had one (`outputs` became `steps`), on `v1beta`.
+- **The build's licence check is narrower than the project notes say** (checked in `macos/grant_matcher.spec`). It walks the requirements of `streamlit`, `pandas` and `pywebview` only, it fails only when Streamlit's two files are missing, and it skips a package with no licence file silently. A new top-level package must be added to that list by hand.
+
+### 9. Where an API key is stored
+
+- **The owner's `claude-multipass` project stores secrets in the login Keychain through `/usr/bin/security`** (checked: `bin/claude-multipass`, functions `keychain_get`, `keychain_put`, `keychain_delete`, and `.claude/rules/desktop-internals.md`). Its notes record what it measured:
+  - Claude Code reads its own login with `security find-generic-password -a <user> -w -s <service>` and writes it with an `add-generic-password -U -a "<user>" -s "<service>" -X "<hex>"` line on the standard input of `security -i`.
+  - `security -i` keeps at most 4,019 bytes of a line and corrupts the rest. `-X <hex>` round-trips any value. `security -w` prints a value that holds a non-ASCII byte as hex. Exit code 44 means the item is absent, and 36 means the keychain is locked.
+  - A Keychain item carries a partition entry beside its application list. An app in the application list still prompts unless its partition is in the item's list, "Always Allow" edits only the application list, and an in-place update resets the partition to the writer's. That project's own writes through `python3` made every Claude Code read prompt until it went back to `security` only.
+  - About eight `security` processes a second crashed `securityd` for another tool, so it limits its calls.
+- **The method was run from Python on this Mac** (checked, with a dummy value and the service name "Grant Matcher probe", which was deleted afterwards): absent before (exit 44), store through `security -i` on standard input (exit 0, 0.04 seconds), read back equal, update in place, a value with a quote, a backslash and an accented letter round-tripped through the hex form, the item was in `login.keychain-db`, the value was absent from the item's metadata output, and delete left exit 44. No prompt appeared.
+- **Why not the Security framework through pyobjc** (checked): `pyobjc-framework-security` is in `uv.lock` and is not in the built app. The installed 0.2.0 has licence folders for the Cocoa, Quartz and WebKit modules only, and the wheel has no licence file. An item that the app itself wrote would be bound to the app's own signature and partition, which is what made another tool prompt after an update.
+- **Why not `keyring`** (agent-read): version 25.7.0 adds five packages on macOS, and it has no backend in a slim container.
+- **Docker** (agent-read, <https://docs.docker.com/compose/how-tos/use-secrets/>): "If you're injecting passwords and API keys as environment variables, you risk unintentional information exposure." Secrets mount under `/run/secrets/<name>`, and a `_FILE` variable is "a convention used by some images, including Docker Official Images".
+- **What a file gives** (agent-read): the AWS CLI and the `llm` tool keep keys in plaintext files. On macOS, `~/Library` is mode 700 on this Mac (checked), so other accounts cannot read a file there, and other apps that run as the same user can. On Windows, `os.chmod` sets only the read-only flag.
+- **Unverified.** The same method run from the notarized app. The app already runs `/usr/sbin/lsof` and `/usr/bin/osascript` as subprocesses, so the mechanism is in use, and the plan's Task 10 Step 4 is the test.
+
+### 10. The statement's toggle
+
+All agent-read.
+
+- **Universities.** UCSF's Office of Sponsored Research makes investigators certify at routing that "the final application is my own original ideas and is not substantially developed by AI, nor does it contain sections substantially developed by AI." Wake Forest: "Disclose your use... Where the disclosure goes... depends on the sponsor or journal." Colorado College (2026-03-13): "Except for basic functions (spelling, grammar, translation), any substantive use of GenAI must be disclosed". CU Boulder and UCLA set no disclosure rule.
+- **Funders.** Wellcome (2026-04-08) requires applicants to "tell us about any substantive use", exempts "improving the standard of English", and says "Anything you tell us will not be used in the assessment process." UKRI (2024-09-23) expects transparency and says "This information will not affect the assessment process." NASA's Science Mission Directorate requires a citation of the tool, its version, the date, and how it was used. NSF encourages. The ERC states no requirement.
+- **NIH.** No report was found of a voluntary disclosure held against an applicant, and no guidance on where one goes. NIH gives no assurance like Wellcome's or UKRI's.
+
+### 11. The line for model text
+
+All agent-read.
+
+- **NIH has published no threshold,** no detector name, and no count of flagged applications. The agent searched NIH's sites and Science, Nature, STAT, the Chronicle and Inside Higher Ed through November 2026.
+- **Funders and journals draw the line by kind of use.** Elsevier: "Basic checks of grammar, spelling and punctuation do not need a declaration statement. However, when an AI tool makes substantive changes to sentence structure or organization... this should be disclosed." Nature Portfolio puts "Using an LLM to polish or refine the language" in its lowest tier, and "Extensive copy editing or writing support" above it. Wellcome and UKRI exempt improving the English.
+- **Detectors do not separate the two.** Saha and Feizi (arXiv 2502.15666, 2025): twelve detectors "frequently flag even minimally polished text as AI-generated". Park and others (arXiv 2608.26710, 2026): on 135,389 manuscripts by non-native writers, false-positive rates on human text ran "from 0.0% to 100.0%" across 13 detectors. So polished text is not safe from a detector, and the tool's message says so.
+- **Use is bimodal.** Qian and others (arXiv 2601.15485, 2026) find "a clear split between minimal and substantive use" in NIH and NSF proposals.
+
+### 12. `ReviewFeedbackAgent`
+
+Checked in the README: it is listed in the agent table ("Captures researcher feedback for future relevance tuning"), and the text calls it "the foundation for a future adaptive recommendation system in which researcher feedback can improve opportunity prioritization." Nothing calls it.
