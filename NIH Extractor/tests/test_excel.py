@@ -15,3 +15,7 @@ def test_write_excel_creates_xlsx(tmp_path) -> None:
         sheet = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
     assert "Machine learning for clinical prediction" in sheet
 
+
+def test_excel_header_calls_the_date_an_expiration() -> None:
+    from nih_grant_matcher.excel import HEADERS
+    assert "Expires" in HEADERS and "Close Date" not in HEADERS

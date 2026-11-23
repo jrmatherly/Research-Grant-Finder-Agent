@@ -178,13 +178,14 @@ metric_col1.metric("Visible Opportunities", f"{len(filtered):,}")
 metric_col2.metric("High Matches", f"{(filtered['Classification'] == 'High').sum():,}")
 metric_col3.metric("Median Score", f"{filtered['Score'].median():.1f}" if not filtered.empty else "0")
 next_deadline = filtered["Close Date"].dropna().min() if not filtered.empty else None
-metric_col4.metric("Next Deadline", next_deadline.strftime("%Y-%m-%d") if pd.notna(next_deadline) else "Not listed")
+metric_col4.metric("Next Expiration", next_deadline.strftime("%Y-%m-%d") if pd.notna(next_deadline) else "Not listed")
+st.caption("For an NIH Guide notice, Expires is the day the notice expires, and application due dates are in the announcement. For a Grants.gov row, Expires is the closing date.")
 
 tab_results, tab_visuals, tab_detail = st.tabs(["Results", "Visuals", "Details"])
 
 with tab_results:
     st.dataframe(
-        filtered.drop(columns=["Source ID"], errors="ignore"),
+        filtered.drop(columns=["Source ID", "Close Month"], errors="ignore"),
         width="stretch",
         hide_index=True,
         column_config={
@@ -192,7 +193,7 @@ with tab_results:
             "Source URL": st.column_config.LinkColumn("NIH Guide URL"),
             "Grants.gov URL": st.column_config.LinkColumn("Grants.gov URL"),
             "Open Date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
-            "Close Date": st.column_config.DateColumn("Close Date", format="YYYY-MM-DD"),
+            "Close Date": st.column_config.DateColumn("Expires", format="YYYY-MM-DD"),
         },
     )
 
@@ -218,10 +219,10 @@ with tab_visuals:
         score_counts = score_bins.value_counts().reindex(score_labels, fill_value=0)
         st.bar_chart(score_counts)
     with chart_col4:
-        st.subheader("Deadlines by Month")
+        st.subheader("Expirations by Month")
         month_counts = filtered[filtered["Close Month"] != "Not listed"]["Close Month"].value_counts().sort_index()
         if month_counts.empty:
-            st.info("No deadline dates in the current view.")
+            st.info("No expiration dates in the current view.")
         else:
             st.bar_chart(month_counts)
 
@@ -235,7 +236,7 @@ with tab_detail:
         d1.metric("Score", f"{row['Score']:.1f}")
         d2.metric("Class", row["Classification"])
         d3.metric("Institute", row["NIH Institute"])
-        d4.metric("Deadline", row["Close Date"].strftime("%Y-%m-%d") if pd.notna(row["Close Date"]) else "Not listed")
+        d4.metric("Expires", row["Close Date"].strftime("%Y-%m-%d") if pd.notna(row["Close Date"]) else "Not listed")
         st.markdown(f"**Opportunity number:** {row['Opportunity Number']}")
         st.markdown(f"**Matched terms:** {row['Matched Terms'] or 'None'}")
         st.markdown(f"**Why it matched:** {row['Why It Matched']}")

@@ -115,7 +115,7 @@ class MLRelevanceScorer:
         if MLRelevanceScorer._is_nih_hhs(opportunity):
             reasons.append("Source agency appears to be NIH/HHS")
         if opportunity.close_date and urgency_score > 0:
-            reasons.append(f"Deadline is still active: {opportunity.close_date.isoformat()}")
+            reasons.append(f"Open until {opportunity.close_date.isoformat()}")
         if generic_penalty > 0 and not matched_terms:
             reasons.append("Mostly generic biomedical wording; keep only as watchlist")
         return reasons or ["Weak computational signal; included for monitoring only"]

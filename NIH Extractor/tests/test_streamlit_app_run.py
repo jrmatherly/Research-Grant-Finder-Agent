@@ -27,6 +27,7 @@ def test_dashboard_renders_saved_open_results(tmp_path, monkeypatch) -> None:
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert not app.exception
     assert app.metric[0].value == "1"
+    assert [metric.label for metric in app.metric][:4] == ["Visible Opportunities", "High Matches", "Median Score", "Next Expiration"]
 
 
 def test_dashboard_says_when_it_shows_scores_as_last_saved(tmp_path, monkeypatch) -> None:
