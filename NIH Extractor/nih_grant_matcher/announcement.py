@@ -98,7 +98,7 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
     try:
         text, guide_ggid = guide.doctext(number)
         # The Guide can answer for an open notice without its text for some minutes.
-        guide_says = "The NIH Guide gave no text for it. The Guide sometimes answers without the text for a few minutes, so try again later."
+        guide_says = "The NIH Guide gave no text for it. The Guide sometimes answers without the text for a few minutes, so a later try may get it."
     except ApiError as exc:
         text, guide_ggid, guide_says = "", "", f"The request to the NIH Guide failed ({exc})."
     # The Guide serves its text with HTML entities and no tags.

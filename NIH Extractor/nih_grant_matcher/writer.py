@@ -147,7 +147,7 @@ class Workspace:
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
         if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "nih-guide" and announcement.origin == "grants.gov":
-            raise ApiError(f"The NIH Guide gave no text for {app.opportunity_number} this time, so Grant Matcher kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}, and you can try again later.")
+            raise ApiError(f"The NIH Guide gave no text for {app.opportunity_number} this time, so Grant Matcher kept the copy it saved from the NIH Guide on {saved.fetched_at:%Y-%m-%d}. A later try may get the text.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
         for other in self.store.applications():
