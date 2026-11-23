@@ -4,7 +4,7 @@ The dashboard searches the NIH Guide and Grants.gov, scores each funding opportu
 
 To start the dashboard, see the [README](../README.md#getting-started) for a local start or [Run NIH Grant Matcher from the published Docker image](docker.md) for Docker. Then open http://localhost:8501.
 
-![The dashboard with the sidebar, the filters, the four metrics, and the Results table](../images/dashboard-results.jpg)
+![The dashboard with the sidebar, the filters, the four metrics, and the Results table](../images/Dashboard.png)
 
 ## The layout
 
