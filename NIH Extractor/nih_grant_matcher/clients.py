@@ -45,6 +45,12 @@ def _read_json(request: urllib.request.Request, timeout: int) -> dict[str, Any]:
         raise ApiError(f"{_address(request)} returned JSON that is not an object")
     return parsed
 
+def _number(value: Any, name: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ApiError(f"{name} is not a number: {value!r}") from None
+
 def _post_json(url: str, payload: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1"}, method="POST")
     parsed = _read_json(request, timeout)
@@ -77,7 +83,7 @@ class GrantsGovClient:
             start_record += len(hits)
         return collected[:limit]
     def fetch_opportunity(self, opportunity_id: str | int) -> dict[str, Any]:
-        data = _post_json(self.fetch_url, {"opportunityId": int(opportunity_id)}).get("data")
+        data = _post_json(self.fetch_url, {"opportunityId": _number(opportunity_id, "Grants.gov opportunity id")}).get("data")
         time.sleep(self.pause_seconds)
         if not isinstance(data, dict):
             raise ApiError(f"Unexpected Grants.gov fetch response for {opportunity_id}")
@@ -87,7 +93,8 @@ class GrantsGovClient:
         found = next((a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")), None)
         if found is None:
             return ""
-        return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{found['id']}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
+        # The id goes into the URL path, so only a number may reach it.
+        return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{_number(found.get('id'), f'Grants.gov full announcement attachment id for {opportunity_id}')}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
 
 @dataclass
 class NihGuideClient:
@@ -114,7 +121,11 @@ class NihGuideClient:
     def doctext(self, docnum: str) -> tuple[str, str]:
         parsed = _read_json(_guide_request(NIH_GUIDE_DOCTEXT_URL, perpage=1, sort="_score", offset=0, types="active,activenosis", keyword=docnum), 30)
         hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
-        source = hits[0].get("_source", hits[0]) if isinstance(hits, list) and hits and isinstance(hits[0], dict) else {}
+        if not isinstance(hits, list):
+            raise ApiError("Unexpected NIH Guide response: hits is not a list")
+        source = (hits[0].get("_source", hits[0]) if isinstance(hits[0], dict) else None) if hits else {}
+        if not isinstance(source, dict):
+            raise ApiError(f"Unexpected NIH Guide response for {docnum}: the hit is not an object")
         # The search ranks by relevance, so the top hit can be another document that cites this number.
         if source.get("docnum") != docnum:
             return "", ""

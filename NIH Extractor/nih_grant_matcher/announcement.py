@@ -11,10 +11,12 @@ from .rules import GRANT_TYPES, Limit
 
 SECTION_TITLES: dict[str, str] = {"I": "Notice of Funding Opportunity Description", "II": "Award Information", "III": "Eligibility Information", "IV": "Application and Submission Information", "V": "Application Review Information", "VI": "Award Administration Information", "VII": "Agency Contacts", "VIII": "Other Information"}
 _NEXT_HEADING = re.compile(r".{0,4}Section")
-_FORMS_AFTER_RESEARCH_PLAN =("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
+_FORMS_AFTER_RESEARCH_PLAN = ("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
 _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
 # "is not limited to" never names a section and a page count, so it cannot match.
-_PAGE_LIMIT = re.compile(r"[^.]*\b(" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r") (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b[^.]*\.?")
+_PAGE_LIMIT = re.compile(r"\b(" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r") (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
+# The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
+_SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
 
 @dataclass(frozen=True)
 class Announcement:
@@ -111,6 +113,11 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
 def quoted_in(quote: str, text: str) -> bool:
     return " ".join(quote.split()) in " ".join(text.split())
 
+def _sentence_around(text: str, start: int, end: int) -> str:
+    before = [m.end() for m in _SENTENCE_END.finditer(text, 0, start)]
+    after = _SENTENCE_END.search(text, end)
+    return text[before[-1] if before else 0:after.end() if after else len(text)].strip()
+
 def parse_requirements(announcement: Announcement) -> tuple[Requirement, ...]:
     part = announcement.section("IV")
     found: list[Requirement] = []
@@ -124,5 +131,5 @@ def parse_requirements(announcement: Announcement) -> tuple[Requirement, ...]:
             found.append(Requirement("must", "Follow the announcement's additional instructions for the Research Plan.", quote, "parsed", "research-strategy"))
     for match in _PAGE_LIMIT.finditer(part):
         title, pages = match.group(1), float(match.group(2))
-        found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", match.group(0).strip(), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
+        found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", _sentence_around(part, match.start(), match.end()), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
     return tuple(found)

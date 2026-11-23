@@ -164,3 +164,18 @@ def test_full_announcement_downloads_only_the_full_announcement_attachment(monke
     monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
     assert clients.GrantsGovClient().full_announcement("360675") == expected
     assert reads[1:] == ([f"{GRANTSGOV_ATTACHMENT_URL}/355218"] if expected else [])
+
+
+@pytest.mark.parametrize("attachment", [{"fileName": "PAR-27-090-Full-Announcement.html"}, {"id": "../x", "fileName": "PAR-27-090-Full-Announcement.html"}, {"id": "1?a=b", "fileName": "PAR-27-090-Full-Announcement.html"}], ids=["no-id", "path", "query"])
+def test_a_full_announcement_without_a_numeric_id_is_an_api_error_and_is_not_requested(monkeypatch, attachment) -> None:
+    import json
+    from nih_grant_matcher.config import GRANTSGOV_FETCH_URL
+    reads = []
+    def fake_read(request, timeout, attempts=3):
+        reads.append(request.full_url)
+        return json.dumps({"errorcode": 0, "data": {"synopsisAttachmentFolders": [{"synopsisAttachments": [attachment]}]}}).encode()
+    monkeypatch.setattr(clients, "_read", fake_read)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    with pytest.raises(clients.ApiError, match="attachment id"):
+        clients.GrantsGovClient().full_announcement("360675")
+    assert reads == [GRANTSGOV_FETCH_URL]
