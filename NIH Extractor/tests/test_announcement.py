@@ -10,6 +10,11 @@ TEXT = (Path(__file__).parent / "fixtures" / "announcement_par.txt").read_text(e
 OPP = Opportunity(source_id="nih-guide:9", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active", funding_instruments=("R01",), raw={"guide_item": {"ggid": "360675"}})
 SMALL = "Part 1. Overview Section I. Notice of Funding Opportunity DescriptionSection IV. Application and Submission InformationSection V. Application Review Information Part 2. Section I. Notice of Funding Opportunity Description Research areas include, but are not limited to: pain. Section III. Eligibility Information Eligible organizations are listed here. Section IV. Application and Submission Information See Section III. Eligibility Information for who may apply. PHS 398 Research PlanAll instructions in the How to Apply - Application Guide must be followed, with the following additional instructions: Research Strategy: Applicants must describe the data sharing approach. The Research Strategy is limited to 6 pages. PHS Human Subjects and Clinical Trials InformationAll instructions must be followed. Section V. Application Review Information Factor 1. Importance of the Research."
 
+# A Grants.gov attachment of less than 1,000 characters of text is not an announcement.
+FILLER = "<p>" + "Applicants must follow the How to Apply - Application Guide. " * 20 + "</p>"
+# The Grants.gov attachment of PA-25-253 on 2026-11-23, which only redirects to the NIH Guide.
+LINK_ONLY = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="refresh" content="0; URL='http://grants.nih.gov/grants/guide/pa-files/PA-25-253.html'" /><title>PA-25-253</title></head><body></body></html>"""
+
 def _announcement(text: str) -> Announcement:
     return Announcement("PAR-27-090", text, "nih-guide", "u", "0" * 64, datetime(2026, 11, 23))
 
@@ -30,7 +35,7 @@ def test_a_heading_in_the_table_of_contents_or_in_a_sentence_is_not_a_section_st
     assert small.section("IV").startswith("Section IV. Application and Submission Information See Section III.") and "PHS 398 Research Plan" in small.section("IV")
 
 def test_fetch_falls_back_to_the_grants_gov_attachment() -> None:
-    found = fetch_announcement(OPP, Guide(""), Grants("<h2>Section IV. Application and Submission Information</h2><p>The Research Strategy is limited to 6&nbsp;pages.</p><script>x()</script>"))
+    found = fetch_announcement(OPP, Guide(""), Grants("<h2>Section IV. Application and Submission Information</h2><p>The Research Strategy is limited to 6&nbsp;pages.</p><script>x()</script>" + FILLER))
     assert found.origin == "grants.gov" and "limited to 6 pages" in found.text and "x()" not in found.text
 
 def test_no_source_is_an_error_that_names_both() -> None:
@@ -63,7 +68,7 @@ def test_a_decimal_point_does_not_end_the_quoted_sentence() -> None:
 
 def test_a_guide_reply_with_a_malformed_hit_falls_back_to_grants_gov(monkeypatch) -> None:
     monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: b'{"data": {"hits": {"hits": [{"_source": "PAR-27-090"}]}}}')
-    found = fetch_announcement(OPP, clients.NihGuideClient(), Grants("<p>Section IV. Application and Submission Information</p>"))
+    found = fetch_announcement(OPP, clients.NihGuideClient(), Grants("<p>Section IV. Application and Submission Information</p>" + FILLER))
     assert found.origin == "grants.gov"
 
 def test_a_grants_gov_id_that_is_not_a_number_ends_in_the_error_that_names_both(monkeypatch) -> None:
@@ -72,3 +77,7 @@ def test_a_grants_gov_id_that_is_not_a_number_ends_in_the_error_that_names_both(
     opportunity = Opportunity(source_id="nih-guide:9", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active", raw={"guide_item": {"ggid": "../x"}})
     with pytest.raises(clients.ApiError, match="NIH Guide.*Grants.gov.*not a number"):
         fetch_announcement(opportunity, Guide(""), clients.GrantsGovClient())
+
+def test_a_grants_gov_page_that_only_links_to_the_announcement_is_not_one() -> None:
+    with pytest.raises(clients.ApiError, match="NIH Guide.*Grants.gov has only a link to the announcement"):
+        fetch_announcement(OPP, Guide(""), Grants(LINK_ONLY))

@@ -80,7 +80,14 @@ OTHER_AGENCIES = ("FDA", "NIOSH")
 # A phased award's announcement sets its own structure, so it is out of scope until a later stage.
 SECOND_PHASE_CODES = ("R33", "UH3")
 
+def why_not_covered(opportunity: Opportunity) -> str:
+    if set(SECOND_PHASE_CODES) & set(opportunity.funding_instruments):
+        return "This is a phased award, whose announcement sets its own structure, and Grant Matcher does not write one yet."
+    if opportunity.agency_code in OTHER_AGENCIES:
+        return f"{opportunity.agency_code} posts in the NIH Guide and reviews by its own criteria, and Grant Matcher writes only for NIH review."
+    return ""
+
 def grant_types_for(opportunity: Opportunity) -> tuple[GrantType, ...]:
-    if opportunity.agency_code in OTHER_AGENCIES or set(SECOND_PHASE_CODES) & set(opportunity.funding_instruments):
+    if why_not_covered(opportunity):
         return ()
     return tuple(GRANT_TYPES[f"NIH:{code}"] for code in dict.fromkeys(opportunity.funding_instruments) if f"NIH:{code}" in GRANT_TYPES)

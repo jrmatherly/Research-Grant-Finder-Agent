@@ -347,3 +347,52 @@ def test_a_database_error_on_save_is_a_message(tmp_path, monkeypatch) -> None:
         path.chmod(0o644)
     assert not app.exception
     assert any("readonly" in error.value.replace("\\", "") for error in app.error)
+
+
+def _tabs_index(app):
+    return next(index for index, child in app.main.children.items() if type(child).__name__ == "Block" and any(type(c).__name__ == "Tab" for c in child.children.values()))
+
+
+def test_a_notice_does_not_move_the_tabs_or_change_the_open_tab(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    before = _tabs_index(app)
+    app.session_state["apply_tab"] = "Sections"
+    app.text_area(key="apply_text_1_specific-aims").set_value("Aim 1.")
+    app.button(key="apply_save_button").click().run(timeout=30)
+    assert not app.exception and app.success
+    assert _tabs_index(app) == before and app.session_state["apply_tab"] == "Sections"
+    app.run(timeout=30)
+    assert _tabs_index(app) == before and app.session_state["apply_tab"] == "Sections"
+
+
+def test_a_typed_delete_confirmation_does_not_carry_to_a_new_application(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.button(key="start_application").click().run(timeout=30)
+    app.text_input(key="apply_delete_1").set_value("PAR-1").run(timeout=30)
+    app.button(key="apply_delete_button").click().run(timeout=30)
+    assert not app.exception and any("Deleted" in success.value for success in app.success)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    app.button(key="start_application").click().run(timeout=30)
+    assert not app.exception and app.selectbox(key="application_id").value == 1
+    assert app.text_input(key="apply_delete_1").value == "" and app.button(key="apply_delete_button").disabled
+
+
+def test_the_keys_of_a_deleted_application_are_its_own() -> None:
+    from nih_grant_matcher.ui.apply_page import owned_by
+    assert [key for key in ("apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary", "apply_delete_11", "apply_text_11_specific-aims", "apply_section", "apply_signer", "apply_restore_1_button", "application_id") if owned_by(1, key)] == ["apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary"]
+
+
+def test_a_phased_award_says_why_it_cannot_be_started(tmp_path, monkeypatch) -> None:
+    from helpers import opportunity
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        store.upsert_scored(MLRelevanceScorer().score(replace_close(opportunity(instruments=("R21", "R33")))))
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert not app.exception and app.button(key="start_application").disabled
+    assert any("phased award" in caption.value for caption in app.caption)

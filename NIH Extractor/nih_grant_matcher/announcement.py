@@ -16,6 +16,8 @@ _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.section
 # "is not limited to" never names a section and a page count, so it cannot match.
 _PAGE_LIMIT = re.compile(r"\b(" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r") (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
 # The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
+# A Grants.gov attachment can be a page that only redirects to the NIH Guide, as PA-25-253's was on 2026-11-23, and its text is then a title of a few characters.
+_SHORTEST_ANNOUNCEMENT = 1000
 _SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
 
 @dataclass(frozen=True)
@@ -106,8 +108,10 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
         grants_says = "has no full announcement attached" if ggid else "has no record of it"
     except ApiError as exc:
         html, grants_says = "", f"failed: {exc}"
+    if html and len(text := html_to_text(html)) >= _SHORTEST_ANNOUNCEMENT:
+        return _announcement(opportunity, text, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
     if html:
-        return _announcement(opportunity, html_to_text(html), "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
+        grants_says = "has only a link to the announcement"
     raise ApiError(f"No announcement text for {number}. The NIH Guide {guide_says}, and Grants.gov {grants_says}.")
 
 def quoted_in(quote: str, text: str) -> bool:
