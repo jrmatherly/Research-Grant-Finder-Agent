@@ -1,0 +1,1319 @@
+[
+ {
+  "source_id": "nih-guide:42726",
+  "opportunity_number": "PAR-26-040",
+  "title": "Advancing Bioinformatics, Translational Bioinformatics and Computational Biology Research (R01 Clinical Trial Optional)",
+  "agency_code": "NLM",
+  "agency_name": "NIH NLM",
+  "status": "active",
+  "open_date": "2026-04-06",
+  "close_date": "2029-03-06",
+  "description": "The National Library of Medicine (NLM) seeks applications for research projects that drive groundbreaking innovation and advanced development in the fields of bioinformatics, translational bioinformatics, and computational biology. The primary goal of this initiative is to support the creation and implementation of cutting-edge methods, tools, and approaches that can transform the landscape of biomedical data science. This NOFO aims to address the growing need to leverage transformative technologies \u2014 such as artificial intelligence (AI), machine learning, and large-scale computational platforms \u2014 to extract actionable knowledge from vast, diverse, and complex biological datasets. By enabling more effective interpretation and integration of multi-dimensional biological and biomedical data, this research will ultimately contribute to improving individual and population health outcomes.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-26-040.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43157",
+  "opportunity_number": "RFA-LM-28-001",
+  "title": "NLM Institutional Grants for Research Training in Biomedical Informatics, Data Science, and AI (T15 Independent Clinical Trial Not Allowed)",
+  "agency_code": "NLM",
+  "agency_name": "NIH NLM",
+  "status": "active",
+  "open_date": "2027-01-11",
+  "close_date": "2027-02-12",
+  "description": "The National Library of Medicine (NLM) invites applications for innovative predoctoral and postdoctoral training programs that prepare the next generation of researchers in biomedical informatics, data science, and artificial intelligence/machine learning (AI/ML). NLM emphasizes cutting-edge, forward-looking training experiences that equip trainees to address complex health and biomedical challenges through advanced computational approaches. Applications may propose the creation of new training programs or the renewal of existing NLM-supported programs. These programs are designed to meet the growing demand for researchers with deep expertise in biomedical computing, data science, and AI/ML, with clear relevance to health and biomedical research. Recognizing the inherently interdisciplinary nature of these fields, NLM seeks programs that integrate methods and perspectives across disciplines to advance biomedical informatics, data science, and AI/ML.",
+  "eligibility": [],
+  "funding_instruments": [
+   "T15"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-LM-28-001.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43191",
+  "opportunity_number": "RFA-AI-28-014",
+  "title": "Systems Biology of Infection and Inflammation in Chronic Diseases (U19 Clinical Trial Not Allowed)",
+  "agency_code": "NIAID",
+  "agency_name": "NIH NIAID",
+  "status": "active",
+  "open_date": "2027-01-18",
+  "close_date": "2027-02-19",
+  "description": "The purpose of this notice of funding opportunity (NOFO) is to support the advancement of systems-level understanding of the link between infectious pathogens and inflammatory pathways that result in predisposition, onset and progression of chronic diseases. The NOFO will stimulate integration of clinical and patient data, large-scale omics datasets, advanced Artificial Intelligence (AI) and computational modeling to prevent, treat, and mitigate the combined impact of chronic diseases, inflammation, and infections.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U19"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-AI-28-014.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42725",
+  "opportunity_number": "PAR-26-042",
+  "title": "Research Grants in Clinical Informatics (R01 Clinical Trial Optional)",
+  "agency_code": "NLM",
+  "agency_name": "NIH NLM",
+  "status": "active",
+  "open_date": "2026-04-06",
+  "close_date": "2029-03-06",
+  "description": "The National Library of Medicine (NLM) seeks applications for innovative research in clinical informatics. The overarching goal of this forthcoming program is to catalyze the development and advancement of novel informatics methodologies that empower clinicians, patients, and the broader public to better understand, manage, and improve health and health care delivery. This NOFO will support research focused on the design, implementation, and evaluation of clinical informatics tools and methods that enable data-driven discovery, promote evidence-based decision-making, and support personalized and precision health care. Emphasis will be placed on domain-independent, scalable, and reusable/reproducible approaches for the discovery, analysis, organization, and management of health-related digital objects\u2014including electronic health records (EHRs), clinical notes, imaging data, and patient-generated data. The aim is to transform raw and heterogeneous health data into actionable knowledge, to develop innovative tools, and to implement practical applications that can be generalized across multiple clinical settings and populations. Projects should demonstrate the potential to accelerate scientific insights, improve clinical workflows, and ultimately lead to improved health outcomes.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-26-042.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43139",
+  "opportunity_number": "RFA-HG-27-010",
+  "title": "Computational Modeling and Analysis of the Impact of Genomic Variation on Function (UM1, Clinical Trial Not Allowed)",
+  "agency_code": "NHGRI",
+  "agency_name": "NIH NHGRI",
+  "status": "active",
+  "open_date": "2026-11-14",
+  "close_date": "2026-12-15",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to solicit applications to develop, apply, and test predictive models and perform integrative analyses to determine the impact of genomic variation on genome function. Centers funded through this initiative will become a part of the Impact of Genomic Variation on Function (IGVF) Consortium. As consortium members, centers will work together to ensure all consortium resources are accessible to a wide variety of potential users. Centers also will collaborate with other consortium components to guide and optimize IGVF experimental design, to provide analytical expertise and support for consortium-wide efforts, and to develop and execute shared analysis strategies to meet consortium goals.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-HG-27-010.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42616",
+  "opportunity_number": "PAR-25-447",
+  "title": "NHLBI TOPMed: Omics Phenotypes of Heart, Lung, and Blood Disorders (X01 - Clinical Trial Not Allowed)",
+  "agency_code": "NHLBI",
+  "agency_name": "NIH NHLBI",
+  "status": "active",
+  "open_date": "2025-10-06",
+  "close_date": "2028-05-09",
+  "description": "This Notice of Funding Opportunity (NOFO) invites applications to use NHLBI-funded TransOmics for Precision Medicine (TOPMed) program to generate a large volume of integrated genetic and multi-omics data to facilitate discovery of the molecular mechanisms of Heart, Lung, Blood, and Sleep (HLBS) disorders. No funding will be provided under this NOFO. The genomic data and related phenotypic data will be deposited in a public NIH-designated controlled-access database such as the database for Genotypes and Phenotypes (dbGaP) and NHLBIs BioData Catalyst (BDC). The overall goal is to move from simply cataloguing genetic associations to understanding how genetic factors contribute to HLBS diseases at the molecular and cellular levels. This transformation will help move TOPMed from genetic Map to Mechanism with potential applications of AI and ML tool sets where possible, enabling functional genomics research that will accelerate mechanistic personalized medicine",
+  "eligibility": [],
+  "funding_instruments": [
+   "X01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-447.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43137",
+  "opportunity_number": "RFA-AR-28-001",
+  "title": "NIAMS P30 Centers Program (P30 - Clinical Trial Not Allowed)",
+  "agency_code": "NIAMS",
+  "agency_name": "NIH NIAMS",
+  "status": "active",
+  "open_date": "2027-01-01",
+  "close_date": "2029-03-02",
+  "description": "The overall goal of this program is to accelerate scientific discovery, improve research efficiency, and enhance the translation of research findings into improved health outcomes. Centers funded under this program will also foster multidisciplinary collaboration, support workforce development across career stages, and promote training in emerging areas such as data science, artificial intelligence, and implementation research. The National Institute of Arthritis and Musculoskeletal and Skin Diseases (NIAMS) requests applications for the NIAMS P30 Centers Program to support integrated research Centers within its mission areas of skin biology and diseases; bone, muscle, and orthopaedic research; and rheumatic diseases. The NIAMS P30 Centers Program supports Centers that provide coordinated research infrastructure, shared resources, and methodological expertise to advance basic, translational, and clinical research. These Centers are expected to integrate state-of-the-art research resources with capabilities that support clinical and translational research, including the development, testing, and dissemination of novel analytical methods, study designs, outcome measures, and data-driven approaches.",
+  "eligibility": [],
+  "funding_instruments": [
+   "P30"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-AR-28-001.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41711",
+  "opportunity_number": "PAR-25-131",
+  "title": "Computational Approaches to Curation at Scale for Biomedical Research Assets (R01 Clinical Trial Not Allowed)",
+  "agency_code": "NLM",
+  "agency_name": "NIH NLM",
+  "status": "active",
+  "open_date": "2024-12-27",
+  "close_date": "2027-04-16",
+  "description": "NLM wishes to accelerate access to, and availability of, secure, complete datasets and computational models that can serve as the basis for transformative biomedical discoveries. Innovative at-scale computational approaches that increase the speed and scope of curation processes are needed for data mining and knowledge discovery from growing quantities of biomedical data being produced from ongoing data science advances.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-131.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43210",
+  "opportunity_number": "RFA-AI-28-003",
+  "title": "HIV/AIDS Clinical Trials Network Statistical and Data Management Centers (UM1 Clinical Trial Required)",
+  "agency_code": "NIAID",
+  "agency_name": "NIH NIAID",
+  "status": "active",
+  "open_date": "2027-02-09",
+  "close_date": "2027-03-10",
+  "description": "The purpose of this notice of funding opportunity (NOFO) is to support HIV/AIDS Clinical Trials Network Statistical and Data Management Centers (SDMCs). The SDMCs will be responsible for the statistical and data management leadership and coordination critical to the HIV/AIDS Clinical Trials Networks.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-AI-28-003.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41805",
+  "opportunity_number": "PAR-25-235",
+  "title": "Personal Health Informatics for Delivering Actionable Insights to Individuals (R01 Clinical Trial Optional)",
+  "agency_code": "NLM",
+  "agency_name": "NIH NLM",
+  "status": "active",
+  "open_date": "2024-12-05",
+  "close_date": "2027-01-08",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to advance the development of novel informatics and data science approaches that can help individuals understand and improve their health through actionable insights. NLM seeks applications that further the science of personal health informatics by providing meaningful and actionable insights to individuals through innovative personal health data collection, integration, analysis, and personalized risk assessments and interpretation. Applications seeking to advance the understanding of how informatics tools, systems, and platforms can best present the results, interpretation, and limitations of personalized assessments for the benefit of individuals are encouraged. Applications should include end user engaged approaches and real-world evaluation to inform the design of generalizable, reusable, and scalable personal health informatics tools, systems, and platforms for the benefit of individuals in understanding and improving their health.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-235.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:40801",
+  "opportunity_number": "PA-24-190",
+  "title": "Mentored Quantitative Research Development Award (Parent K25 Independent Clinical Trial Required)",
+  "agency_code": "NIH",
+  "agency_name": "NIH NIH",
+  "status": "active",
+  "open_date": "2024-05-10",
+  "close_date": "2027-11-13",
+  "description": "The purpose of the Mentored Quantitative Research Career Development Award (K25) is to attract to NIH-relevant research those investigators whose quantitative science and engineering research has thus far not been focused primarily on questions of health and disease. The K25 award will provide support and \"protected time\" for a period of supervised study and research for productive professionals with quantitative (e.g., mathematics, statistics, economics, computer science, imaging science, informatics, physics, chemistry) and engineering backgrounds to integrate their expertise with NIH-relevant research.This Funding Opportunity Announcement (FOA) is designed specifically for applicants proposing to serve as the lead investigator of an independent clinical trial, a clinical trial feasibility study, or a separate ancillary clinical trial, as part of their research and career development. Applicants not planning an independent clinical trial, or proposing to gain research experience in a clinical trial led by another investigator, must apply to companion FOA.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K25"
+  ],
+  "funding_categories": [
+   "PA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-24-190.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:40803",
+  "opportunity_number": "PA-24-191",
+  "title": "Mentored Quantitative Research Development Award (Parent K25 Independent Clinical Trial Not Allowed)",
+  "agency_code": "NIH",
+  "agency_name": "NIH NIH",
+  "status": "active",
+  "open_date": "2024-05-10",
+  "close_date": "2027-11-13",
+  "description": "The purpose of the Mentored Quantitative Research Career Development Award (K25) is to attract to NIH-relevant research those investigators whose quantitative science and engineering research has thus far not been focused primarily on questions of health and disease. The K25 award will provide support and \"protected time\" for a period of supervised study and research for productive professionals with quantitative (e.g., mathematics, statistics, economics, computer science, imaging science, informatics, physics, chemistry) and engineering backgrounds to integrate their expertise with NIH-relevant research.This Funding Opportunity Announcement (FOA) is designed specifically for applicants proposing research that does not involve leading an independent clinical trial, a clinical trial feasibility study, or an ancillary clinical trial. Applicants to this FOA are permitted to propose research experience in a clinical trial led by a mentor or co-mentor. Applicants proposing a clinical trial or an ancillary clinical trial as lead investigator, should apply to the companion FOA ().",
+  "eligibility": [],
+  "funding_instruments": [
+   "K25"
+  ],
+  "funding_categories": [
+   "PA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-24-191.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42234",
+  "opportunity_number": "PAR-25-357",
+  "title": "NEI Research Grant for Vision-Related Secondary Data Analysis (R21 Clinical Trial Not Allowed)",
+  "agency_code": "NEI",
+  "agency_name": "NIH NEI",
+  "status": "active",
+  "open_date": "2025-01-16",
+  "close_date": "2027-10-17",
+  "description": "The goal of this funding opportunity announcement (FOA) is to fund meritorious vision-related research projects that involve secondary data analyses using existing database resources. The development of statistical methodology necessary for improving methods to analyze vision health data using existing vision data may also be proposed.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R21"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-357.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42834",
+  "opportunity_number": "PAR-27-015",
+  "title": "Community-Based Participatory Research to Advance Data and Practice Transformation (ADAPT) for Optimizing Oral Health for All (UG3/UH3 Clinical Trial Optional)",
+  "agency_code": "NIDCR",
+  "agency_name": "NIH NIDCR",
+  "status": "active",
+  "open_date": "2026-09-16",
+  "close_date": "2028-11-17",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to solicit UG3/UH3 phased, cooperative agreement research applications to evaluate, implement, and/or test population-based interventions to policies, programs, and/or practices for promoting integration of services, systems, and/or values by leveraging cross-sector partnerships in communities. Such interventions must address social and chronic disease common risk factors and/or barriers driving oral disease burden in communities. Projects funded through this funding opportunity and a separately funded Community Engagement Evaluation and Data Coordination hub (CEED) will form a Community-Based Participatory Research (CBPR) consortium: Advancing Data and Practice Transformation (ADAPT), which will receive consultative services from the NIH Community Engagement Alliance Consultative Resource (CEACR) and join in the Science Collaborative for Health and Artificial Intelligence Reduction of Errors (SCHARE) platform for the overarching goal of promoting data use and transformational community engagement to optimize oral health for all people across the lifespan.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UG3",
+   "UH3"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-015.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43115",
+  "opportunity_number": "PAR-28-057",
+  "title": "Pancreatic Cancer Detection Consortium: Management and Data Coordination Unit (U24 Clinical Trial Not Allowed)",
+  "agency_code": "NCI",
+  "agency_name": "NIH NCI",
+  "status": "active",
+  "open_date": "2026-12-25",
+  "close_date": "2027-05-26",
+  "description": "Through this Notice of Funding Opportunity (NOFO), the National Cancer Institute (NCI) is soliciting applications for the establishment of the Management and Data Coordination Unit (MDCU), one of the two scientific components of the Pancreatic Cancer Detection Consortium (PCDC). The PCDC will continue to address one of the four research priorities identified in the National Cancer Institute's 2014 Scientific Framework for Pancreatic Ductal Adenocarcinoma and conduct research on early detection of pancreatic ductal adenocarcinoma (PDAC) and characterization of its precursor lesions to identify those patients who are at high risk of progression to cancer. The PCDC-MDCU will provide support towards collaborative efforts such as study design, protocol development, statistical analysis, coordination and data management. Other PCDC-MDCU activities include: coordination and support towards biorepository building; and organizational and logistics support for PCDC activities.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U24"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-28-057.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42147",
+  "opportunity_number": "RFA-HG-25-009",
+  "title": "Supporting Talented Early Career Researchers in Genomics (R01 Clinical Trial Optional)",
+  "agency_code": "NHGRI",
+  "agency_name": "NIH NHGRI",
+  "status": "active",
+  "open_date": "2025-01-28",
+  "close_date": "2027-02-27",
+  "description": "This Funding Opportunity Announcement is intended to identify and support research projects by exceptionally promising Early Stage Investigators with a long-term career interest in pursuing innovative research in genomics. This opportunity is open to research in all areas relevant to the mission of NHGRI, including genomic sciences, genomic medicine, genomic data science, and ethical, legal, and social implications of genomics.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-HG-25-009.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42778",
+  "opportunity_number": "PAR-27-013",
+  "title": "Data Coordinating Center for Multi-Site Investigator-Initiated Clinical Trials (Collaborative U24 Clinical Trial Required)",
+  "agency_code": "NHLBI",
+  "agency_name": "NIH NHLBI",
+  "status": "active",
+  "open_date": "2026-05-02",
+  "close_date": "2028-11-03",
+  "description": "This Notice of Funding Opportunity (NOFO) supports applications for a collaborating Data Coordinating Center (DCC) for investigator-initiated multi-site clinical trials including efficacy, comparative effectiveness, pragmatic and/or implementation research clinical trials. Trials using innovative designs such as platform trials, adaptive, and Bayesian designs are encouraged. These trials may include ones that test different therapeutic, behavioral, and/or prevention strategies. Trials for which this NOFO applies must be relevant to the research mission of the NHLBI and meet the NIH definition of a clinical trial (see NOT-OD-15-015). For additional information about the mission, strategic vision, and research priorities of the NHLBI, applicants are encouraged to consult the NHLBI website.This NOFO will utilize a milestone-driven cooperative agreement mechanism of award and runs in parallel with a companion NOFO (PAR-27-012) for a collaborating Clinical Coordinating Center (CCC). The objective of the DCC application is to present a comprehensive plan to provide overall project coordination, administration, data management, and biostatistical support for the clinical trial proposed in the collaborating CCC application. The application should also describe its approaches to collaborate with the CCC on implementation of the clinical trial community engagement plan. Both a DCC application and a collaborating CCC application must be submitted on the same application due date for consideration by NHLBI. Applicants are strongly encouraged to contact the appropriate Scientific/Research contact prior to submitting an application.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U24"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-013.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43114",
+  "opportunity_number": "PAR-28-056",
+  "title": "Pancreatic Cancer Detection Consortium: Research Units (U01 Clinical Trial Optional)",
+  "agency_code": "NCI",
+  "agency_name": "NIH NCI",
+  "status": "active",
+  "open_date": "2027-01-05",
+  "close_date": "2029-11-06",
+  "description": "Through this Notice of Funding Opportunity (NOFO), NCI solicits applications for the Research Units (RUs), one of the two scientific components of the Pancreatic Cancer Detection Consortium (PCDC), to conduct research on early detection of pancreatic ductal adenocarcinoma (PDAC) and characterization of its precursor lesions to identify patients who are at high risk of progression to cancer. The PCDC will continue to address one of the four research priorities identified in the NCI's 2014 Scientific Framework for Pancreatic Ductal Adenocarcinoma (PDAC). The PCDC will support research for the development and testing of new molecular and imaging biomarkers for detecting PDAC early and for identifying patients at high risk of PDAC (because of genetic factors, family history and/or the presence of precursor lesions) who could be candidates for early intervention. The PCDC-RUs will consist of multi-disciplinary teams and will undertake studies to: identify and test biomarkers measurable in bodily fluids for early detection of PDAC and/or its precursor lesions; develop molecular- and/or imaging-based markers of pancreatic cysts and determine which lesions are likely to progress to cancer; develop molecular- and/or imaging-based approaches for screening populations at high risk of PDAC; use machine learning and computational approaches towards biomarker discovery and/or validation; and conduct biomarker validation studies. The PCDC-RUs will also collect longitudinal biospecimens for building a biorepository. Each PCDC-RU is expected to participate in collaborative activities with other PCDC-RUs and share ideas, biospecimens, and data within the Consortium.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-28-056.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41514",
+  "opportunity_number": "PAR-24-301",
+  "title": "NICHD Resource Program Grants in Bioinformatics (P41 Clinical Trial Not Allowed)",
+  "agency_code": "NICHD",
+  "agency_name": "NIH NICHD",
+  "status": "active",
+  "open_date": "2024-12-25",
+  "close_date": "2027-09-26",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to support the continued operation, maintenance, and dissemination of unique database bioinformatics resources that are of major importance to the research community using animal models of embryonic developmental processes. These grants will support ongoing development and enhancement of the resources, user training and services, provision of community generated data storage and curation, wide dissemination of the tools and/or resources, and expansion of interoperability with other NIH bioinformatics resources.",
+  "eligibility": [],
+  "funding_instruments": [
+   "P41"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-301.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43181",
+  "opportunity_number": "RFA-RM-27-009",
+  "title": "Single Source: Continued Development of the Gabriella Miller Kids First Pediatric Data Resource Center (U2C Clinical Trial Not Allowed)",
+  "agency_code": "RMOD",
+  "agency_name": "NIH RMOD",
+  "status": "active",
+  "open_date": "2026-12-08",
+  "close_date": "2027-01-09",
+  "description": "This is a Notice of Funding Opportunity (NOFO) for a Single Source that will invite application(s) from the eligible organization(s) to apply. Please see Section III. Eligibility for additional information. In accordance with NIH standard peer-review processes, the application(s) will be peer-reviewed, and only meritorious application(s) will be considered. This NOFO solicits applications for the continued development of the Gabriella Miller Kids First Pediatric Data Resource Center (DRC), which consists of the following components: a Data Resource Core, a Data Coordination Core, and an Administrative Core. The goal of the cloud-based Data Resource is to accelerate discovery of genetic etiology and shared biologic pathways within and across childhood cancers and congenital anomalies by facilitating access to and querying of annotated genomic sequence and phenotypic data from cohorts of patients with these conditions. The Data Resource Core serves as a research resource where genomic and phenotypic data can be aggregated, accessed, analyzed, and shared within and across the childhood cancer and congenital anomalies research communities as well as the broader scientific community. The Data Coordination Core will work with Kids First investigators and KF Genomic Data Generation Centers to facilitate data collection, harmonization, and sharing. The Administrative Core will oversee administrative activities, work closely with the NIH Kids First Working Group, and with the Kids First Training and Outreach Core, to provide resources to the research community.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U2C"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-RM-27-009.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43090",
+  "opportunity_number": "RFA-NS-27-002",
+  "title": "BRAIN Initiative: Integrative Team-Research BRAIN Circuits Program - iBCP (RM1 Clinical Trial Not Allowed)",
+  "agency_code": "NINDS",
+  "agency_name": "NIH NINDS",
+  "status": "active",
+  "open_date": "2026-09-07",
+  "close_date": "2028-06-24",
+  "description": "This Notice of Funding Opportunity (NOFO) supports transdisciplinary research teams seeking to develop mechanistic, biologically grounded explanations of how neural circuits and their cellular building blocks give rise to central nervous system (CNS) function. Teams must integrate expertise spanning molecular and cellular through systems neuroscience, with strong collaboration between experimental and computational investigators, to bridge cells, circuits, and behavior in a unified framework that yields mechanistic insight.Applications must explicitly connect three core elements: (1) characterization of circuit components (e.g., cell types and/or connectivity); (2) measurement of dynamic circuit activity, incorporating in vivo CNS recordings at cellular and sub-second temporal resolution; and (3) analyses of a tractable behavior or functional output.To address this significant challenge in neuroscience, proposed studies are expected to leverage innovative conceptual or theoretical frameworks, predictive models, and/or cutting-edge approaches that unify these three levels of analysis and bridge experimental and computational components.Recipients are expected to participate in BRAIN consortia activities to identify standards of practice towards multi-level integration.",
+  "eligibility": [],
+  "funding_instruments": [
+   "RM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-NS-27-002.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42986",
+  "opportunity_number": "PAR-27-071",
+  "title": "Discovery of the Genetic Basis of Childhood Cancers and of Congenital Anomalies: Gabriella Miller Kids First Pediatric Research Program (X01 Clinical Trial Not Allowed)",
+  "agency_code": "RMOD",
+  "agency_name": "NIH RMOD",
+  "status": "active",
+  "open_date": "2026-12-11",
+  "close_date": "2027-01-12",
+  "description": "As part of the Gabriella Miller Kids First Pediatric Research Program (Kids First Program), the NIH invites applications to submit samples from pediatric cohorts for whole genome sequencing at a Kids First Program supported genomic data generating centers. Applicants are encouraged to propose sequencing of existing pediatric cancer or congenital anomaly cohorts to elucidate the genetic contribution (somatic and/or germline) to childhood cancers, to investigate the genetic etiology of congenital anomalies, to study the molecular basis of the associations between congenital anomalies and increased cancer risk, or to expand the range of pediatric disorders included within the Kids First Data Resource. The program will accept applications that propose whole genome, exome, and transcriptome sequencing, as well as clinical-grade sequencing, long-read sequencing, proteomics, and epigenomic assays of tumor or affected tissue, when justified. Applicants are encouraged to propose cohorts to increase representation of existing Kids First Program projects. These data, and associated clinical and phenotypic data, will become part of the Kids First Data Resource Center for sharing with the research community.",
+  "eligibility": [],
+  "funding_instruments": [
+   "X01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-071.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42889",
+  "opportunity_number": "RFA-CA-27-019",
+  "title": "Early-Stage Development of Informatics Technologies for Cancer Research and Management (U01 Clinical Trial Optional)",
+  "agency_code": "NCI",
+  "agency_name": "NIH NCI",
+  "status": "active",
+  "open_date": "2026-06-01",
+  "close_date": "2027-10-20",
+  "description": "This Notice of Funding Opportunity (NOFO) solicits applications for the development of enabling informatics technologies to improve the acquisition, management, analysis, and dissemination of data and knowledge across the cancer research continuum including cancer biology, cancer treatment and diagnosis, early cancer detection, risk assessment and prevention, cancer control and epidemiology. As a component of the NCI's Informatics Technology for Cancer Research (ITCR) Program, this NOFO is focused on early-stage development from prototyping to initial dissemination. Early-stage development is defined for the purpose of this NOFO as initial tool development or the significant modification of existing tools for new applications. The central mission of ITCR is to promote research-driven informatics technology across the development lifecycle to address priority needs in cancer research. In order to be successful, proposed development plans must have a clear rationale for why the proposed technology is needed and how it will benefit the cancer research field. In addition, mechanisms to solicit feedback from driving research projects and other users throughout the development process must be included.This NOFO encourages applications that involve the development of new, user-friendly informatics technologies that support a wide range of cancer research, including discovery biology, population studies, as well as clinical and translational research. The emphasis is on uniqueness and potential impact on cancer research. In addition, all projects proposed in response to this NOFO must involve the following general attributes:Potential to advance driving cancer research projects and the cancer research field in generalNovel informatics capabilities for the targeted cancer research domainCompelling plans and processes for engaging end users to evaluate and apply the tool or resourceA realistic timeline and milestones for technology development",
+  "eligibility": [],
+  "funding_instruments": [
+   "U01"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-CA-27-019.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41653",
+  "opportunity_number": "PAR-25-120",
+  "title": "NIDCD Early Career Research(ECR) Award (R21 Clinical Trial Optional)",
+  "agency_code": "NIDCD",
+  "agency_name": "NIH NIDCD",
+  "status": "active",
+  "open_date": "2025-01-19",
+  "close_date": "2027-10-16",
+  "description": "The NIDCD Early Career Research (ECR) Award (R21) is intended to support both basic and clinical research from scientists who are beginning to establish an independent research career. It cannot be used for thesis or dissertation research. The research must be focused on one or more of the areas within the biomedical and behavioral scientific mission of the NIDCD: hearing, balance, smell, taste, voice, speech, or language. The NIDCD ECR Award R21 grant mechanism supports different types of projects including secondary analysis of existing data; small, self-contained research projects; development of research methodology; translational research; outcomes research; and development of new research technology. Irrespective of the type of project, the intent of the NIDCD ECR Award R21 is for the Program Director(s)/Principal Investigator(s) (PD(s)/PI(s)) to obtain sufficient preliminary data for a subsequent R01 application.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R21"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-120.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41868",
+  "opportunity_number": "PAR-25-113",
+  "title": "Advancement and Innovation in Measurement of Language Development and Predictors (R21 Clinical Trial Not Allowed)",
+  "agency_code": "NICHD",
+  "agency_name": "NIH NICHD",
+  "status": "active",
+  "open_date": "2025-01-16",
+  "close_date": "2027-09-08",
+  "description": "The purpose of this notice of funding opportunity (NOFO) is to encourage community-engaged research that broadens the conceptualization of qualities of the environment that can support language development in children and that focuses on the development of novel measures of childrens language development. The overall goal is to build the number of strengths-focused, culturally and linguistically responsive, and generalizable toolsto further our understanding of childrens language development and/or impairment, and predictors thereof.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R21"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-113.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41732",
+  "opportunity_number": "PAR-25-185",
+  "title": "Screening and Functional Validation of Genomic Variants Associated with Human Congenital Anomalies (R01 Clinical Trial Not Allowed)",
+  "agency_code": "NICHD",
+  "agency_name": "NIH NICHD",
+  "status": "active",
+  "open_date": "2025-01-05",
+  "close_date": "2028-01-08",
+  "description": "Rapid advances in genotyping and next generation sequencing technologies have led to the identification of genetic variants that are associated with a wide variety of congenital defects including human congenital anomalies (HCAs), intellectual developmental disabilities (IDDs) and inborn errors of metabolism (IEMs). Large quantities of genomic data collected from pediatric congenital anomalies cohorts are available to the research community through several databases such as the Database of Genotypes and Phenotypes (dbGaP), the Gabriella Miller Kids First Data Resource Portal, the European Genome-Phenome Archive and Clinical Genome Resource (ClinGen). The purpose of this initiative is to promote the screening, functional validation and characterization of congenital anomaly-associated genetic variants identified through public facing databases and individual efforts using in-silico tools, appropriate animal models, in vitro systems or multi-pronged approaches. This initiative addresses a challenging gap between identifying sequence variations of potential interest and recognizing which of those variations have functional effects on the phenotype of interest.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-185.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:40722",
+  "opportunity_number": "PA-24-185",
+  "title": "Mentored Patient-Oriented Research Career Development Award (Parent K23 Independent Clinical Trial Not Allowed)",
+  "agency_code": "NIH",
+  "agency_name": "NIH NIH",
+  "status": "active",
+  "open_date": "2024-05-10",
+  "close_date": "2027-11-13",
+  "description": "The purpose of the NIH Mentored Patient-Oriented Research Career Development Award (K23) is to support the career development of individuals with a clinical doctoral degree who have made a commitment to focus their research endeavors on patient-oriented research.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K23"
+  ],
+  "funding_categories": [
+   "PA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-24-185.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43140",
+  "opportunity_number": "RFA-HG-27-007",
+  "title": "Systematic Characterization of Genomic Variation to Assess Effects of Individual Variants on Genome Function and Phenotype (UM1 Clinical Trials Not Allowed)",
+  "agency_code": "NHGRI",
+  "agency_name": "NIH NHGRI",
+  "status": "active",
+  "open_date": "2026-11-14",
+  "close_date": "2026-12-15",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to solicit applications to characterize genomic variation to assess the impact of individual variants on genome function. This will be accomplished by systematically perturbing variants or elements using one or more high-throughput methods; collecting data on the effects of variants in DNA, RNA, or protein-coding elements on molecular, cellular, or organismal phenotypes; and developing robust, reproducible, and portable data processing pipelines. Centers funded through this initiative will become a part of the Impact of Genomic Variation on Function (IGVF) Consortium. As consortium members, centers will work together to ensure all consortium resources are accessible to a wide variety of potential users. Centers are also expected to collaborate with other consortium components to coordinate assays, variants, and cell types, and to develop shared analysis strategies to meet consortium goals.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-HG-27-007.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43184",
+  "opportunity_number": "RFA-DK-28-214",
+  "title": "The NIDDK Disorders of Gastrointestinal Interoception Consortium (DGIC) Scientific Data Research Center (U24 Clinical Trial Not Allowed)",
+  "agency_code": "NIDDK",
+  "agency_name": "NIH NIDDK",
+  "status": "active",
+  "open_date": "2027-01-05",
+  "close_date": "2027-03-06",
+  "description": "This Notice of Funding Opportunity (NOFO) invites new applications to participate in the Diseases of Gastrointestinal Interoception Consortium (DGIC). The overall objectives of this consortium are to: 1) identify the underlying mechanisms that link altered GI interception more directly to GI dysmotility and symptoms; 2) identify disease or response biomarkers that better assess pathophysiology or treatment efficacy; and 3) leverage state-of-the-art technologies to identify novel therapeutic targets that could be assessed in future clinical trials.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U24"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-DK-28-214.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41415",
+  "opportunity_number": "PAR-24-235",
+  "title": "Tribal Undergraduate to Graduate Research Training and Leadership Experiences (TURTLE) Program (UE5/T32)",
+  "agency_code": "NIGMS",
+  "agency_name": "NIH NIGMS",
+  "status": "active",
+  "open_date": "2024-12-27",
+  "close_date": "2027-01-26",
+  "description": "The purpose of the Tribal Undergraduate to Graduate Research Training and Leadership Experiences (TURTLE) program is to fund federally recognized American Indian/Alaska Native (AI/AN) Tribes, tribal colleges or universities, Tribal health programs, or Tribal organizations (collectively termed, eligible Tribal Entities) to identify and develop a pool of scientists to conduct research on AI/AN health and health disparities. Through this Notice of Funding Opportunity (NOFO), NIGMS will provide support for a phased award to eligible AI/AN Tribal Entities to develop (UE5) and implement (T32) effective training and mentoring activities for research-oriented individuals earning a doctoral degree in a biomedical research field at a variety of institutions across the United States and territories. The overall purpose is to support the development of individuals who have the technical, operational, and professional skills required to conduct AI/AN health research in a culturally appropriate, ethically responsible and rigorous manner, to complete Ph.D.s in a biomedical field, and to transition into careers in the biomedical research workforce.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UE5",
+   "T32"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-235.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41416",
+  "opportunity_number": "PAR-24-236",
+  "title": "Tribal Undergraduate to Graduate Research Training and Leadership Experiences (TURTLE) Program (UE5/T34)",
+  "agency_code": "NIGMS",
+  "agency_name": "NIH NIGMS",
+  "status": "active",
+  "open_date": "2024-12-27",
+  "close_date": "2027-01-26",
+  "description": "The purpose of the Tribal Undergraduate to Graduate Research Training and Leadership Experiences (TURTLE) program is to fund federally recognized American Indian/Alaska Native (AI/AN) Tribes, tribal colleges or universities, Tribal health programs, or Tribal organizations (collectively termed, eligible Tribal Entities) to identify and develop a pool of scientists to conduct research on AI/AN health and health disparities. Through this Notice of Funding Opportunity (NOFO), NIGMS will provide support for a phased award to eligible AI/AN Tribal Entities to develop (UE5) and implement (T34) effective training and mentoring activities for research-oriented individuals earning a bachelor's degree in a biomedically-relevant field at a variety of institutions across the United States and territories. The overall purpose is to support the development of individuals who have the technical, operational, and professional skills required to conduct AI/AN health research in a culturally appropriate, ethically responsible and rigorous manner, to complete a bachelor's degree in a biomedical field, and ultimately to transition into careers in the biomedical research workforce.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UE5",
+   "T34"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-236.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41094",
+  "opportunity_number": "PAR-24-251",
+  "title": "Animal and Veterinary Innovation Centers",
+  "agency_code": "FDA",
+  "agency_name": "NIH FDA",
+  "status": "active",
+  "open_date": "2024-06-20",
+  "close_date": "2028-09-30",
+  "description": "The purpose of this Funding Opportunity Announcement (FOA) is to solicit applications for inclusion as Animal and Veterinary Innovation Centers, which are intended to form long-term partnerships to address priority areas for FDA's Center for Veterinary Medicine (CVM). This includes CVM developing cooperative agreement(s) with academic research institutions (public and private) to: 1. Drive research that supports the development of interventions to prevent, control, or eliminate Highly Pathogenic Avian Influenza (HPAI) virus in animals, or interventions that reduce the circulation of the virus in the ecosystem. Work may also include other emerging zoonotic disease threats or One Health issues in future years. 2. Drive research that supports the development of intentional genomic alternations in animals and the advancement of regulatory science in this field, with a focus on intentional genomic alternations that support agricultural resilience, food security, animal health, or public health. 3. Drive research that supports the development of products for minor species, minor uses in major species (dogs, cats, horses, cattle, pigs, chickens, and turkeys) and other unmet veterinary medical needs in major species that create a significant animal or public health burden.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U18"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-251.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42228",
+  "opportunity_number": "PAR-25-337",
+  "title": "Academic-Industrial Partnerships for Translation of Technologies for Diagnosis and Treatment (R01 - Clinical Trial Optional)",
+  "agency_code": "NCI",
+  "agency_name": "NIH NCI",
+  "status": "active",
+  "open_date": "2025-01-05",
+  "close_date": "2028-01-08",
+  "description": "Through this Notice of Funding Opportunity (NOFO), the National Cancer Institute (NCI) intends to stimulate efforts to translate scientific discoveries and engineering developments into methods or tools that address problems in basic research to understand disease, or in applied research to assess risk, detect, prevent, diagnose, treat, and/or manage disease. The rationale is to deliver new capabilities to meet evolving requirements for technologies and methods relevant to the advance of research and delivery of care in pre-clinical, clinical and non-clinical settings, domestic or foreign, for conditions and diseases within the missions of participating institutes.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-337.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41841",
+  "opportunity_number": "RFA-ES-25-002",
+  "title": "Environmental Health Sciences Core Centers Program (P30 Clinical Trials Optional)",
+  "agency_code": "NIEHS",
+  "agency_name": "NIH NIEHS",
+  "status": "active",
+  "open_date": "2025-02-18",
+  "close_date": "2027-04-21",
+  "description": "This Notice of Funding Opportunity Announcement (NOFO) invites grant applications for Environmental Health Sciences Core Centers (EHSCC). As intellectual hubs for environmental health science research, the EHSCC's are expected to be the thought leaders for the field and advance the goals of the 2025-2029 NIEHS Strategic Plan (http://www.niehs.nih.gov/about/strategicplan/). The Core Centers provide critical research infrastructure, shared facilities, services and/or resources, to groups of investigators conducting environmental health sciences research. An EHSCC enables researchers to conduct their independently-funded individual and/or collaborative research projects more efficiently and/or more effectively. The overall goal of an EHSCC is to identify and capitalize on emerging issues that advance improving the understanding of the relationships among environmental exposures, human biology, and disease. The EHSCC supports community engagement and translational research as key approaches to improving public health.",
+  "eligibility": [],
+  "funding_instruments": [
+   "P30"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-ES-25-002.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41990",
+  "opportunity_number": "PAR-25-288",
+  "title": "Navigator Emergency Department Diversion Models for Non-Urgent Mental Health Concerns (R34 Clinical Trial Required)",
+  "agency_code": "NIMH",
+  "agency_name": "NIH NIMH",
+  "status": "active",
+  "open_date": "2025-01-16",
+  "close_date": "2028-01-08",
+  "description": "The purpose of this NOFO is to build research about the effectiveness, implementation, and optimization of family navigation ED diversion models for non-urgent mental health problems. Models of interest are designed to (a) utilize triage tools to identify mental health acuity, (b) facilitate engagement in mental health services and needed resources, and (c) provide support, knowledge about the mental health condition, and facilitate linkages/address barriers to help-seeking among families.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R34"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-288.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:37346",
+  "opportunity_number": "RFA-OH-22-005",
+  "title": "Commercial Fishing Occupational Safety Research Cooperative Agreement (U01)",
+  "agency_code": "NIOSH",
+  "agency_name": "NIH NIOSH",
+  "status": "active",
+  "open_date": "2022-07-29",
+  "close_date": "2028-01-31",
+  "description": "The purpose of this announcement is to provide funding to individuals in academia, members of non-profit organizations and businesses involved in fishing and maritime matters, and other entities with expertise in commercial fishing safety.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U01"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-OH-22-005.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42866",
+  "opportunity_number": "RFA-OD-27-003",
+  "title": "INCLUDE Project: Exploratory/Developmental Research Awards for Down syndrome (R21 Clinical Trial Not Allowed)",
+  "agency_code": "OD",
+  "agency_name": "NIH OD",
+  "status": "active",
+  "open_date": "2026-09-15",
+  "close_date": "2028-06-16",
+  "description": "The NIH INvestigation of Co-occurring conditions across the Lifespan to Understand Down syndromE (INCLUDE) Project seeks to improve health and quality-of-life for individuals with Down syndrome. This Notice of Funding Opportunity (NOFO) invites researchers to submit applications for support of new exploratory and developmental research projects that address critical needs for Down syndrome projects, as articulated in the INCLUDE Project objectives. For example, such projects could assess the feasibility of a novel area of investigation or a new experimental system that has the potential to enhance health-related research. Another example could include the unique and innovative use of an existing methodology to explore a new scientific area. These studies may involve considerable risk but may lead to a breakthrough in a particular area, or to the development of novel techniques, agents, methodologies, models, or applications that could have a major impact on a field of biomedical, behavioral, or clinical research.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R21"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-OD-27-003.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41430",
+  "opportunity_number": "PAR-25-043",
+  "title": "Mechanisms that Impact Cancer Risk after Bariatric Surgery (R01 Clinical Trial Optional)",
+  "agency_code": "NCI",
+  "agency_name": "NIH NCI",
+  "status": "active",
+  "open_date": "2025-01-05",
+  "close_date": "2028-01-08",
+  "description": "Through this Notice of Funding Opportunity (NOFO), the National Cancer Institute (NCI) invites applications for support of investigator-initiated studies addressing mechanisms by which bariatric surgery impacts cancer risk, and seeks to draw in talented scientists who study bariatric surgery to investigate its effects on cancer, rather than shorter-term outcomes such as weight loss and diabetes.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-043.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43120",
+  "opportunity_number": "RFA-MH-27-125",
+  "title": "Mechanistic Evaluation of Therapeutic Targets derived from Treatable Traits to Improve CNS Outcomes in People with HIV (R21/R33 Clinical Trial Not Allowed)",
+  "agency_code": "NIMH",
+  "agency_name": "NIH NIMH",
+  "status": "active",
+  "open_date": "2026-10-09",
+  "close_date": "2027-10-29",
+  "description": "The purpose of this notice of funding opportunity (NOFO) is to identify modifiable mechanisms and therapeutic targets to address central nervous system (CNS) complications associated with human immunodeficiency virus (HIV). The initiative supports a phased research approach beginning with the identification of patient phenotypes characterized by convergent pathophysiological features, followed by the discovery and experimental validation of molecular mechanisms using innovative in-vitro and in-vivo models. The goal of this NOFO is to advance therapeutic target, and intervention discovery to address the multifactorial and heterogeneous nature of HIV-associated CNS dysfunction.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R21",
+   "R33"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-MH-27-125.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41635",
+  "opportunity_number": "PAR-24-296",
+  "title": "Emerging Global Leader Award (K43 Independent Clinical Trial Not Allowed)",
+  "agency_code": "FIC",
+  "agency_name": "NIH FIC",
+  "status": "active",
+  "open_date": "2024-11-03",
+  "close_date": "2026-12-04",
+  "description": "This Funding Opportunity Announcement (FOA) is designed specifically for applicants proposing research that does not involve leading an independent clinical trial, a clinical trial feasibility study, or an ancillary study to a clinical trial. Applicants to this FOA are permitted to propose research experience in a clinical trial led by a mentor or co-mentor. Applicants proposing a clinical trial or an ancillary clinical trial as lead investigator, should apply to the companion FOA PAR-.The purpose of the Fogarty Emerging Global Leader Award is to provide research support and protected time (three to five years) to an early career research scientist from a low- or middle-income country (LMIC) who holds a junior faculty position at an LMIC academic or research institution, as defined by the World Bank (http://data.worldbank.org/about/country-classifications/country-and-lending-groups , including low-income, lower-middle-income, and upper-middle-income countries). This intensive, mentored research career development experience is expected to lead to an independently funded research career at the LMIC institution or in another LMIC. This Funding Opportunity Announcement (FOA) invites applications from LMIC scientists from any health-related discipline who propose career development activities and a research project that is relevant to the health priorities of their country under the mentorship of LMIC and U.S. mentors.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K43"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-296.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:40504",
+  "opportunity_number": "PAR-24-128",
+  "title": "Medical Scientist Training Program (MSTP) (T32)",
+  "agency_code": "NIGMS",
+  "agency_name": "NIH NIGMS",
+  "status": "active",
+  "open_date": "2024-04-25",
+  "close_date": "2027-01-26",
+  "description": "The goal of the Medical Scientist Training Program (MSTP) is to develop a diverse pool of highly trained physician-scientist leaders available to meet the needs of the Nations biomedical research agenda. Specifically, this Notice of Funding Opportunity (NOFO) provides support to eligible domestic institutions to develop and implement effective, evidence-based approaches to integrated dual-degree training leading to the award of both professional medical doctorate degrees and research doctorate degrees (Ph.D. or equivalent). With the dual qualification of rigorous scientific research and clinical practice, graduates will be equipped with the skills to develop research programs that accelerate the translation of research advances to the understanding, detection, treatment and prevention of human disease, and to lead the advancement of biomedical research. Areas of particular importance to NIGMS are the iterative optimization of MSTP training efficacy and efficiency, fostering the persistence of MSTP alumni in research careers, and enhancing the diversity of the physician-scientist workforce. NIGMS expects that the proposed research training programs will incorporate didactic, research, mentoring and career development elements to prepare trainees for careers that will have a significant impact on the health-related research needs of the Nation.",
+  "eligibility": [],
+  "funding_instruments": [
+   "T32"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-128.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43154",
+  "opportunity_number": "PAR-28-091",
+  "title": "Assessing the Feasibility of Incorporating Mechanisms in Multi-site Clinical Trials of Mind and Body Interventions on Whole Person Health Restoration (R33 Clinical Trial Required)",
+  "agency_code": "NCCIH",
+  "agency_name": "NIH NCCIH",
+  "status": "active",
+  "open_date": "2027-01-16",
+  "close_date": "2029-11-17",
+  "description": "The National Center for Complementary and Integrative Health (NCCIH) announces this Notice of Funding Opportunity (NOFO) to solicit applications for multi-site feasibility trials of complementary and integrative health approaches with physical and/or psychological therapeutic inputs (often called mind and body interventions) to reproduce and translate mechanisms of emotional well-being (EWB) into large-scale clinical trials that advance our understanding of whole person health. These early-phase multi-site trials are essential for 1) demonstrating that the mind and body intervention can be delivered with fidelity across sites; 2) demonstrating reproducibility and rigor in engaging targeted mechanisms of EWB by the mind and body intervention across sites; 3) assessing feasibility of participant recruitment and retention, as well as randomization; 4) assessing feasibility of collecting comprehensive clinical (whole person health restoration) and mechanistic (EWB) data across sites; and 5) exploring correlations between changes in mechanistic targets and clinical outcome measurements pooled across sites. By laying this groundwork, studies supported under this NOFO will advance the science of whole person health and prepare the field for rigorous clinical trials and mechanistic mediation analysis with the potential to improve the health and well-being of all Americans.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R33"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-28-091.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41586",
+  "opportunity_number": "RFA-OH-25-002",
+  "title": "Occupational Safety and Health Education and Research Centers (T42)",
+  "agency_code": "NIOSH",
+  "agency_name": "NIH NIOSH",
+  "status": "active",
+  "open_date": "2024-10-08",
+  "close_date": "2028-10-30",
+  "description": "Purpose. The National Institute for Occupational Safety and Health (NIOSH), Centers for Disease Control and Prevention (CDC), invites grant applications for Education and Research Centers (ERCs) that are focused on graduate occupational safety and health (OSH) training.",
+  "eligibility": [],
+  "funding_instruments": [
+   "T42"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-OH-25-002.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42850",
+  "opportunity_number": "PAR-27-077",
+  "title": "NIH Science Education Partnership Award (SEPA) (R25 - Clinical Trial Not Allowed)",
+  "agency_code": "NIGMS",
+  "agency_name": "NIH NIGMS",
+  "status": "active",
+  "open_date": "2026-08-25",
+  "close_date": "2029-05-26",
+  "description": "The NIH Research Education Program (R25) supports research education activities in the mission areas of the NIH. The overarching goal of this NIH Science Education Partnership Award (SEPA) program is to support educational activities that increase understanding of biomedical research among pre-college (pre-kindergarten to grade12) individuals, and to encourage awareness of and continued interest in careers in science, technology, engineering, and mathematics (STEM).",
+  "eligibility": [],
+  "funding_instruments": [
+   "R25"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-077.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:40821",
+  "opportunity_number": "PA-24-179",
+  "title": "Independent Scientist Award (Parent K02 - Independent Clinical Trial Not Allowed)",
+  "agency_code": "NIH",
+  "agency_name": "NIH NIH",
+  "status": "active",
+  "open_date": "2024-05-13",
+  "close_date": "2027-11-13",
+  "description": "The purpose of the NIH Independent Scientist Award (K02) is to foster the development of outstanding scientists and enable them to expand their potential to make significant contributions to their field of research. The K02 award provides three to five years of salary support and \"protected time\" for newly independent scientists who can demonstrate the need for a period of intensive research focus as a means of enhancing their research careers. Each independent scientist career award program must be tailored to meet the individual needs of the candidate.This Funding Opportunity Announcement (FOA) is designed specifically for applicants proposing research that does not involve leading an independent clinical trial, a clinical trial feasibility study, or a separate ancillary clinical trial. Applicants to this FOA are permitted to propose research experience in a clinical trial led by another investigator. Applicants proposing a clinical trial or an ancillary clinical trial as lead investigator, should apply to the companion FOA",
+  "eligibility": [],
+  "funding_instruments": [
+   "K02"
+  ],
+  "funding_categories": [
+   "PA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-24-179.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42004",
+  "opportunity_number": "PAR-25-180",
+  "title": "First in Human and Early Stage Clinical Trials of Novel Investigational Drugs or Neuromodulatory Device-based Interventions for Psychiatric Disorders (U01 Clinical Trial Required)",
+  "agency_code": "NIMH",
+  "agency_name": "NIH NIMH",
+  "status": "active",
+  "open_date": "2025-01-14",
+  "close_date": "2027-10-16",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to encourage cooperative agreement applications to support early stage clinical trials of novel mechanism of action, investigational drugs, or novel neuromodulatory devices for the treatment of psychiatric disorders in areas of unmet medical need. The NOFO will support milestone-driven early stage trials in pediatric and adult populations. First in human (FIH) and Phase II studies of novel agents must assess target engagement (brain exposure), pharmacological effects, safety, and tolerability to assess feasibility for Phase II/proof of concept (PoC) studies in psychiatric disorders. Phase II/PoC studies must evaluate the drugs impact on clinically relevant physiological systems (functional measures) and clinical indicators of effect. The NOFO also supports FIH and early feasibility studies (EFS) of novel devices to evaluate target engagement, safety, tolerability, and efficacy. The overall objective is to facilitate rapid collection of data to \"de-risk\" novel mechanism of action investigational drugs, novel drugs for use in pediatric populations with psychiatric disorders, and devices or combination treatments in order to attract private or other public funding for further clinical development as FDA-approved treatments. A key aspect of this NOFO is the formation of collaborative partnerships between the biomedical researchers and biotechnology or industry researchers to facilitate psychiatric drug or device development.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-180.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41997",
+  "opportunity_number": "PAR-25-134",
+  "title": "Academic Research Enhancement Award (AREA) for Undergraduate-Focused Institutions (R15 Clinical Trial Not Allowed)",
+  "agency_code": "NIGMS",
+  "agency_name": "NIH NIGMS",
+  "status": "active",
+  "open_date": "2025-01-25",
+  "close_date": "2028-01-08",
+  "description": "The purpose of this Academic Research Enhancement Award (AREA) for Undergraduate-Focused Institutionsis to support small scale research grants at institutions that do not receive substantial funding from the NIH, with an emphasis on providing biomedical research experiences primarily for undergraduate students, and enhancing the research environment at applicant institutions. Eligible institutions must award baccalaureate science degrees and have received no more than $6 million dollars per year of NIH support (in both direct and F and A/indirect costs) in 4 of the last 7 fiscal years. For institutions composed of multiple schools and colleges, the $6 million funding limit is based on the amount of NIH funding received by all the non-health professional schools and colleges within the institution as a whole. See Part II. Section 3.1 Eligible Organizations for more information.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R15"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-134.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42484",
+  "opportunity_number": "PAR-25-333",
+  "title": "NIDCR Dual Degree Dentist Scientist Pathway to Independence Award (K99/R00 Clinical Trial Not Allowed)",
+  "agency_code": "NIDCR",
+  "agency_name": "NIH NIDCR",
+  "status": "active",
+  "open_date": "2025-06-15",
+  "close_date": "2028-05-08",
+  "description": "The purpose of the NIDCR Dual Degree Dentist Scientist Pathway to Independence Award (K99/R00) program is to develop and maintain a strong cohort of independently funded dentist scientists dedicated to improving dental, oral and craniofacial health. This program is designed to facilitate a timely transition of outstanding dual degree dentist scientists from mentored, postdoctoral research positions to independent, tenure-track or equivalent faculty positions by providing support for two years of mentored training and three to five years of independent research. An option for five years of independent (R00) support is available to accommodate clinical training in a dental specialty program at no more than 3 person-months effort (25% full-time professional effort) in any year of the R00 phase.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K99",
+   "R00"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-333.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43134",
+  "opportunity_number": "RFA-HL-27-010",
+  "title": "Limited Competition: Stimulating Access to Research in Residency Transition Scholar (StARRTS) (K38 Clinical Trial Not Allowed)",
+  "agency_code": "NHLBI",
+  "agency_name": "NIH NHLBI",
+  "status": "active",
+  "open_date": "2026-10-09",
+  "close_date": "2028-10-14",
+  "description": "The purpose of the Stimulating Access to Research in Residency Transition Scholar (StARRTS) K38 Career Development program is to retain and support clinician-investigators who have successfully completed the Stimulating Access to Research in Residency (StARR) R38 Program ( RFA-HL-26-012 and previous NOFOs) as resident-investigators. Individuals who receive K38 grants described in this Notice of Funding Opportunity (NOFO) will be referred to as Transition Scholars. The intent of this NOFO is to provide Transition Scholars with opportunities for additional research and career development during subsequent clinical fellowships or early career faculty appointments (as defined in Section III. 3. Additional Information on Eligibility). It is anticipated that the StARRTS K38 program will provide a pathway to retain the newly-created pool of clinician-investigators generated through the StARR R38 program. Transition Scholars will receive support for continued research and career development opportunities in basic, clinical, and/or translational research, thereby providing enhanced potential to accelerate the transition to independent research careers. This is a Notice of Funding Opportunity (NOFO) for a Limited Competition that will invite application(s) from eligible organization(s) to apply. Please see Section III. Eligibility for additional information. In accordance with NIH standard peer-review processes, the application(s) will be peer-reviewed, and only meritorious application(s) will be considered for funding.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K38"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-HL-27-010.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42496",
+  "opportunity_number": "PAR-25-003",
+  "title": "Animal Food Regulatory Program Standards Implementation Development and Maintenance, with Mutual Reliance Initiatives Clinical Trials Not Allowed",
+  "agency_code": "FDA",
+  "agency_name": "NIH FDA",
+  "status": "active",
+  "open_date": "2025-06-25",
+  "close_date": "2027-04-01",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to advance efforts for a nationally integrated animal food safety system providing state animal food regulatory programs the ability to achieve full implementation of the Animal Food Regulatory Program Standards (AFRPS) within 5 years and to maintain full implementation. This NOFO will also fund optional projects for state animal food regulatory programs to: Advance food safety and protect public health by strengthening partnerships with the FDA and other state animal food regulatory partners through sharing, collaboration, coordination, and leveraging each others expertise, work, data, and enforcement actions Develop and standardize processes, procedures, systems, and other methods to integrate federal and state animal food regulatory work resulting in mutual reliance. Specific outcomes may include, but are not limited to: State animal food regulatory programs will achieve and maintain implementation of the AFRPS, which is recognized as a critical element to creating a national, fully integrated food safety system. Operational use of standardized animal food regulatory systems developed by state programs to compel federal reliance on state regulatory work and resources and reciprocal state reliance on federal work and resources, resulting in mutual reliance. This project will strengthen and improve FDA efforts to build an integrated food safety system by building high quality state animal food regulatory programs that can promote regulatory compliance and prevent foodborne illnesses.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U2F"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-003.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42054",
+  "opportunity_number": "PAR-25-025",
+  "title": "NHLBI Early Phase Clinical Trials for Therapeutics and/or Diagnostics for HLBS Disorders (R33 CT Required)",
+  "agency_code": "NHLBI",
+  "agency_name": "NIH NHLBI",
+  "status": "active",
+  "open_date": "2025-01-03",
+  "close_date": "2027-02-04",
+  "description": "The objective of this funding opportunity is to support investigator-initiated, phase I clinical trials for diagnostic and therapeutic interventions for heart, lung, blood, and sleep (HLBS) disorders in adults and children. The proposed trial can be single or multisite. Applicants applying for funding under this NOFO should be ready to initiate the clinical trial within the first quarter of the project period. Discussion, submission, and attainment of applicable regulatory (FDA, DSMB, IRB) approvals, and establishment of drug (and placebo, if applicable) supplies, and any necessary third-party agreements should be established by the time of award. If time and support for these and other pre-clinical and/or trial readiness activities are desired, applicants should consider the companion NOFO which utilizes an R61/R33 phased approach.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R33"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-025.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42940",
+  "opportunity_number": "RFA-DK-27-108",
+  "title": "Continuation of the Cardiovascular Repository for-Type 1 Diabetes (CARE-T1D) Consortium U01 (Open Competition)- Research (U01, Clinical Trial Not Allowed)",
+  "agency_code": "NIDDK",
+  "agency_name": "NIH NIDDK",
+  "status": "active",
+  "open_date": "2026-09-09",
+  "close_date": "2027-03-11",
+  "description": "The NIH Cardiovascular Repository for Type 1 Diabetes (CaRe-T1D) was created to improve research on type 1 diabetes (T1D) and cardiovascular disease (CVD). Cardiovascular complications remain the top cause of death among people with T1D and greatly shorten lifespan. The mechanisms underlying atherosclerosis, cardiomyopathy, endothelial dysfunction, and cardiac autonomic neuropathy in T1D remain poorly understood. While managing traditional risk factors\u2014such as high blood glucose, high blood pressure, and elevated cholesterol lower cardiovascular risk, a significant residual risk remains even with optimal control. In addition to atherosclerosis, both diastolic and systolic diabetic cardiomyopathy play a major role in morbidity and mortality among these patients. Currently, no therapies are specifically approved to prevent or treat these common and severe cardiovascular issues in T1D. The purpose of this NOFO is to promote collaborative and interdisciplinary research aimed at enhancing the understanding of the development of CVD in individuals with T1D and the differences with CVD in T1D by continuing the efforts of the CaRe-T1D consortium.This NOFO is associated with the Special Diabetes Program (https://www.niddk.nih.gov/about-niddk/research-areas/diabetes/type-1-diabetes-special-statutory-funding-program/about-special-diabetes-program) which funds research on the prevention, treatment, and cure of type 1 diabetes and its complications, including unique, innovative, and collaborative research consortia and clinical trials networks.",
+  "eligibility": [],
+  "funding_instruments": [
+   "U01"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-DK-27-108.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:41817",
+  "opportunity_number": "PAR-25-027",
+  "title": "NIDCR Dentist Scientist Career Transition Award for Intramural Investigators (K22 Clinical Trial Not Allowed)",
+  "agency_code": "NIDCR",
+  "agency_name": "NIH NIDCR",
+  "status": "active",
+  "open_date": "2025-01-12",
+  "close_date": "2028-01-08",
+  "description": "The purpose of the NIDCR Dentist Scientist Career Transition Award for Intramural Investigators (K22) program is to facilitate transition of highly qualified dentists from NIH Intramural postdoctoral research positions to extramural academic tenure-track or equivalent faculty positions at eligible institutions. The award will provide support for two years of mentored postdoctoral research training in the NIH Intramural Research Program, and three years of independent research funding at the extramural institution.",
+  "eligibility": [],
+  "funding_instruments": [
+   "K22"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-027.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43148",
+  "opportunity_number": "PA-27-061",
+  "title": "NIH Research Program Projects (Parent P01 Clinical Trial Optional)",
+  "agency_code": "OD",
+  "agency_name": "NIH OD",
+  "status": "active",
+  "open_date": "2026-10-20",
+  "close_date": "2029-05-26",
+  "description": "Through this Notice of Funding Opportunity (NOFO), the participating NIH Institutes, Centers, and Offices (ICOs) invite applications for the investigator-initiated Program Project (P01). A P01 supports a broadly based, multidisciplinary research program with a specific major scientific objective or theme. The proposed Program Projects are focused on the programmatic interests of one or more of the participating ICOs based on their scientific missions. A program project utilizes research projects with a common central scientific theme, an administrative core, and optional shared resource core(s) to accomplish ICOs' programmatic objectives.",
+  "eligibility": [],
+  "funding_instruments": [
+   "P01"
+  ],
+  "funding_categories": [
+   "PA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-27-061.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43195",
+  "opportunity_number": "RFA-MH-27-150",
+  "title": "Advancing Real-World Effectiveness Evidence for Rapid-Acting Psychotropic Interventional Drugs (RAPIDs) (UM1 Clinical Trial Required)",
+  "agency_code": "NIMH",
+  "agency_name": "NIH NIMH",
+  "status": "active",
+  "open_date": "2026-12-05",
+  "close_date": "2027-06-11",
+  "description": "This notice of funding opportunity (NOFO) encourages applications to establish a Rapid-Acting Psychotropic Interventional Drugs - Clinical Trials Network (RAPIDs-CTN). The overarching purpose is to generate actionable, real-world evidence to guide the safe and effective implementation of RAPIDs in routine clinical practice, answering urgent questions about how these treatments can be delivered sustainably outside tightly controlled experimental settings. This NOFO utilizes a milestone-driven UM1 Cooperative Agreement mechanism structured into two operational stages: Stage 1 (Years 1\u20132) for network establishment and pilot studies, and Stage 2 (Years 3\u20135) focuses for full-scale execution of proposed pragmatic trials. This program is intended only for large-scale, coordinated network projects that could not be achieved using other, more standard grant mechanisms.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-MH-27-150.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43208",
+  "opportunity_number": "RFA-AI-28-001",
+  "title": "HIV/AIDS Clinical Trials Network Leadership and Operations Centers (UM1 Clinical Trial Required)",
+  "agency_code": "NIAID",
+  "agency_name": "NIH NIAID",
+  "status": "active",
+  "open_date": "2027-02-09",
+  "close_date": "2027-03-10",
+  "description": "The purpose of this notice of funding opportunity (NOFO) is to support HIV/AIDS Clinical Trials Network Leadership and Operations Centers (LOCs). Each LOC will oversee research prioritization, planning, and conduct of studies in a HIV/AIDS Clinical Trials Network to advance research in the prevention and treatment of HIV and HIV-associated diseases.",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-AI-28-001.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:42003",
+  "opportunity_number": "PAR-25-179",
+  "title": "Confirmatory Efficacy Clinical Trials of Non-Pharmacological and Pharmacological Interventions for Mental Disorders (R01 Clinical Trial Required)",
+  "agency_code": "NIMH",
+  "agency_name": "NIH NIMH",
+  "status": "active",
+  "open_date": "2025-01-14",
+  "close_date": "2027-10-16",
+  "description": "Confirmatory Efficacy Clinical Trials of Non-Pharmacological Interventions for Mental Disorders (R01 Clinical Trial Required). As part of NIMH's clinical trials pipeline NOFOs, this announcement supports confirmatory efficacy testing of non pharmacological therapeutic and preventive interventions for mental disorders in adults and children that address unmet therapeutic needs, and are consistent with the NIMH emphasis on the experimental therapeutics approach. In this approach, clinical trials should be designed to increase knowledge of the relationship between underlying disease processes and the mechanisms of action through which any intervention produces therapeutic change.",
+  "eligibility": [],
+  "funding_instruments": [
+   "R01"
+  ],
+  "funding_categories": [
+   "PAR"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-25-179.html",
+  "attachments": []
+ },
+ {
+  "source_id": "nih-guide:43143",
+  "opportunity_number": "RFA-RM-27-016",
+  "title": "Cellular Senescence Network (SenNet): Discovery, Validation Centers (UM1 Clinical Trials Not Allowed)",
+  "agency_code": "RMOD",
+  "agency_name": "NIH RMOD",
+  "status": "active",
+  "open_date": "2026-10-23",
+  "close_date": "2026-11-24",
+  "description": "The purpose of this Notice of Funding Opportunity (NOFO) is to support SenNet Discovery and Validation Centers (SenNet DVCs) as a core component of Stage 2 of the NIH Common Fund Cellular Senescence Network (SenNet). Building on Stage 1 resources, DVCs will define, refine, and validate tissue- and disease-relevant cellular senescence signatures (\u201csenotypes\u201d) and associated biomarkers, and will investigate their functional consequences in human health and disease. DVCs are expected to generate and contribute high-quality molecular, cellular, and spatial datasets (including relevant metadata and documentation) and to use complementary experimental systems, as appropriate, to validate senotypes/biomarkers and characterize responses to senescence-associated perturbations or senotherapeutic approaches. DVC applications should also propose goals and aims for SenNet consortium-wide organizational and outreach activities (SenNet OOC functions).",
+  "eligibility": [],
+  "funding_instruments": [
+   "UM1"
+  ],
+  "funding_categories": [
+   "RFA"
+  ],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-RM-27-016.html",
+  "attachments": []
+ },
+ {
+  "source_id": "359137",
+  "opportunity_number": "FOR-NS-25-004",
+  "title": "Forecast for NIH Blueprint and BRAIN Initiative ACTION Potential Program (F99/K00 Clinical Trial Not Allowed)",
+  "agency_code": "HHS-NIH11",
+  "agency_name": "National Institutes of Health",
+  "status": "forecasted",
+  "open_date": "2025-05-27",
+  "close_date": null,
+  "description": "",
+  "eligibility": [],
+  "funding_instruments": [],
+  "funding_categories": [],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://www.grants.gov/search-results-detail/359137",
+  "attachments": []
+ },
+ {
+  "source_id": "359203",
+  "opportunity_number": "FOR-MH-26-160",
+  "title": "Pilot Effectiveness Trials of Peer Support Services for Suicide Prevention",
+  "agency_code": "HHS-NIH11",
+  "agency_name": "National Institutes of Health",
+  "status": "forecasted",
+  "open_date": "2025-06-17",
+  "close_date": null,
+  "description": "",
+  "eligibility": [],
+  "funding_instruments": [],
+  "funding_categories": [],
+  "award_ceiling": null,
+  "award_floor": null,
+  "source_url": "https://www.grants.gov/search-results-detail/359203",
+  "attachments": []
+ }
+]
