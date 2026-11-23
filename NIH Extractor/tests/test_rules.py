@@ -1,3 +1,4 @@
+from dataclasses import replace
 from nih_grant_matcher.models import Opportunity
 from nih_grant_matcher.rules import FACT_KINDS, GRANT_TYPES, Limit, grant_types_for
 
@@ -20,3 +21,8 @@ def test_an_opportunity_maps_to_the_covered_codes_it_lists() -> None:
     assert [g.code for g in grant_types_for(_opp("R21", "R01"))] == ["R21", "R01"]
     assert [g.code for g in grant_types_for(_opp("U01"))] == ["U01"]
     assert grant_types_for(_opp("R61", "R33")) == () and grant_types_for(_opp("UM1")) == () and grant_types_for(_opp()) == ()
+
+def test_a_phased_award_or_a_non_nih_agency_gets_no_grant_type() -> None:
+    assert grant_types_for(_opp("R21", "R33")) == () and grant_types_for(_opp("UG3", "UH3")) == ()
+    assert [g.code for g in grant_types_for(replace(_opp("R01"), agency_code="NCI"))] == ["R01"]
+    assert grant_types_for(replace(_opp("R01"), agency_code="FDA")) == () and grant_types_for(replace(_opp("R01"), agency_code="NIOSH")) == ()

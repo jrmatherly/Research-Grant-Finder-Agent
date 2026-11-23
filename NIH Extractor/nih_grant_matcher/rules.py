@@ -75,5 +75,12 @@ GRANT_TYPES: dict[str, GrantType] = {f"NIH:{g.code}": g for g in (
     _R01, _sibling("R21", "Exploratory/Developmental Grants", 6), _sibling("R03", "Small Research Grants", 6), _sibling("R15", "Research Enhancement Awards", 12), _sibling("R16", "Research Excellence Award", 6),
     _sibling("R34", "Planning Grant", 12), _sibling("RF1", "Multi-Year Funded Research Project Grant", 12), _sibling("U01", "Research Project--Cooperative Agreements", 12))}
 
+# These agencies post in the NIH Guide and review by their own criteria.
+OTHER_AGENCIES = ("FDA", "NIOSH")
+# A phased award's announcement sets its own structure, so it is out of scope until a later stage.
+SECOND_PHASE_CODES = ("R33", "UH3")
+
 def grant_types_for(opportunity: Opportunity) -> tuple[GrantType, ...]:
+    if opportunity.agency_code in OTHER_AGENCIES or set(SECOND_PHASE_CODES) & set(opportunity.funding_instruments):
+        return ()
     return tuple(GRANT_TYPES[f"NIH:{code}"] for code in dict.fromkeys(opportunity.funding_instruments) if f"NIH:{code}" in GRANT_TYPES)
