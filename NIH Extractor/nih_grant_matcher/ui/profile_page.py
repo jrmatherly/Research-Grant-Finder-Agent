@@ -8,6 +8,7 @@ from ..profile import BUILTIN_PROFILE, Profile, ProfileError, Reference, from_ex
 from ..scoring import MLRelevanceScorer
 from ..store import OpportunityStore
 from ..workflow import config_for
+from .markdown import escape_markdown
 
 STEPS = ("You", "Your research", "Your terms", "Preview", "Your background")
 CAREER_STAGES = ("early-stage investigator", "new investigator", "established")
@@ -24,10 +25,6 @@ def saved_profile(db_path: str) -> Profile | None:
         store.close()
     # Equality ignores the order of the keywords, and the order is the order of matched_terms.
     return None if to_export(profile) == to_export(BUILTIN_PROFILE) else profile
-
-def escape_markdown(text: str) -> str:
-    # Captions and alerts render as Markdown, and profile text comes from the user or from a pasted file.
-    return re.sub(r"([!-/:-@\[-`{-~])", r"\\\1", text)
 
 def profile_sentence(profile: Profile) -> str:
     return f"Ranking uses the profile of {escape_markdown(profile.investigator) or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."

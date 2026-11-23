@@ -14,7 +14,8 @@ from nih_grant_matcher.profile import ProfileError
 from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for, why_not_covered
 from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.ui.apply_page import apply_page, show_notices, start_application
-from nih_grant_matcher.ui.profile_page import escape_markdown, profile_page, profile_sentence, saved_profile, show_unreadable
+from nih_grant_matcher.ui.markdown import escape_markdown
+from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
