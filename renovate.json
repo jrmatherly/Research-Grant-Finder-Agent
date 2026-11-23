@@ -71,7 +71,7 @@
       "automerge": false
     },
     {
-      "description": "The hadolint image, in the same PR as the workflow actions",
+      "description": "The hadolint and Trivy images, in the same PR as the workflow actions",
       "matchManagers": [
         "custom.regex"
       ],
@@ -92,12 +92,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The hadolint image docker-image.yml runs",
+      "description": "The hadolint and Trivy images docker-image.yml runs",
       "managerFilePatterns": [
         "/^\\.github/workflows/docker-image\\.yml$/"
       ],
       "matchStrings": [
-        "HADOLINT_IMAGE: (?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+        "(?:HADOLINT|TRIVY)_IMAGE: (?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ],
       "datasourceTemplate": "docker"
     }
