@@ -1,12 +1,13 @@
 from __future__ import annotations
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from . import __version__
-from .announcement import Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
+from .announcement import Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
 from .checks import check_section
+from .clients import ApiError
 from .models import Application, Attribution, Fact, Finding, Model, Opportunity, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import attribution, head, section_state, share
@@ -73,11 +74,13 @@ def _profile(store: OpportunityStore) -> Profile:
         return BUILTIN_PROFILE
 
 def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[Requirement]:
+    same = lambda r: (r.kind, r.section, r.text)
     decided = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None]
-    kept = [r for r in decided if quoted_in(r.quote, announcement.text)]
-    same = {(r.kind, r.section, r.text, letters(r.quote)) for r in kept}
-    store.replace_requirements(app_id, "parsed", [*kept, *(r for r in parse_requirements(announcement) if (r.kind, r.section, r.text, letters(r.quote)) not in same)])
-    return [r for r in decided if r not in kept]
+    # A decision moves to the newly parsed requirement that says the same thing, while the sentence it was made on is still in the text.
+    carried = {same(r): r.confirmed for r in decided if quoted_in(r.quote, announcement.text)}
+    parsed = {same(r): r for r in parse_requirements(announcement)}
+    store.replace_requirements(app_id, "parsed", [replace(r, confirmed=carried.get(key)) for key, r in parsed.items()])
+    return [r for r in decided if same(r) not in carried or same(r) not in parsed]
 
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
@@ -148,6 +151,9 @@ class Workspace:
         # Without a saved record the fetch goes by the number saved with the application.
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
+        # Grants.gov is the official source, and the Guide can serve an older text when Grants.gov does not answer.
+        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "grants.gov" and announcement.origin == "nih-guide":
+            raise ApiError(f"Grant Matcher could not get the announcement for {app.opportunity_number} from Grants.gov this time, so it kept the copy it saved from there on {saved.fetched_at:%Y-%m-%d}. The NIH Guide's text can be older.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
         dropped = {other.id: _reparse(self.store, other.id, announcement) for other in self.store.applications() if other.opportunity_number == app.opportunity_number}

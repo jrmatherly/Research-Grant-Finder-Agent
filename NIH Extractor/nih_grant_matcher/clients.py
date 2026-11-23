@@ -99,7 +99,7 @@ class GrantsGovClient:
         latest = found[-1]
         # A revised announcement is a second attachment, and the list need not be in date order.
         try:
-            latest = max(found, key=lambda a: datetime.strptime(str(a.get("createdDate"))[:-4], "%b %d, %Y %I:%M:%S %p"))
+            latest = max(reversed(found), key=lambda a: datetime.strptime(str(a.get("createdDate")).rpartition(" ")[0], "%b %d, %Y %I:%M:%S %p"))
         except ValueError:
             pass
         # The id goes into the URL path, so only a number may reach it.
