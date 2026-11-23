@@ -37,3 +37,21 @@ def test_a_parent_outside_the_log_is_named() -> None:
     import pytest
     with pytest.raises(ValueError, match="parent 1"):
         attribution(LOG[1:], 3)
+
+def test_a_run_of_applicant_revisions_before_a_model_one_keeps_each_author() -> None:
+    log = (_rev(1, None, "applicant", "We study heart cells."), _rev(2, 1, "applicant", "We study heart cells in mice."), _rev(3, 2, "model", "We study cardiac cells in mice.", call=7), _rev(4, 3, "applicant", "We study cardiac cells in old mice."))
+    assert attribution(log, 4) == (("We", "applicant"), ("study", "applicant"), ("cardiac", "polish"), ("cells", "applicant"), ("in", "applicant"), ("old", "applicant"), ("mice.", "applicant"))
+
+def test_a_long_chain_of_applicant_saves_is_read_quickly() -> None:
+    import random, time
+    rng = random.Random(7)
+    vocabulary = [f"w{k}" for k in range(3000)]
+    words = rng.choices(vocabulary, weights=[1 / (k + 1) for k in range(3000)], k=6000)
+    log = []
+    for n in range(1, 31):
+        for at in rng.sample(range(len(words)), 20):
+            words[at] = rng.choice(vocabulary)
+        log.append(_rev(n, n - 1 or None, "applicant", " ".join(words)))
+    began = time.perf_counter()
+    found = attribution(log, 30)
+    assert time.perf_counter() - began < 2 and len(found) == 6000 and {origin for _, origin in found} == {"applicant"}
