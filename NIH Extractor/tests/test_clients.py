@@ -136,3 +136,31 @@ def test_nih_guide_default_run_reads_every_page(monkeypatch) -> None:
     opportunities = NihGuideIngestionAgent(clients.NihGuideClient(), MatcherConfig()).ingest()
     assert len({opportunity.source_id for opportunity in opportunities}) == 371
     assert offsets == [(0, 100), (100, 100), (200, 100), (300, 100)]
+
+
+@pytest.mark.parametrize("docnum, expected", [("PAR-27-090", ("Body", "360675")), ("PAR-27-091", ("", ""))], ids=["same", "other"])
+def test_doctext_takes_the_text_only_of_the_document_asked_for(monkeypatch, docnum, expected) -> None:
+    import json, urllib.parse
+    from nih_grant_matcher.config import NIH_GUIDE_DOCTEXT_URL
+    def fake_read(request, timeout, attempts=3):
+        url, _, query = request.full_url.partition("?")
+        assert url == NIH_GUIDE_DOCTEXT_URL and urllib.parse.parse_qs(query)["query"] == ["PAR-27-090"] and urllib.parse.parse_qs(query)["perpage"] == ["1"]
+        return json.dumps({"data": {"hits": {"hits": [{"_source": {"docnum": docnum, "doctext": "Body", "ggid": "360675"}}]}}}).encode()
+    monkeypatch.setattr(clients, "_read", fake_read)
+    assert clients.NihGuideClient().doctext("PAR-27-090") == expected
+
+
+@pytest.mark.parametrize("file_name, expected", [("PAR-27-090-Full-Announcement.html", "<p>Full</p>"), ("PAR-27-090-Notice.pdf", "")], ids=["full", "none"])
+def test_full_announcement_downloads_only_the_full_announcement_attachment(monkeypatch, file_name, expected) -> None:
+    import json
+    from nih_grant_matcher.config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL
+    reads = []
+    def fake_read(request, timeout, attempts=3):
+        reads.append(request.full_url)
+        if request.full_url == GRANTSGOV_FETCH_URL:
+            return json.dumps({"errorcode": 0, "data": {"synopsisAttachmentFolders": [{"synopsisAttachments": [{"id": 355218, "fileName": file_name}]}]}}).encode()
+        return b"<p>Full</p>"
+    monkeypatch.setattr(clients, "_read", fake_read)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    assert clients.GrantsGovClient().full_announcement("360675") == expected
+    assert reads[1:] == ([f"{GRANTSGOV_ATTACHMENT_URL}/355218"] if expected else [])

@@ -2,7 +2,7 @@ from __future__ import annotations
 import http.client, json, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
 from typing import Any
-from .config import GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_REPORTER_SEARCH_URL
+from .config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_GUIDE_DOCTEXT_URL, NIH_REPORTER_SEARCH_URL
 
 class ApiError(RuntimeError):
     pass
@@ -82,6 +82,12 @@ class GrantsGovClient:
         if not isinstance(data, dict):
             raise ApiError(f"Unexpected Grants.gov fetch response for {opportunity_id}")
         return data
+    def full_announcement(self, opportunity_id: str) -> str:
+        folders = self.fetch_opportunity(opportunity_id).get("synopsisAttachmentFolders") or []
+        found = next((a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")), None)
+        if found is None:
+            return ""
+        return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{found['id']}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
 
 @dataclass
 class NihGuideClient:
@@ -92,30 +98,7 @@ class NihGuideClient:
         page_size = min(100, max(1, rows))
         offset = 0
         while len(collected) < rows:
-            params = {
-                "perpage": page_size,
-                "sort": "reldate:desc" if not keyword else "_score",
-                "from": offset,
-                "type": types,
-                "parentic": "all",
-                "primaryic": "all",
-                "activitycodes": "all",
-                "doctype": "all",
-                "parentfoa": "all",
-                "daterange": "01011991-12312030",
-                "clinicaltrials": "all",
-                "fields": "all",
-                "spons": "true",
-                "query": keyword,
-                "apptype": "all",
-                "noticeSubject": "all",
-                "category": "all",
-            }
-            query = urllib.parse.urlencode(params)
-            request = urllib.request.Request(
-                f"{self.api_url}/data?{query}",
-                headers={"Accept": "application/json", "Origin": "https://grants.nih.gov", "Referer": "https://grants.nih.gov/funding/nih-guide-for-grants-and-contracts", "User-Agent": "nih-grant-matcher/0.1"},
-            )
+            request = _guide_request(f"{self.api_url}/data", perpage=page_size, sort="reldate:desc" if not keyword else "_score", offset=offset, types=types, keyword=keyword)
             parsed = _read_json(request, 30)
             hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
             if not isinstance(hits, list):
@@ -128,6 +111,40 @@ class NihGuideClient:
             offset += len(hits)
             time.sleep(self.pause_seconds)
         return collected[:rows]
+    def doctext(self, docnum: str) -> tuple[str, str]:
+        parsed = _read_json(_guide_request(NIH_GUIDE_DOCTEXT_URL, perpage=1, sort="_score", offset=0, types="active,activenosis", keyword=docnum), 30)
+        hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
+        source = hits[0].get("_source", hits[0]) if isinstance(hits, list) and hits and isinstance(hits[0], dict) else {}
+        # The search ranks by relevance, so the top hit can be another document that cites this number.
+        if source.get("docnum") != docnum:
+            return "", ""
+        return str(source.get("doctext") or ""), str(source.get("ggid") or "")
+
+def _guide_request(url: str, perpage: int, sort: str, offset: int, types: str, keyword: str) -> urllib.request.Request:
+    params = {
+        "perpage": perpage,
+        "sort": sort,
+        "from": offset,
+        "type": types,
+        "parentic": "all",
+        "primaryic": "all",
+        "activitycodes": "all",
+        "doctype": "all",
+        "parentfoa": "all",
+        "daterange": "01011991-12312030",
+        "clinicaltrials": "all",
+        "fields": "all",
+        "spons": "true",
+        "query": keyword,
+        "apptype": "all",
+        "noticeSubject": "all",
+        "category": "all",
+    }
+    query = urllib.parse.urlencode(params)
+    return urllib.request.Request(
+        f"{url}?{query}",
+        headers={"Accept": "application/json", "Origin": "https://grants.nih.gov", "Referer": "https://grants.nih.gov/funding/nih-guide-for-grants-and-contracts", "User-Agent": "nih-grant-matcher/0.1"},
+    )
 
 @dataclass
 class NihReporterClient:

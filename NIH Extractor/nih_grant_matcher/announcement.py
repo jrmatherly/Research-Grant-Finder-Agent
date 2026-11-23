@@ -1,0 +1,128 @@
+from __future__ import annotations
+import hashlib, re
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from html.parser import HTMLParser
+from typing import Literal
+from .clients import ApiError, GrantsGovClient, NihGuideClient
+from .models import Opportunity
+from .normalizer import _nih_guide_url
+from .rules import GRANT_TYPES, Limit
+
+SECTION_TITLES: dict[str, str] = {"I": "Notice of Funding Opportunity Description", "II": "Award Information", "III": "Eligibility Information", "IV": "Application and Submission Information", "V": "Application Review Information", "VI": "Award Administration Information", "VII": "Agency Contacts", "VIII": "Other Information"}
+_NEXT_HEADING = re.compile(r".{0,4}Section")
+_FORMS_AFTER_RESEARCH_PLAN =("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
+_SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
+# "is not limited to" never names a section and a page count, so it cannot match.
+_PAGE_LIMIT = re.compile(r"[^.]*\b(" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r") (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b[^.]*\.?")
+
+@dataclass(frozen=True)
+class Announcement:
+    opportunity_number: str
+    text: str
+    origin: Literal["nih-guide", "grants.gov"]
+    url: str
+    sha256: str
+    fetched_at: datetime
+    def section(self, numeral: str) -> str:
+        starts = _section_starts(self.text)
+        if numeral not in starts:
+            return ""
+        later = [at for at in starts.values() if at > starts[numeral]]
+        return self.text[starts[numeral]:later[0] if later else len(self.text)]
+
+@dataclass(frozen=True)
+class Requirement:
+    kind: Literal["limit", "must", "criterion"]
+    text: str
+    quote: str
+    origin: Literal["parsed", "model"]
+    section: str = ""
+    limit: Limit | None = None
+    confirmed: bool | None = None
+    id: int = 0
+    call_id: int | None = None
+    def __post_init__(self) -> None:
+        if (self.call_id is not None) != (self.origin == "model"):
+            raise ValueError("A requirement carries a call_id exactly when a model found it")
+
+# shortcut: assumes the eight sections come in order, as NIH's template has them. A section that is absent and that a later section names would be misread. Upgrade if an announcement is found that drops a section.
+def _section_starts(text: str) -> dict[str, int]:
+    starts: dict[str, int] = {}
+    after = 0
+    for numeral, title in SECTION_TITLES.items():
+        heading = f"Section {numeral}. {title}"
+        at = text.find(heading, after)
+        # The table of contents runs one heading into the next.
+        while at != -1 and _NEXT_HEADING.match(text, at + len(heading)):
+            at = text.find(heading, at + 1)
+        if at != -1:
+            starts[numeral] = after = at
+    return starts
+
+class _TextParser(HTMLParser):
+    BLOCKS = {"address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul"}
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self.skipping = 0
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in ("script", "style"):
+            self.skipping += 1
+        elif tag in self.BLOCKS:
+            self.parts.append(" ")
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style"):
+            self.skipping = max(0, self.skipping - 1)
+        elif tag in self.BLOCKS:
+            self.parts.append(" ")
+    def handle_data(self, data: str) -> None:
+        if not self.skipping:
+            self.parts.append(data)
+
+def html_to_text(html: str) -> str:
+    parser = _TextParser()
+    parser.feed(html)
+    parser.close()
+    return re.sub(r"\s+", " ", "".join(parser.parts)).strip()
+
+def _announcement(opportunity: Opportunity, text: str, origin: Literal["nih-guide", "grants.gov"], url: str) -> Announcement:
+    return Announcement(opportunity.opportunity_number, text, origin, url, hashlib.sha256(text.encode("utf-8")).hexdigest(), datetime.now(timezone.utc).replace(tzinfo=None))
+
+def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = None, grants: GrantsGovClient | None = None) -> Announcement:
+    guide, grants, number = guide or NihGuideClient(), grants or GrantsGovClient(), opportunity.opportunity_number
+    try:
+        text, guide_ggid = guide.doctext(number)
+        guide_says = "has no text for it"
+    except ApiError as exc:
+        text, guide_ggid, guide_says = "", "", f"failed: {exc}"
+    if text:
+        return _announcement(opportunity, text, "nih-guide", _nih_guide_url(number))
+    ggid = str((opportunity.raw.get("guide_item") or {}).get("ggid") or guide_ggid or ("" if opportunity.source_id.startswith("nih-guide:") else opportunity.source_id))
+    try:
+        html = grants.full_announcement(ggid) if ggid else ""
+        grants_says = "has no full announcement attached" if ggid else "has no record of it"
+    except ApiError as exc:
+        html, grants_says = "", f"failed: {exc}"
+    if html:
+        return _announcement(opportunity, html_to_text(html), "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
+    raise ApiError(f"No announcement text for {number}. The NIH Guide {guide_says}, and Grants.gov {grants_says}.")
+
+def quoted_in(quote: str, text: str) -> bool:
+    return " ".join(quote.split()) in " ".join(text.split())
+
+def parse_requirements(announcement: Announcement) -> tuple[Requirement, ...]:
+    part = announcement.section("IV")
+    found: list[Requirement] = []
+    plan = part.rfind("PHS 398 Research Plan")
+    if plan != -1:
+        ends = [at for at in (part.find(form, plan) for form in _FORMS_AFTER_RESEARCH_PLAN) if at != -1]
+        instructions = part[plan:min(ends, default=len(part))]
+        marker = instructions.find("additional instructions:")
+        if marker != -1:
+            quote = instructions[marker + len("additional instructions:"):].strip()[:1500].strip()
+            found.append(Requirement("must", "Follow the announcement's additional instructions for the Research Plan.", quote, "parsed", "research-strategy"))
+    for match in _PAGE_LIMIT.finditer(part):
+        title, pages = match.group(1), float(match.group(2))
+        found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", match.group(0).strip(), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
+    return tuple(found)
