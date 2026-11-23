@@ -1,5 +1,5 @@
 from __future__ import annotations
-import re
+import html, re
 from datetime import date, datetime
 from typing import Any
 from .models import Opportunity
@@ -7,7 +7,8 @@ from .models import Opportunity
 def _clean_text(value: Any) -> str:
     if value is None:
         return ""
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", str(value))).strip()
+    # Tags go first. Decoding first would turn "p&lt;0.05" into the start of a tag.
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", str(value)))).strip()
 
 def _parse_date(value: Any) -> date | None:
     if not value:

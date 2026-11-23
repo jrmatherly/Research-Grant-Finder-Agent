@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -59,7 +60,8 @@ def _cell(ref: str, value: object, style: int) -> str:
     if isinstance(value, date):
         serial = (value - date(1899, 12, 30)).days
         return f'<c r="{ref}" s="{style}"><v>{serial}</v></c>'
-    text = html.escape(str(value), quote=False)
+    # XML 1.0 forbids these control characters, and one of them makes the sheet unreadable.
+    text = html.escape(re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(value)), quote=False)
     return f'<c r="{ref}" s="{style}" t="inlineStr"><is><t>{text}</t></is></c>'
 
 def _style_for(row_idx: int, col_idx: int) -> int:

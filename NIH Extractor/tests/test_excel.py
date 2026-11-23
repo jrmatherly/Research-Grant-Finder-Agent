@@ -19,3 +19,11 @@ def test_write_excel_creates_xlsx(tmp_path) -> None:
 def test_excel_header_calls_the_date_an_expiration() -> None:
     from nih_grant_matcher.excel import HEADERS
     assert "Expires" in HEADERS and "Close Date" not in HEADERS
+
+
+def test_write_excel_drops_characters_that_xml_forbids(tmp_path) -> None:
+    import xml.etree.ElementTree as ET
+    scored = MLRelevanceScorer().score(Opportunity(source_id="x2", opportunity_number="RFA-X2", title="Bad\x08title & <more>", agency_code="NCI", agency_name="NIH NCI", status="active"), today=date(2026, 7, 6))
+    output = write_excel([scored], tmp_path / "results.xlsx", min_score=0)
+    root = ET.fromstring(zipfile.ZipFile(output).read("xl/worksheets/sheet1.xml"))
+    assert "Badtitle & <more>" in [cell.text for cell in root.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t")]
