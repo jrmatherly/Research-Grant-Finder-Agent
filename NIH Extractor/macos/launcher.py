@@ -18,7 +18,7 @@ def app_script() -> Path:
 
 
 def server_argv(app: Path, port: int) -> list[str]:
-    return ["streamlit", "run", str(app), "--global.developmentMode=false", "--server.address=127.0.0.1", "--server.headless=true", f"--server.port={port}", "--browser.gatherUsageStats=false", "--server.showEmailPrompt=false", "--client.toolbarMode=viewer", "--server.fileWatcherType=none"]
+    return ["streamlit", "run", str(app), "--global.developmentMode=false", "--server.address=127.0.0.1", "--server.allowedHosts=127.0.0.1", "--server.headless=true", f"--server.port={port}", "--browser.gatherUsageStats=false", "--server.showEmailPrompt=false", "--client.toolbarMode=viewer", "--server.fileWatcherType=none"]
 
 
 def page(text: str) -> str:
@@ -41,18 +41,29 @@ def serve(port: int) -> int:
     return cli.main()
 
 
+def owns_port(pid: int, port: str) -> bool:
+    try:
+        out = subprocess.run(["/usr/sbin/lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return str(pid) in out.split()
+
+
 def wait_and_load(window, child: subprocess.Popen, url: str, log: Path) -> None:
+    # A system or environment proxy must not carry the request to our own loopback server.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline and child.poll() is None:
         try:
-            urllib.request.urlopen(url + "/_stcore/health", timeout=1)
-            # Another local process can take the port between the parent choosing it and the server binding it, so load the page only from our own child.
-            listeners = subprocess.run(["/usr/sbin/lsof", "-nP", f"-iTCP:{url.rsplit(':', 1)[1]}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True).stdout.split()
-            if str(child.pid) in listeners:
-                return window.load_url(url)
-            break
+            opener.open(url + "/_stcore/health", timeout=1)
         except OSError:
             time.sleep(0.25)
+            continue
+        # Another local process can take the port between the parent choosing it and the server binding it, so load the page only from our own child.
+        if owns_port(child.pid, url.rsplit(":", 1)[1]):
+            return window.load_url(url)
+        break
+    child.terminate()
     window.load_html(page(f"{NAME} could not start its server. See the log at {log}."))
 
 
@@ -65,7 +76,7 @@ def main() -> int:
     log = log_path(Path.home())
     log.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "--serve", str(port)] if getattr(sys, "frozen", False) else [sys.executable, __file__, "--serve", str(port)]
-    with log.open("ab") as out:
+    with log.open("wb") as out:
         child = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
     try:
         import webview
