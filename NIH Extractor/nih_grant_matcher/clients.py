@@ -96,12 +96,13 @@ class GrantsGovClient:
         found = [a for f in folders if isinstance(f, dict) for a in f.get("synopsisAttachments") or [] if isinstance(a, dict) and str(a.get("fileName", "")).endswith("Full-Announcement.html")]
         if not found:
             return ""
-        latest = found[-1]
-        # A revised announcement is a second attachment, and the list need not be in date order.
-        try:
-            latest = max(reversed(found), key=lambda a: datetime.strptime(str(a.get("createdDate")).rpartition(" ")[0], "%b %d, %Y %I:%M:%S %p"))
-        except ValueError:
-            pass
+        def created(a: dict) -> datetime:
+            try:
+                return datetime.strptime(str(a.get("createdDate")).rpartition(" ")[0], "%b %d, %Y %I:%M:%S %p")
+            except ValueError:
+                return datetime.min
+        # A revised announcement is a second attachment, and the list need not be in date order. A tie takes the later in the list.
+        latest = max(enumerate(found), key=lambda pair: (created(pair[1]), pair[0]))[1]
         # The id goes into the URL path, so only a number may reach it.
         return _read(urllib.request.Request(f"{GRANTSGOV_ATTACHMENT_URL}/{_number(latest.get('id'), f'Grants.gov full announcement attachment id for {opportunity_id}')}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 60).decode("utf-8", errors="replace")
 

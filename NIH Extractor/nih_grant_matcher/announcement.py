@@ -1,6 +1,6 @@
 from __future__ import annotations
 import hashlib, html, re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Literal
@@ -17,6 +17,7 @@ _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.section
 _PAGE_LIMIT = re.compile(r"\b((?i:" + "|".join(re.escape(t) for t in _SECTION_KEYS) + r")) (?:(?:is|are|must be) limited to|(?:may|must) not exceed) (\d+(?:\.\d+)?) pages?\b")
 # A Grants.gov attachment can be a page that only redirects to the NIH Guide, and the Guide can answer with a few hundred bytes of a PDF.
 _SHORTEST_ANNOUNCEMENT = 1000
+GRANTS_FAILED = "The request to Grants.gov failed"
 # The Guide text has no line breaks, so a sentence ends only at a period, and not at the one in "2.0".
 _SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
 
@@ -28,6 +29,8 @@ class Announcement:
     url: str
     sha256: str
     fetched_at: datetime
+    # What Grants.gov answered when the text is the Guide's. It is not saved.
+    grants_says: str = field(default="", compare=False)
     def section(self, numeral: str) -> str:
         starts = _section_starts(self.text)
         if numeral not in starts:
@@ -108,14 +111,14 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
         page = grants.full_announcement(ggid) if ggid else ""
         grants_says = "Grants.gov has no full announcement attached." if ggid else "Grants.gov was not asked, because the record has no Grants.gov id."
     except ApiError as exc:
-        page, grants_says = "", f"The request to Grants.gov failed ({exc})."
+        page, grants_says = "", f"{GRANTS_FAILED} ({exc})."
     # Grants.gov is the official source from fiscal 2026 (NOT-OD-25-143), and its attachment can be newer than the Guide text.
     if page and len(official := html_to_text(page)) >= _SHORTEST_ANNOUNCEMENT:
         return _announcement(opportunity, official, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
-    if len(text.strip()) >= _SHORTEST_ANNOUNCEMENT:
-        return _announcement(opportunity, text, "nih-guide", _nih_guide_url(number))
     if page:
         grants_says = "Grants.gov has only a link to the announcement."
+    if len(text.strip()) >= _SHORTEST_ANNOUNCEMENT:
+        return replace(_announcement(opportunity, text, "nih-guide", _nih_guide_url(number)), grants_says=grants_says)
     if text.strip():
         guide_says = f"The NIH Guide answered with only {len(text.strip())} characters, too few to be the announcement."
     raise ApiError(f"No announcement text for {number}. {guide_says} {grants_says}")
