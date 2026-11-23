@@ -101,3 +101,53 @@ def test_a_read_only_database_from_an_earlier_version_reads_as_empty(tmp_path) -
             store.close()
     finally:
         path.chmod(0o644)
+
+def test_a_revision_and_a_signoff_stay_in_their_own_application_and_section(store) -> None:
+    a, b = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    aims = store.add_revision(a, "specific-aims", None, "applicant", "write", "mine", call_id=None)
+    for app, section in ((b, "specific-aims"), (a, "research-strategy")):
+        with pytest.raises(ValueError, match=f"{aims.id}.*application {app}.*{section}"):
+            store.add_revision(app, section, aims.id, "applicant", "write", "x", call_id=None)
+        with pytest.raises(ValueError, match=f"{aims.id}.*application {app}.*{section}"):
+            store.add_signoff(app, section, aims.id, "A. Applicant", "I wrote this.", (), "0.3.0")
+    assert store.revisions(b) == [] and store.signoffs(a) == store.signoffs(b) == []
+
+def test_a_kept_model_requirement_keeps_the_call_that_found_it(store) -> None:
+    from nih_grant_matcher.announcement import Requirement
+    app = _app(store)
+    first, second = (store.add_call(app, "", "requirements", "anthropic", "claude-opus-5-5", "s", "p", "r").id for _ in range(2))
+    [kept] = store.replace_requirements(app, "model", (Requirement("must", "Name a mentor.", "q", "model", call_id=first),), call_id=first)
+    found = store.replace_requirements(app, "model", (kept, Requirement("must", "Add a timeline.", "q", "model", call_id=second)), call_id=second)
+    assert [r.call_id for r in found] == [first, second]
+
+def test_the_deleting_setting_is_the_store_s_own(store) -> None:
+    with pytest.raises(ValueError, match="deleting"):
+        store.set_setting("deleting", str(_app(store)))
+    assert store.setting("deleting") is None
+
+def test_deleting_an_application_removes_every_kind_of_row(store) -> None:
+    from nih_grant_matcher.announcement import Requirement
+    keep, gone = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    for app in (keep, gone):
+        call = store.add_call(app, "specific-aims", "draft", "anthropic", "claude-opus-5-5", "s", "p", "r")
+        drafted = store.add_revision(app, "specific-aims", None, "model", "draft", "drafted", call_id=call.id)
+        child = store.add_revision(app, "specific-aims", drafted.id, "applicant", "write", "mine", call_id=None)
+        store.add_signoff(app, "specific-aims", child.id, "A. Applicant", "I wrote this.", (), "0.3.0")
+        store.replace_requirements(app, "model", (Requirement("must", "Name a mentor.", "q", "model", call_id=call.id),), call_id=call.id)
+        store.add_fact(app, "aim", "Aim one.")
+    before = (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep))
+    store.delete_application(gone)
+    assert (store.calls(gone), store.revisions(gone), store.signoffs(gone), store.requirements(gone), store.facts(gone)) == ([], [], [], [], [])
+    assert store.application(gone) is None and (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep)) == before
+    assert store.setting("deleting") is None
+
+def test_a_delete_that_fails_part_way_leaves_the_log_locked(store) -> None:
+    a, b = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    parent = store.add_revision(a, "specific-aims", None, "applicant", "write", "mine", call_id=None)
+    with store.conn:
+        store.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, created_at) VALUES (?, 'specific-aims', ?, 'applicant', 'write', 'x', '2026-11-23T00:00:00')", (b, parent.id))
+    with pytest.raises(sqlite3.IntegrityError):
+        store.delete_application(a)
+    assert store.setting("deleting") is None and len(store.revisions(a)) == 1
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        store.conn.execute("DELETE FROM revisions WHERE id = ?", (parent.id,))

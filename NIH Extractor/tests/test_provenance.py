@@ -27,3 +27,13 @@ def test_a_section_is_final_only_while_a_signoff_names_its_head() -> None:
     assert section_state(LOG[:2], signed, "specific-aims") == "final"
     assert section_state(LOG, signed, "specific-aims") == "draft"
     assert section_state((), (), "specific-aims") == "empty" and head(LOG, "specific-aims").id == 3
+
+def test_an_unknown_origin_is_refused() -> None:
+    import pytest
+    with pytest.raises(ValueError, match="edit"):
+        share((("We", "applicant"), ("study", "edit")))
+
+def test_a_parent_outside_the_log_is_named() -> None:
+    import pytest
+    with pytest.raises(ValueError, match="parent 1"):
+        attribution(LOG[1:], 3)
