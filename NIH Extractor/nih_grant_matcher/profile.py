@@ -61,8 +61,8 @@ def from_export(text: str) -> Profile:
     if not isinstance(keywords, dict) or len(keywords) > 200:
         raise ProfileError("keywords: expected an object of at most 200 terms")
     for term, weight in keywords.items():
-        if not term.strip() or type(weight) is not int or not 1 <= weight <= 30:
-            raise ProfileError(f"keywords: {term!r} needs a name and a weight from 1 to 30")
+        if not term.strip() or term != term.strip().lower() or type(weight) is not int or not 1 <= weight <= 30:
+            raise ProfileError(f"keywords: {term!r} needs a lower-case name with no outer spaces and a weight from 1 to 30")
     examples = raw.get("examples", CURATED_COMPUTATIONAL_EXAMPLES)
     if not isinstance(examples, (list, tuple)) or len(examples) > 20 or not all(isinstance(example, str) for example in examples):
         raise ProfileError("examples: expected at most 20 sentences")
