@@ -220,14 +220,29 @@ def test_a_decision_in_another_application_stays_while_its_quote_is_in_the_text(
     a.fetch_announcement(Guide(FOUR_PAGES + " More text."), Grants(""))
     assert [(r.text, r.confirmed) for r in b.view().requirements] == [("Research Strategy: at most 4 pages.", False)]
 
-def test_any_fetched_announcement_replaces_the_saved_one_in_either_direction(tmp_path) -> None:
+def test_a_grants_gov_text_replaces_a_saved_guide_copy_and_the_guide_text_does_not_replace_it(tmp_path) -> None:
     from dataclasses import replace
     ws = start(tmp_path)
     ws.opportunity = replace(ws.opportunity, raw={"guide_item": {"ggid": "360675"}})
     ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
     official, _ = ws.fetch_announcement(GuideDown(), Grants(GRANTS_PAGE))
     assert official.origin == "grants.gov" and ws.view().announcement == official
-    assert ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))[0].origin == ws.view().announcement.origin == "nih-guide"
+    # Grants.gov is down or attaches nothing this time, and the Guide can serve an older text.
+    with pytest.raises(ApiError, match="kept the copy it saved from there"):
+        ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    assert ws.view().announcement == official
+
+def test_a_decision_moves_to_the_new_sentence_and_a_changed_limit_drops_it(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
+    ws.decide(ws.view().requirements[0].id, True)
+    longer = FOUR_PAGES.replace("4 pages.", "4 pages for the first phase.")
+    _, dropped = ws.fetch_announcement(Guide(longer), Grants(""))
+    kept = ws.view().requirements
+    assert dropped == [] and [(r.text, r.confirmed) for r in kept] == [("Research Strategy: at most 4 pages.", True)] and "first phase" in kept[0].quote
+    _, dropped = ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages.", "4.5 pages.")), Grants(""))
+    assert [r.text for r in dropped] == ["Research Strategy: at most 4 pages."]
+    assert [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4.5 pages.", None)]
 
 def test_a_decision_carries_to_the_guide_text_of_the_same_sentence(tmp_path) -> None:
     ws = start(tmp_path)

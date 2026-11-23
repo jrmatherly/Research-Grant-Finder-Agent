@@ -167,7 +167,7 @@ def test_full_announcement_downloads_only_the_full_announcement_attachment(monke
 
 
 # PAR-26-121 on Grants.gov on 2026-11-23 has the first announcement and its revision, in that order.
-@pytest.mark.parametrize("dates, expected", [(("Dec 11, 2025 12:55:49 PM EST", "Dec 18, 2025 02:19:42 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 2), (("Dec 18, 2025 02:19:42 PM EST", "Dec 11, 2025 12:55:49 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 1), (("Dec 18, 2025 02:19:42 PM EST", "soon", "Dec 11, 2025 12:55:49 PM EST"), 3)], ids=["newest-second", "newest-first", "unreadable-date-takes-the-last"])
+@pytest.mark.parametrize("dates, expected", [(("Dec 11, 2025 12:55:49 PM EST", "Dec 18, 2025 02:19:42 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 2), (("Dec 18, 2025 02:19:42 PM EST", "Dec 11, 2025 12:55:49 PM EST", "Dec 16, 2025 09:00:00 AM EST"), 1), (("Dec 18, 2025 02:19:42 PM EST", "soon", "Dec 11, 2025 12:55:49 PM EST"), 3), (("Dec 18, 2025 02:19:42 PM EST", "Dec 18, 2025 02:19:42 PM EST"), 2), (("Dec 11, 2025 12:55:49 PM ET", "Dec 18, 2025 02:19:42 PM AKST", "Dec 16, 2025 09:00:00 AM ET"), 2)], ids=["newest-second", "newest-first", "unreadable-date-takes-the-last", "a-tie-takes-the-later-in-the-list", "a-zone-of-another-length"])
 def test_full_announcement_downloads_the_newest_full_announcement(monkeypatch, dates, expected) -> None:
     import json
     from nih_grant_matcher.config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL
