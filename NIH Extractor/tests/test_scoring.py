@@ -1,4 +1,5 @@
 from datetime import date
+import pytest
 from nih_grant_matcher.models import Opportunity
 from nih_grant_matcher.scoring import MLRelevanceScorer
 
@@ -51,15 +52,48 @@ def test_common_words_do_not_count_as_similarity() -> None:
 def test_data_infrastructure_terms_match_under_readable_names() -> None:
     scored = MLRelevanceScorer().score(_nih("Statistical and Data Management Center", "Biostatistical support, data coordinating center duties, data harmonisation and secondary data analyses."), today=date(2026, 7, 6))
     assert set(scored.matched_terms) == {"statistical", "data management", "biostatistics", "data coordination", "data harmonization", "secondary analysis"}
+    assert scored.breakdown.keyword_score == 8 + 8 + 12 + 10 + 10 + 10
+
+@pytest.mark.parametrize("text, keyword, weight", [
+    ("Medical imaging of tumors", "medical imaging", 12), ("Data integration across cohorts", "data integration", 10), ("Clinical informatics", "informatics", 12),
+    ("Biostatistics core", "biostatistics", 12), ("Statistical methods and statistics", "statistical", 8), ("Quantitative approaches", "quantitative", 8),
+    ("Data coordinating center", "data coordination", 10), ("Data management core", "data management", 8), ("Common data standards", "data standards", 10),
+    ("Data harmonization", "data harmonization", 10), ("Secondary analysis of trials", "secondary analysis", 10), ("A shared data resource", "data resource", 8), ("Data sharing", "data sharing", 6),
+])
+def test_each_data_infrastructure_keyword_scores_its_weight(text: str, keyword: str, weight: int) -> None:
+    scored = MLRelevanceScorer().score(_nih("Program", f"{text}."), today=date(2026, 7, 6))
+    assert scored.matched_terms == (keyword,)
+    assert scored.breakdown.keyword_score == weight
+
+def test_application_boilerplate_is_not_a_keyword() -> None:
+    scored = MLRelevanceScorer().score(_nih("Program", "Results were statistically significant. Applicants submit a Data Management and Sharing Plan. Ergonomics matters."), today=date(2026, 7, 6))
+    assert scored.matched_terms == ()
+
+def test_keywords_that_share_words_count_once() -> None:
+    scorer = MLRelevanceScorer()
+    assert scorer.score(_nih("Medical imaging analytics core", ""), today=date(2026, 7, 6)).matched_terms == ("imaging analytics",)
+    assert scorer.score(_nih("Clinical prediction models", ""), today=date(2026, 7, 6)).matched_terms == ("clinical prediction",)
+    both = scorer.score(_nih("Medical imaging analytics core", "A second aim uses medical imaging."), today=date(2026, 7, 6))
+    assert set(both.matched_terms) == {"imaging analytics", "medical imaging"}
+
+def test_a_title_alone_cannot_reach_the_similarity_reason() -> None:
+    for title in ("Patient Outcomes", "Disease Mechanisms", "Biomedical imaging"):
+        scored = MLRelevanceScorer().score(_nih(title, ""), today=date(2026, 7, 6))
+        assert scored.breakdown.semantic_score < 8, title
+
+def test_similarity_reason_lists_the_three_strongest_shared_terms() -> None:
+    scored = MLRelevanceScorer().score(_nih("Program", "Extract phenotypes from clinical text with natural language processing. " * 3), today=date(2026, 7, 6))
+    reason = next(reason for reason in scored.reasons if "curated" in reason)
+    terms = reason.rsplit(": ", 1)[1].rstrip(")").split(", ")
+    # The text shares seven words with the example. Three are named, and the common word "clinical" is not one of them.
+    assert len(terms) == 3 and set(terms) <= {"natural", "language", "processing", "extract", "phenotypes", "text"}
 
 def test_similarity_weights_rare_words_above_common_ones() -> None:
     scorer = MLRelevanceScorer()
-    filler = "Supports investigators who study kidney stones, bladder function and urinary tract infection in older adults."
+    filler = "Supports investigators who study kidney stones, bladder function and urinary tract infection in older adults. Projects may enroll cohorts, collect specimens, measure symptoms and compare surgical, dietary and pharmacologic treatment across sites."
     rare = scorer.score(_nih("Urology", f"{filler} Phenotypes."), today=date(2026, 7, 6))
     common = scorer.score(_nih("Urology", f"{filler} Health."), today=date(2026, 7, 6))
     assert rare.breakdown.semantic_score > 2 * common.breakdown.semantic_score
-    assert rare.breakdown.semantic_score >= 8
-    assert "Description is close to curated ML/data-science grant examples (shared terms: phenotypes)" in rare.reasons
 
 def test_rarity_table_is_present_and_plausible() -> None:
     scorer = MLRelevanceScorer()

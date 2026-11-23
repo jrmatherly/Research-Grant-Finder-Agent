@@ -43,6 +43,19 @@ def test_store_clears_duplicates_saved_before_the_rule(tmp_path) -> None:
     finally:
         store.close()
 
+def test_store_replaces_a_grants_gov_row_when_the_guide_row_arrives(tmp_path) -> None:
+    close = date(2026, 12, 1)
+    assert _saved_ids(tmp_path, [_scored("123", "RFA-1", close), _scored("nih-guide:9", "RFA-1", close)], 2) == ["nih-guide:9"]
+
+def test_store_keeps_rows_without_a_number_or_a_deadline(tmp_path) -> None:
+    store = OpportunityStore(tmp_path / "grants.sqlite3")
+    try:
+        for source_id in ("a", "b"):
+            store.upsert_scored(MLRelevanceScorer().score(Opportunity(source_id=source_id, opportunity_number="", title="Machine learning", agency_code="HHS-NIH11", agency_name="National Institutes of Health", status="posted"), today=date(2026, 7, 6)))
+        assert sorted(item.opportunity.source_id for item in store.top_scored(today=date(2026, 7, 6))) == ["a", "b"]
+    finally:
+        store.close()
+
 def test_store_keeps_one_row_per_opportunity_number(tmp_path) -> None:
     close = date(2026, 12, 1)
     assert _saved_ids(tmp_path, [_scored("123", "RFA-1", close), _scored("nih-guide:9", "RFA-1", close), _scored("456", "RFA-1", close)], 2) == ["nih-guide:9"]

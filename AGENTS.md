@@ -11,12 +11,12 @@ Start your coding assistant at the repository root, so that it loads the project
 - Run one test file: `uv run pytest -q tests/test_scoring.py`
 - Run the dashboard: `uv run streamlit run streamlit_app.py`
 - Run the CLI: `uv run python -m nih_grant_matcher run --source nih-guide`. It calls live public APIs and writes `data/` and `digests/` under the current directory.
-- Run in Docker, from the repository root: `docker compose up --build -d` serves the dashboard on `localhost:8501`. `docker compose run --rm app python -m nih_grant_matcher run` runs the CLI. `NIH Extractor/Dockerfile` installs from `pyproject.toml` and `uv.lock` and copies only `streamlit_app.py` and the package, so list a new runtime file in `NIH Extractor/.dockerignore`.
+- Run in Docker, from the repository root: `docker compose up --build -d` serves the dashboard on `localhost:8501`. `docker compose run --rm app python -m nih_grant_matcher run` runs the CLI. `NIH Extractor/Dockerfile` installs from `pyproject.toml` and `uv.lock` and copies only `streamlit_app.py` and the package. A new file inside the package needs nothing. A new runtime file beside it needs a `COPY` line, an entry in `NIH Extractor/.dockerignore`, and an entry in the `paths` list of `docker-image.yml`.
 
 ## CI
 
-- `.github/workflows/tests.yml` runs pytest on Python 3.11, 3.13, and 3.14. Require the check `✅ Required checks passed`, not the matrix legs.
-- `.github/workflows/docker-image.yml` lints the Dockerfile, builds the image, and pushes `ghcr.io/jrmatherly/nih-grant-matcher` on a push to `main` or a `v*` tag. A pull request builds without pushing.
+- `.github/workflows/tests.yml` runs pytest on Python 3.11, 3.13, and 3.15. Require the check `✅ Required checks passed`, not the matrix legs.
+- `.github/workflows/docker-image.yml` lints the Dockerfile, builds the image, and pushes `ghcr.io/jrmatherly/nih-grant-matcher` on a `v*` tag and on a push to `main` that changes a file in its `paths` list. A pull request that changes one of those files builds without pushing.
 - Pin every action to a commit with its tag in a comment, and start every step name with an emoji. Check a workflow change with `actionlint` and `zizmor .github/workflows`, and the Dockerfile with `hadolint`.
 - `renovate.json` moves the action pins, the image digests, uv, and the packages in `pyproject.toml` and `uv.lock`. A raise of the Python version is a manual change to the Dockerfile tag, the CI matrix, and `pyproject.toml` together.
 

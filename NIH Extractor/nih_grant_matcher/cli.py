@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json, ssl, sys, urllib.error
 from pathlib import Path
 from .agents import DigestAgent, NihContextAgent
-from .clients import GrantsGovXmlClient, NihGuideClient, NihReporterClient
+from .clients import ApiError, GrantsGovXmlClient, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .normalizer import normalize_nih_guide
@@ -95,9 +95,14 @@ def _reporter_context(args: argparse.Namespace) -> int:
 
 def _rarity_table(args: argparse.Namespace) -> int:
     texts = [normalize_nih_guide(item).searchable_text for item in NihGuideClient().search(rows=args.rows, types="expired")]
-    # A word seen in one document is as rare as an unseen word for scoring, so leave it out and keep the file small.
+    if len(texts) < args.rows // 2:
+        print(f"Read {len(texts)} opportunities, fewer than half of the {args.rows} asked for, so the table was not replaced.", file=sys.stderr)
+        return 1
+    # A word seen in one document is left out to keep the file small. Scoring then treats it as unseen, which weighs it about 8% higher.
     terms = {term: count for term, count in sorted(document_frequencies(texts).items()) if count > 1}
-    Path(args.out).write_text(json.dumps({"documents": len(texts), "terms": terms}, separators=(",", ":")) + "\n", encoding="utf-8")
+    partial = Path(f"{args.out}.partial")
+    partial.write_text(json.dumps({"documents": len(texts), "terms": terms}, separators=(",", ":")) + "\n", encoding="utf-8")
+    partial.replace(args.out)
     print(f"Wrote {len(terms)} terms from {len(texts)} opportunities to {args.out}.")
     return 0
 
@@ -107,7 +112,10 @@ def _backfill_xml(args: argparse.Namespace) -> int:
     except urllib.error.URLError as exc:
         if not isinstance(exc.reason, ssl.SSLCertVerificationError):
             raise
-        print("Could not verify the certificate of www.grants.gov, so nothing was downloaded. The server does not send its intermediate certificate. Download the extract in a browser from https://www.grants.gov/xml-extract.", file=sys.stderr)
+        print(f"Could not verify a server certificate, so nothing was downloaded: {exc.reason}. www.grants.gov is known not to send its intermediate certificate. Download the extract in a browser from https://www.grants.gov/xml-extract.", file=sys.stderr)
+        return 1
+    except ApiError as exc:
+        print(f"Could not download the extract: {exc}", file=sys.stderr)
         return 1
     print(f"Downloaded latest Grants.gov XML extract to {path}.")
     return 0

@@ -13,6 +13,7 @@ from nih_grant_matcher.store import OpportunityStore
 APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
 
 
+# The dashboard reads the real date, so the deadlines here are set relative to today instead of fixed.
 def test_dashboard_renders_saved_open_results(tmp_path, monkeypatch) -> None:
     opportunity = Opportunity(source_id="nih-guide:1", opportunity_number="RFA-TEST-1", title="Machine learning for health", agency_code="NLM", agency_name="NIH NLM", status="active", close_date=date.today() + timedelta(days=60), description="Machine learning for health data.")
     closed = Opportunity(source_id="nih-guide:2", opportunity_number="RFA-TEST-2", title="Machine learning, closed", agency_code="NLM", agency_name="NIH NLM", status="active", close_date=date.today() - timedelta(days=1))
