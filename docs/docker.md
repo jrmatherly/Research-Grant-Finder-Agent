@@ -122,7 +122,7 @@ Docker Desktop on macOS and Windows does not need this step.
 - **Remove.** `docker rm -f nih-grant-matcher` removes the container. `docker rmi ghcr.io/jrmatherly/nih-grant-matcher:latest` removes the image.
 - **Read the log.** `docker logs nih-grant-matcher`.
 
-Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is normally rebuilt every week with Debian's security fixes. A build with a serious vulnerability that has a fix is not published.
+Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is normally rebuilt every week with Debian's security fixes. GitHub turns the weekly rebuild off after 60 days without activity in the repository. To turn it on again, open the repository's Actions tab, select the Docker image workflow, and select Enable workflow. A build with a serious vulnerability that has a fix is not published.
 
 ## Troubleshooting
 
