@@ -113,6 +113,8 @@ def test_run_says_when_it_reaches_the_limit(sources, tmp_path, capsys) -> None:
     db = tmp_path / "g.sqlite3"
     assert cli.main(["--db", str(db), "run", "--limit", "2", "--out", str(tmp_path / "d.md")]) == 0
     assert "A source returned 2 rows" in capsys.readouterr().err
+    assert cli.main(["--db", str(db), "run", "--source", "grants.gov", "--limit", "2", "--out", str(tmp_path / "d.md")]) == 0
+    assert "A source returned 2 rows" in capsys.readouterr().err
     # Each source returns 2 rows. Together they pass a limit of 3, but neither source reaches it.
     assert cli.main(["--db", str(db), "run", "--source", "both", "--limit", "3", "--out", str(tmp_path / "d.md")]) == 0
     assert capsys.readouterr().err == ""
@@ -154,3 +156,15 @@ def test_a_failed_request_exits_1_with_one_line(monkeypatch, tmp_path, capsys, a
     assert cli.main(["--db", str(tmp_path / "g.sqlite3"), *argv]) == 1
     assert capsys.readouterr().err == "Request failed: https://example.invalid/data failed after 3 attempt(s): HTTP Error 503\n"
     assert not (tmp_path / "g.sqlite3").exists()
+
+
+def test_digest_escapes_markup_in_a_title_and_a_summary() -> None:
+    from nih_grant_matcher.digest import render_digest
+    from nih_grant_matcher.models import Opportunity
+    from nih_grant_matcher.scoring import MLRelevanceScorer
+    # A Markdown viewer reads "<" as the start of an HTML tag, and then hides or runs what follows.
+    scored = MLRelevanceScorer().score(Opportunity(source_id="nih-guide:9", opportunity_number="PAR-TEST-9", title="Models with p<0.05 and n>30", agency_code="NIH", agency_name="National Institutes of Health", status="active", description="<img src=x onerror=alert(1)> & more"))
+    digest = render_digest([scored], min_score=0)
+    assert "## 1. Models with p&lt;0.05 and n>30" in digest
+    assert "&lt;img src=x onerror=alert(1)> & more" in digest
+    assert "<" not in digest
