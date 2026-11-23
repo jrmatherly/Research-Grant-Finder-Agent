@@ -10,8 +10,9 @@ from .rules import Limit, PageFormat, SectionRule
 
 _PLACEHOLDER = re.compile(r"\[NEEDS INPUT:[^\]]*\]")
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
-_CITATION_LIKE = re.compile(r"(?P<doi>10\.\d{4,9}/\S+)|PMID:?\s*(?P<pmid>\d+)|(?P<author>[A-Z][a-z]+) et al\.?,? \(?(?P<year>\d{4})\)?")
-_DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)")
+# The author is the whole surname, so McDonald is not read as Donald. A year may carry a letter, as in 2021a.
+_CITATION_LIKE = re.compile(r"(?P<doi>10\.\d{4,9}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>[A-Z][A-Za-z'-]*[a-z]) et al\.?,? \(?(?P<year>\d{4}[a-z]?)\)?")
+_DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)", re.I)
 _FIGURE = re.compile(r"!\[|<img|^[ \t]*(?:Figure|Table)[ \t]+\d", re.M)
 _URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+", re.I)
 # A roman numeral after one of these words is not the pronoun.
@@ -42,10 +43,11 @@ def _doi(found: str) -> str:
 
 def _cites(m: re.Match[str], reference: Fact) -> bool:
     if m["doi"]:
-        return _doi(m["doi"]) in {_doi(str(reference.detail.get("doi", ""))), *map(_doi, _DOI.findall(reference.text))}
+        return _doi(m["doi"]) in set(map(_doi, _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")))
     if m["pmid"]:
-        return m["pmid"] in {str(reference.detail.get("pmid", "")), *_PMID.findall(reference.text)}
-    return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (m["author"], m["year"]))
+        return m["pmid"] in {*re.findall(r"\d+", str(reference.detail.get("pmid", ""))), *_PMID.findall(reference.text)}
+    year = m["year"] if m["year"][-1].isalpha() else m["year"] + "[a-z]?"
+    return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(m["author"]), year))
 
 def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, facts: Sequence[Fact], grounding: str, words: Sequence[tuple[str, str]]) -> tuple[Finding, ...]:
     references = [f for f in facts if f.kind == "reference" and f.retired_at is None]
