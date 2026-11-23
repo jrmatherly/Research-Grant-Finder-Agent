@@ -19,38 +19,43 @@ class RunSummary:
     fetched: int
     saved: int
     source: str
+    capped: bool = False
 
 
-def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", keyword: str = "") -> tuple[list[ScoredOpportunity], int]:
+def fetch_score_opportunities(config: MatcherConfig, source: str = "nih-guide", keyword: str = "") -> tuple[list[ScoredOpportunity], int, bool]:
     parser = GrantParserAgent()
     relevance = MLRelevanceAgent(MLRelevanceScorer(config))
     opportunities: list[Opportunity] = []
     fetched = 0
+    # The count below is the sum over the sources, so each source's own count is compared to the limit.
+    capped = False
 
     if source in ("nih-guide", "both"):
         guide_opportunities = NihGuideIngestionAgent(NihGuideClient(), config).ingest(keyword=keyword)
         opportunities.extend(guide_opportunities)
         fetched += len(guide_opportunities)
+        capped = capped or len(guide_opportunities) >= config.rows
 
     if source in ("grants.gov", "both"):
         enriched = IngestionAgent(GrantsGovClient(), config).ingest(keyword=keyword)
         opportunities.extend(parser.parse(hit, detail) for hit, detail in enriched)
         fetched += len(enriched)
+        capped = capped or len(enriched) >= config.rows
 
     scored = [relevance.score(opp) for opp in _dedupe_opportunities(opportunities)]
     current = [item for item in scored if is_current_nih_hhs_opportunity(item.opportunity)]
     current.sort(key=lambda item: (-item.score, item.opportunity.close_date is None, item.opportunity.close_date or item.scored_at.date()))
-    return current, fetched
+    return current, fetched, capped
 
 
 def run_and_save(config: MatcherConfig, source: str = "nih-guide", keyword: str = "") -> tuple[list[ScoredOpportunity], RunSummary]:
-    scored, fetched = fetch_score_opportunities(config, source=source, keyword=keyword)
+    scored, fetched, capped = fetch_score_opportunities(config, source=source, keyword=keyword)
     store = OpportunityStore(config.db_path)
     try:
         saved = store.upsert_many(scored)
     finally:
         store.close()
-    return scored, RunSummary(fetched=fetched, saved=saved, source=source)
+    return scored, RunSummary(fetched=fetched, saved=saved, source=source, capped=capped)
 
 
 def rescore_saved(store: OpportunityStore) -> None:

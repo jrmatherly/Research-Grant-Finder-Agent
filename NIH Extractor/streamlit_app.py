@@ -105,7 +105,7 @@ with st.sidebar:
     st.header("Run Search")
     source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], index=0)
     keyword = st.text_input("Keyword", value="", placeholder="AI, machine learning, imaging...")
-    limit = st.slider("Rows per source", min_value=25, max_value=500, value=250, step=25)
+    limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25)
     db_path = st.text_input("Database", value=DEFAULT_DB)
     run_clicked = st.button("Run Search", type="primary", width="stretch")
 
@@ -139,6 +139,8 @@ if run_clicked:
             set_scored_items_in_session(items)
             st.session_state["last_run"] = summary
             st.success(f"Fetched {summary.fetched} records from {summary.source}; saved {summary.saved} current NIH/HHS opportunities.")
+            if summary.capped:
+                st.warning("A source reached the row limit and may hold more. Raise Rows per source and run again.")
 
 if load_clicked or (not get_scored_items_from_session() and Path(db_path).exists()):
     try:

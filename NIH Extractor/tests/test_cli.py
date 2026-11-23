@@ -107,3 +107,15 @@ def test_rarity_table_counts_documents_per_term_and_drops_singletons(monkeypatch
     assert table["documents"] == 2
     assert table["terms"]["research"] == 2
     assert "imaging" not in table["terms"] and "once" not in table["terms"]
+
+
+def test_run_says_when_it_reaches_the_limit(sources, tmp_path, capsys) -> None:
+    db = tmp_path / "g.sqlite3"
+    assert cli.main(["--db", str(db), "run", "--limit", "2", "--out", str(tmp_path / "d.md")]) == 0
+    assert "A source returned 2 rows" in capsys.readouterr().err
+    # Each source returns 2 rows. Together they pass a limit of 3, but neither source reaches it.
+    assert cli.main(["--db", str(db), "run", "--source", "both", "--limit", "3", "--out", str(tmp_path / "d.md")]) == 0
+    assert capsys.readouterr().err == ""
+    assert cli.main(["--db", str(db), "run", "--out", str(tmp_path / "d.md")]) == 0
+    assert capsys.readouterr().err == ""
+    assert cli.build_parser().parse_args(["run"]).limit == 500
