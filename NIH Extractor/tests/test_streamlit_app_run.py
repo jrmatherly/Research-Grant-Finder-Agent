@@ -550,3 +550,24 @@ def test_the_delete_caption_says_exported_files_stay(tmp_path, monkeypatch) -> N
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     assert any("Files you exported stay where you exported them." in caption.value for caption in app.caption)
+
+
+def test_the_terms_table_names_each_term_it_drops_or_merges() -> None:
+    import pandas as pd
+    from nih_grant_matcher.ui.profile_page import read_terms
+    table = pd.DataFrame({"Term": ["cardiac", "Cardiac", "fibrosis", "valve", None, "  "], "Weight": [12, 18, None, 9, 5, 4]})
+    assert read_terms(table) == ({"cardiac": 18, "valve": 9}, ["fibrosis"], [("cardiac", "Cardiac", 18)])
+    assert read_terms(pd.DataFrame({"Term": ["valve"], "Weight": [9]})) == ({"valve": 9}, [], [])
+
+
+def test_the_wizard_warns_about_the_terms_it_dropped_or_merged(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import Profile
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    app.session_state["profile_step"], app.session_state["profile_draft"] = 2, Profile(keywords={"cardiac": 12, "Cardiac": 18, "fibrosis": None, "valve": 9}, examples=("One.", "Two.", "Three."), focus="profile", examples_name="your example sentences")
+    app.run(timeout=30)
+    next(button for button in app.button if button.label == "Next").click().run(timeout=30)
+    assert not app.exception and app.session_state["profile_draft"].keywords == {"cardiac": 18, "valve": 9}
+    (warning,) = [w.value for w in app.warning if "fibrosis" in w.value]
+    assert "fibrosis had no weight" in warning and "cardiac and Cardiac are one term" in warning and "18" in warning
