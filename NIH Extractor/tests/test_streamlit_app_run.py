@@ -88,11 +88,14 @@ def test_saving_a_profile_reorders_the_find_view(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert app.dataframe[0].value["Opportunity Number"].iloc[0] == "PA-1"
+    assert app.caption[0].value == "Run NIH Guide and Grants.gov searches, rank computational opportunities, and explore the results interactively."
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     app.text_area(key="profile_import_text").set_value(to_export(Profile(keywords={"mitochondria": 18}, examples=("Study mitochondria in cardiac muscle.",), focus="profile", examples_name="your example sentences"))).run(timeout=30)
     app.button(key="profile_import_save").click().run(timeout=30)
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     assert app.dataframe[0].value["Opportunity Number"].iloc[0] == "PA-2"
+    assert app.caption[0].value == "Run NIH Guide and Grants.gov searches, rank opportunities, and explore the results interactively."
+    assert "Ranking uses the profile of an unnamed investigator, with 1 terms and 1 example sentences." in [caption.value for caption in app.caption]
 
 
 def test_the_wizard_saves_every_step_and_resets(tmp_path, monkeypatch) -> None:
@@ -122,6 +125,50 @@ def test_the_wizard_saves_every_step_and_resets(tmp_path, monkeypatch) -> None:
         store.close()
     press("Reset to built-in")
     store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        assert store.profile() == BUILTIN_PROFILE
+    finally:
+        store.close()
+
+
+def test_saving_on_the_first_step_saves_nothing(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import BUILTIN_PROFILE
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    next(button for button in app.button if button.label == "Set up my profile").click().run(timeout=30)
+    app.text_input[0].set_value("Ada Lovelace")
+    next(button for button in app.button if button.label == "Save profile").click().run(timeout=30)
+    assert not app.exception
+    assert any("example sentences under step 2" in error.value for error in app.error)
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        assert store.profile() == BUILTIN_PROFILE
+    finally:
+        store.close()
+
+
+def test_an_unreadable_profile_ranks_with_the_builtin_one_and_can_be_reset(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import BUILTIN_PROFILE
+    path = tmp_path / "data" / "grants.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.upsert_scored(MLRelevanceScorer().score(Opportunity(source_id="nih-guide:1", opportunity_number="RFA-TEST-1", title="Machine learning for health", agency_code="NLM", agency_name="NIH NLM", status="active", close_date=date.today() + timedelta(days=60))))
+        with store.conn:
+            store.conn.execute("INSERT INTO profile VALUES (1, ?, ?)", ('{"format": "grant-matcher-profile/2", "profile": {}}', "2026-11-23T00:00:00"))
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert not app.exception
+    assert any("grant-matcher-profile/1" in error.value for error in app.error)
+    assert app.dataframe[0].value["Opportunity Number"].iloc[0] == "RFA-TEST-1"
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    assert not app.exception
+    assert any("grant-matcher-profile/1" in error.value for error in app.error)
+    next(button for button in app.button if button.label == "Reset to built-in").click().run(timeout=30)
+    assert not app.exception
+    store = OpportunityStore(path)
     try:
         assert store.profile() == BUILTIN_PROFILE
     finally:

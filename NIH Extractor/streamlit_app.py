@@ -9,8 +9,9 @@ import streamlit as st
 from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.excel import write_excel
 from nih_grant_matcher.models import ScoredOpportunity
+from nih_grant_matcher.profile import ProfileError
 from nih_grant_matcher.scoring import score_bin
-from nih_grant_matcher.ui.profile_page import profile_page, saved_profile
+from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
@@ -20,7 +21,6 @@ DEFAULT_EXCEL = "outputs/nih_grant_opportunities_ui.xlsx"
 
 st.set_page_config(page_title="NIH Grant Matcher", page_icon="NIH", layout="wide")
 st.title("NIH Grant Opportunity Matcher")
-st.caption("Run NIH Guide and Grants.gov searches, rank computational opportunities, and explore the results interactively.")
 
 
 def get_scored_items_from_session() -> list[ScoredOpportunity]:
@@ -136,11 +136,21 @@ if "items" in st.session_state:
 if "last_run" not in st.session_state:
     st.session_state["last_run"] = None
 
+try:
+    saved, unreadable = saved_profile(db_path), None
+except ProfileError as exc:
+    saved, unreadable = None, exc
+st.caption(f"Run NIH Guide and Grants.gov searches, rank {'computational ' if saved is None else ''}opportunities, and explore the results interactively.")
+
 if view == "Profile":
     profile_page(db_path)
     st.stop()
-if saved_profile(db_path) is None:
+if unreadable:
+    show_unreadable(unreadable)
+elif saved is None:
     st.caption("Ranking uses the built-in profile (machine learning and data science). Set your own under Profile.")
+else:
+    st.caption(profile_sentence(saved))
 
 if run_clicked:
     config = MatcherConfig(rows=limit, db_path=db_path, min_digest_score=min_score)
