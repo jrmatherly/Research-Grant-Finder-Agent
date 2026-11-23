@@ -26,7 +26,7 @@ To sign with your Developer ID certificate, set `CODESIGN_IDENTITY` to its name.
 CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" "NIH Extractor/macos/build.sh"
 ```
 
-The build takes a few minutes. It then starts the server from the built app and fails if the server does not answer within 30 seconds. With `CODESIGN_IDENTITY` set, it also checks the app's signature and signs the disk image.
+The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. With `CODESIGN_IDENTITY` set, it also checks the app's signature and signs the disk image.
 
 The results are in `NIH Extractor/macos/dist`:
 
@@ -42,13 +42,13 @@ Git ignores `NIH Extractor/macos/build` and `NIH Extractor/macos/dist`.
 | Folder | Contents |
 | --- | --- |
 | `~/Library/Application Support/Grant Matcher` | The database `data/grants.sqlite3` and the Excel files in `outputs/`. The dashboard writes them here in place of `NIH Extractor/`. |
-| `~/Library/Logs/Grant Matcher/server.log` | The dashboard server's output. Read it when the window says the server could not start. |
+| `~/Library/Logs/Grant Matcher/server.log` | The dashboard server's output from the last launch. Read it when the window says the server could not start. |
 
 The app does not read the database in your clone. To keep earlier results, copy `NIH Extractor/data/grants.sqlite3` to `~/Library/Application Support/Grant Matcher/data/`.
 
 ## Notarize to use the app on another Mac
 
-You need this step only to move the `.dmg` to another Mac you own. Gatekeeper on that Mac blocks an app that Apple has not notarized.
+You need this step only to move the `.dmg` to another Mac you own. Gatekeeper on that Mac blocks an app that arrives from another computer and that Apple has not notarized.
 
 1. Store your App Store Connect credentials in the keychain under a profile name, for example `grant-matcher`. See `xcrun notarytool store-credentials --help`.
 2. Build with both variables set. The build sends the `.dmg` to Apple, waits for the result, and staples the ticket to the `.dmg`.
