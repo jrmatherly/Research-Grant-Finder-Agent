@@ -103,25 +103,29 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
     return filtered
 
 
+# Streamlit drops the state of a widget it does not draw, so the Find settings are kept under keys that outlive a visit to Profile.
+for find_key, find_default in {"find_source": "nih-guide", "find_keyword": "", "find_rows": 500, "find_min_score": 0.0, "find_max_saved": 500, "find_excel": DEFAULT_EXCEL}.items():
+    st.session_state[find_key] = st.session_state.get(find_key, find_default)
+
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Profile"], key="view")
     db_path = st.text_input("Database", value=DEFAULT_DB)
     if view == "Find":
         st.header("Run Search")
-        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], index=0)
-        keyword = st.text_input("Keyword", value="", placeholder="AI, machine learning, imaging...")
-        limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25)
+        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source")
+        keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword")
+        limit = st.slider("Rows per source", min_value=25, max_value=1000, step=25, key="find_rows")
         run_clicked = st.button("Run Search", type="primary", width="stretch")
 
         st.divider()
         st.header("Display")
-        min_score = st.slider("Minimum score shown", 0.0, 100.0, 0.0, 5.0)
-        max_saved = st.slider("Saved rows to load", 50, 1000, 500, 50)
+        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score")
+        max_saved = st.slider("Saved rows to load", 50, 1000, step=50, key="find_max_saved")
         load_clicked = st.button("Load Saved Results", width="stretch")
 
         st.divider()
         st.header("Export")
-        excel_path = st.text_input("Excel output", value=DEFAULT_EXCEL)
+        excel_path = st.text_input("Excel output", key="find_excel")
         export_clicked = st.button("Export Current View", width="stretch")
 
 
