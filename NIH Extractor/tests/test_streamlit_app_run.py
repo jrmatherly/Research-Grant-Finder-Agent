@@ -93,3 +93,36 @@ def test_saving_a_profile_reorders_the_find_view(tmp_path, monkeypatch) -> None:
     app.button(key="profile_import_save").click().run(timeout=30)
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     assert app.dataframe[0].value["Opportunity Number"].iloc[0] == "PA-2"
+
+
+def test_the_wizard_saves_every_step_and_resets(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import BUILTIN_PROFILE
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    def press(label):
+        next(button for button in app.button if button.label == label).click().run(timeout=30)
+    press("Set up my profile")
+    app.text_input[0].set_value("Ada Lovelace")
+    press("Next")
+    app.text_area[0].set_value("Mitochondria in the heart.")
+    app.text_area[1].set_value("Measure mitochondrial fission in heart failure. Map cardiac muscle energetics. Test mitophagy in cardiomyocytes.")
+    press("Next")
+    press("Next")
+    press("Next")
+    app.text_area[0].set_value("Cardiac imaging")
+    press("Save profile")
+    assert not app.exception
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        profile = store.profile()
+        assert len(profile.examples) == 3 and profile.expertise == "Cardiac imaging" and profile.keywords
+        assert all(term == term.strip().lower() for term in profile.keywords)
+    finally:
+        store.close()
+    press("Reset to built-in")
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        assert store.profile() == BUILTIN_PROFILE
+    finally:
+        store.close()

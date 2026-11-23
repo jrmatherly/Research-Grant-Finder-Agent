@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re, sqlite3
 from dataclasses import replace
 from pathlib import Path
 import pandas as pd
@@ -23,7 +24,7 @@ def saved_profile(db_path: str) -> Profile | None:
         store.close()
     return None if profile == BUILTIN_PROFILE else profile
 
-def _apply(db_path: str, make, done: str) -> bool:
+def _apply(db_path: str, make, done: str) -> None:
     try:
         profile = make()
         store = OpportunityStore(db_path)
@@ -31,16 +32,12 @@ def _apply(db_path: str, make, done: str) -> bool:
             store.save_profile(profile)
         finally:
             store.close()
-    except ProfileError as exc:
+    except (ProfileError, sqlite3.OperationalError) as exc:
         st.session_state["profile_notice"] = ("error", str(exc))
-        return False
+        return
     st.session_state["profile_notice"] = ("success", done)
+    st.session_state["profile_step"] = None
     st.session_state["scored_items"] = []
-    return True
-
-def _save(db_path: str) -> None:
-    if _apply(db_path, lambda: replace(st.session_state["profile_draft"], focus="profile", examples_name="your example sentences"), "Saved your profile. The Find view now ranks with it."):
-        st.session_state["profile_step"] = None
 
 def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
     if not Path(db_path).exists():
@@ -67,7 +64,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
             stage = st.selectbox("Career stage", CAREER_STAGES, index=CAREER_STAGES.index(draft.career_stage) if draft.career_stage in CAREER_STAGES else None, placeholder="Choose a stage")
         elif n == 1:
             summary = st.text_area("Research summary", value=draft.research_summary)
-            aims = st.text_area("Aims of recent or planned work, one sentence per line", value="\n".join(draft.examples), help="Three to six sentences. Ranking compares each opportunity with them.")
+            aims = st.text_area("Aims of recent or planned work", value="\n".join(draft.examples), help="Three to six sentences, as a paragraph or one per line. Ranking compares each opportunity with each sentence.")
         elif n == 2:
             st.caption("Terms proposed from your research text. Keep, remove, re-weight or add terms. A weight runs from 1 to 30.")
             terms = st.data_editor(pd.DataFrame({"Term": list(draft.keywords), "Weight": list(draft.keywords.values())}, columns=["Term", "Weight"]), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Weight": st.column_config.NumberColumn("Weight", min_value=1, max_value=30, step=1, default=10)})
@@ -85,16 +82,18 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
             resources = st.text_area("Resources", value=draft.resources)
             st.caption("Prior work, one reference per row. A key holds only letters, digits and hyphens.")
             refs = st.data_editor(pd.DataFrame([{"Key": ref.key, "Citation": ref.citation, "PMID": ref.pmid, "DOI": ref.doi} for ref in draft.prior_work], columns=["Key", "Citation", "PMID", "DOI"], dtype=str), num_rows="dynamic", hide_index=True, width="stretch")
-        back_col, next_col = st.columns(2)
-        back = back_col.form_submit_button("Back", disabled=n == 0, width="stretch")
-        forward = next_col.form_submit_button("Next" if n < len(STEPS) - 1 else "Finish", type="primary", width="stretch")
-    if not (back or forward):
+        last = n == len(STEPS) - 1
+        cols = st.columns(2 if last else 3)
+        back = cols[0].form_submit_button("Back", disabled=n == 0, width="stretch")
+        forward = not last and cols[1].form_submit_button("Next", type="primary", width="stretch")
+        save = cols[-1].form_submit_button("Save profile", type="primary" if last else "secondary", width="stretch")
+    if not (back or forward or save):
         return
     if n == 0:
         draft = replace(draft, investigator=investigator.strip(), institution=institution.strip(), career_stage=stage or "")
     elif n == 1:
-        examples = tuple(line.strip() for line in aims.splitlines() if line.strip())
-        if forward and not 3 <= len(examples) <= 6:
+        examples = tuple(part.strip() for part in re.split(r"\n|(?<=[.?!])\s+", aims) if part.strip())
+        if (forward or save) and not 3 <= len(examples) <= 6:
             st.error(f"Write three to six sentences. You wrote {len(examples)}.")
             return
         if (summary.strip(), examples) != (draft.research_summary, draft.examples) or not draft.keywords:
@@ -108,7 +107,10 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         cells = [["" if pd.isna(value) else str(value).strip() for value in row] for row in refs[["Key", "Citation", "PMID", "DOI"]].itertuples(index=False)]
         draft = replace(draft, expertise=expertise.strip(), resources=resources.strip(), prior_work=tuple(Reference(*row) for row in cells if any(row)))
     st.session_state["profile_draft"] = draft
-    st.session_state["profile_step"] = max(0, n - 1) if back else min(n + 1, len(STEPS) - 1)
+    if save:
+        _apply(db_path, lambda: replace(draft, focus="profile", examples_name="your example sentences"), "Saved your profile. The Find view now ranks with it.")
+    else:
+        st.session_state["profile_step"] = n - 1 if back else n + 1
     st.rerun()
 
 def profile_page(db_path: str) -> None:
@@ -126,7 +128,6 @@ def profile_page(db_path: str) -> None:
         st.button("Set up my profile" if saved is None else "Edit my profile", type="primary", on_click=lambda: st.session_state.update(profile_step=0, profile_draft=saved or BLANK))
     else:
         _step(step, db_path, st.session_state["profile_draft"])
-        st.button("Save profile", type="primary", on_click=_save, args=(db_path,), help="Saves each step as of your last Back, Next or Finish.")
 
     st.divider()
     st.subheader("Export and import")
