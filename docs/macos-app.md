@@ -1,8 +1,12 @@
 # Build NIH Grant Matcher as a macOS app
 
-`NIH Extractor/macos/build.sh` builds `Grant Matcher.app`, which shows the dashboard in its own window, and a disk image that holds it. The app starts the dashboard server on a free port on `127.0.0.1` and stops it when you quit.
+`Grant Matcher.app` shows the dashboard in its own window. It starts the dashboard server on a free port on `127.0.0.1` and stops it when you quit.
 
-The app is for your own use on your own Mac. The root `LICENSE` covers this fork's changes only, and the original upstream work has no licence, so do not publish or hand out the `.dmg`.
+## Download
+
+Each release on the [releases page](https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases) carries `Grant-Matcher-<version>-arm64.dmg`, signed with a Developer ID certificate and notarized by Apple, and a `.sha256` file to check it against. It needs a Mac with Apple silicon and macOS 14 or later. Open the disk image and drag `Grant Matcher` to `Applications`.
+
+The rest of this page is for building the app yourself with `NIH Extractor/macos/build.sh`.
 
 ## Before you begin
 
@@ -46,17 +50,37 @@ Git ignores `NIH Extractor/macos/build` and `NIH Extractor/macos/dist`.
 
 The app does not read the database in your clone. To keep earlier results, copy `NIH Extractor/data/grants.sqlite3` to `~/Library/Application Support/Grant Matcher/data/`.
 
-## Notarize to use the app on another Mac
+## Notarize
 
-You need this step only to move the `.dmg` to another Mac you own. Gatekeeper on that Mac blocks an app that arrives from another computer and that Apple has not notarized.
+A Mac blocks an app that arrives from another computer unless Apple has notarized it. A build you run on the Mac that made it does not need this step.
 
-1. Store your App Store Connect credentials in the keychain under a profile name, for example `grant-matcher`. See `xcrun notarytool store-credentials --help`.
-2. Build with both variables set. The build sends the `.dmg` to Apple, waits for the result, and staples the ticket to the `.dmg`.
+The build notarizes the `.dmg` and staples the ticket to it when `CODESIGN_IDENTITY` is set together with one of these:
 
-   ```bash
-   CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=grant-matcher "NIH Extractor/macos/build.sh"
-   ```
+- `NOTARY_PROFILE`, the name of a keychain profile made with `xcrun notarytool store-credentials`.
+- `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID` and `APPLE_API_ISSUER_ID`, an App Store Connect API key. The release workflow uses these.
 
-   The notarization step is untested.
+```bash
+CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=grant-matcher "NIH Extractor/macos/build.sh"
+```
+
+The notarization step is untested on a developer's Mac. The first release run is its first test.
 
 Use a Developer ID Application certificate issued by the Developer ID G2 Sub-CA. The older Developer ID Certification Authority expires on 2027-02-01, and the certificates it issued expire with it. `security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -issuer -enddate` shows the issuer and the end date of your certificate.
+
+## Publish a release
+
+`.github/workflows/macos-release.yml` runs on a `v*` tag. It builds, signs and notarizes the disk image on an Apple silicon runner, then attaches `Grant-Matcher-<version>-arm64.dmg` and its checksum to the tag's GitHub release. The same tag also publishes the Docker image.
+
+The workflow stops before it builds when the tag does not equal `v` plus the `version` in `NIH Extractor/pyproject.toml`, when the tagged commit is not on `main`, or when a secret is missing. It never replaces an asset on an existing release.
+
+The repository needs five Actions secrets:
+
+| Secret | Contents |
+| --- | --- |
+| `MACOS_CERT_P12` | The Developer ID Application certificate and its private key, exported as a `.p12` file and base64-encoded |
+| `MACOS_CERT_PASSWORD` | The password set when the `.p12` file was exported |
+| `APPLE_API_KEY_ID` | The Key ID of an App Store Connect API key |
+| `APPLE_API_ISSUER_ID` | The Issuer ID shown above the keys in App Store Connect |
+| `APPLE_API_KEY_P8` | The text of the key's `AuthKey_<Key ID>.p8` file |
+
+To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml`, run `uv lock` there, merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.

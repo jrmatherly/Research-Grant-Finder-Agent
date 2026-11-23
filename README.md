@@ -418,7 +418,7 @@ sudo chown -R "$(id -u):$(id -g)" "NIH Extractor"/{data,outputs,digests}
 
 CI publishes the image as `ghcr.io/jrmatherly/nih-grant-matcher`. To run it without a clone of this repository, or to update, pin, and troubleshoot it, see [Run NIH Grant Matcher from the published Docker image](docs/docker.md).
 
-To run the dashboard in its own window as a macOS app, see [Build NIH Grant Matcher as a macOS app](docs/macos-app.md).
+To run the dashboard in its own window as a macOS app, download the disk image from the [releases page](https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases) or see [Build NIH Grant Matcher as a macOS app](docs/macos-app.md).
 
 ### Use the Command Line
 
