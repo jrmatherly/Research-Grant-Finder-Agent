@@ -21,7 +21,7 @@ _NUMBER = re.compile(r"(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)%?")
 _TITLES = r"e\.g|i\.e|et al|vs|Fig|Dr|Prof|St|Mr|Mrs|Ms|Mt|Jr|Sr|No|Inc|U\.S"
 _ABBREVIATION, _TITLE = re.compile(rf"\b(?:{_TITLES}|[A-Z])\."), re.compile(rf"\b(?:{_TITLES})\.")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
-# The high count also ends a sentence after a single capital, after a closing quote or bracket, and before a lower-case word or a digit.
+# For the high count, which leaves a single capital unguarded, a sentence also ends after a closing quote or bracket and before a lower-case word or a digit.
 _ANY_SENTENCE_END = re.compile(r"[.!?][\"'\u201d\u2019)\]]*\s+(?=[A-Za-z0-9])")
 _LABEL = r"(?:(?:[A-Za-z]|\d+)[.)]\s*)?"
 
@@ -74,7 +74,7 @@ def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, 
     if limit.unit == "sentences" and count > limit.amount:
         findings.append(Finding("over-limit", "error", f"This section has {figure} sentences and the limit is {amount}. Cut it to {amount} or fewer."))
     elif limit.unit == "sentences" and (high := len(_sentences(text, _TITLE, _ANY_SENTENCE_END))) > limit.amount:
-        findings.append(Finding("sentence-count-unsure", "warning", f"Grant Matcher counts {figure} sentences one way and {high} another, and the limit is {amount}. A single letter or an initial may have been read as an abbreviation. Count the sentences by hand."))
+        findings.append(Finding("sentence-count-unsure", "warning", f"Grant Matcher counts {figure} sentence{'' if count == 1 else 's'} one way and {high} another, and the limit is {amount}. A single letter or an initial may have been read as an abbreviation. Count the sentences by hand."))
     elif count > limit.amount:
         findings.append(Finding("over-limit", "warning", f"This section comes to about {figure} {limit.unit} against a limit of {amount}. The figure is an estimate at NIH's densest legal format, so cut the text and check the final PDF, which is the authority."))
     elif limit.unit != "sentences" and count > 0.9 * limit.amount:

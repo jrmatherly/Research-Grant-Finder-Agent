@@ -145,7 +145,7 @@ def test_the_sentence_count_reads_titles_initials_quotes_and_lower_case_starts(t
 
 def test_an_unsure_sentence_count_gives_both_counts_and_says_to_count_by_hand() -> None:
     (finding,) = [f for f in check_section("One. p53 is two. mTOR is three. 5 mice is four.", *NARRATIVE, R21.page, (), "", ()) if f.code == "sentence-count-unsure"]
-    assert all(part in finding.message for part in ("1", "4", "abbreviation", "by hand")) and scan(finding.message) == ()
+    assert all(part in finding.message for part in ("counts 1 sentence one way and 4 another", "abbreviation", "by hand")) and scan(finding.message) == ()
 
 def test_a_citation_names_your_inputs() -> None:
     found = check_section("Aim [NEEDS INPUT: dose] as shown [@jones2020].", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", ())
