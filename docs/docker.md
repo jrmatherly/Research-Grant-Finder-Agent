@@ -50,6 +50,8 @@ docker compose up -d --no-build
 
 Open http://localhost:8501. The results are written to `NIH Extractor/data`, `NIH Extractor/outputs`, and `NIH Extractor/digests`.
 
+Compose starts the dashboard again after Docker or the computer restarts. The quick start container does not.
+
 To build the image from the source in the clone, run `docker compose up --build -d`. To stop the dashboard, run `docker compose down`.
 
 On Linux, if your user ID is not 1000, start it as yourself: `APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d --no-build`. To keep the two values, write them as `APP_UID=...` and `APP_GID=...` in a file named `.env` beside `compose.yaml`.
@@ -71,7 +73,13 @@ docker run --rm \
   python -m nih_grant_matcher excel
 ```
 
-With Docker Compose, the same command is `docker compose run --rm app python -m nih_grant_matcher excel`.
+With Docker Compose, the container has a different name, so `docker exec nih-grant-matcher` does not find it. From the repository root, run a command in the container that serves the dashboard:
+
+```bash
+docker compose exec app python -m nih_grant_matcher run --source nih-guide
+```
+
+Or run a command in a container of its own: `docker compose run --rm app python -m nih_grant_matcher excel`.
 
 | Command | Result |
 | --- | --- |
@@ -117,10 +125,18 @@ Docker Desktop on macOS and Windows does not need this step.
 
   Then run the `docker run` command from the quick start again. Your results stay in the folders.
 
-- **Pin a version.** Every build has a tag of the form `sha-<commit>`, for example `sha-662dc90`. A release has a tag such as `1.2.0`. Use one in place of `latest` to stay on that build.
+  With Docker Compose, run these two commands from the repository root:
+
+  ```bash
+  docker compose pull
+  docker compose up -d --no-build
+  ```
+
+- **Pin a version.** Every build has a tag of the form `sha-<commit>`, for example `sha-9697e50`. A release has a tag such as `1.2.0`. Use one in place of `latest` to stay on that build.
 - **Stop and start.** `docker stop nih-grant-matcher` and `docker start nih-grant-matcher`.
 - **Remove.** `docker rm -f nih-grant-matcher` removes the container. `docker rmi ghcr.io/jrmatherly/nih-grant-matcher:latest` removes the image.
 - **Read the log.** `docker logs nih-grant-matcher`.
+- **With Docker Compose.** `docker compose stop` and `docker compose start` stop and start the dashboard. `docker compose down` removes the container, and `docker compose logs app` shows the log.
 
 Saved opportunities are scored again each time they are read, so an update that changes scoring shows at once. `latest` is normally rebuilt every week with Debian's security fixes. GitHub turns the weekly rebuild off after 60 days without activity in the repository. To turn it on again, open the repository's Actions tab, select the Docker image workflow, and select Enable workflow. A build with a serious vulnerability that has a fix is not published.
 
