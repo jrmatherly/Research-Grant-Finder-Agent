@@ -10,7 +10,7 @@ a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[root],
     binaries=st_binaries,
-    # collect_all does not pick up term_rarity.json, so it is listed by hand.
+    # collect_submodules gathers code only, so the term_rarity.json that config.py reads beside itself is listed by hand.
     datas=st_datas + copy_metadata("streamlit") + [(os.path.join(root, "nih_grant_matcher", "term_rarity.json"), "nih_grant_matcher"), (os.path.join(root, "streamlit_app.py"), ".")],
     hiddenimports=st_hidden + collect_submodules("nih_grant_matcher") + ["pandas"],
 )

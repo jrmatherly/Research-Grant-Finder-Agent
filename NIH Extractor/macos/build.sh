@@ -11,14 +11,16 @@ uv run --locked --group macos pyinstaller --noconfirm --distpath macos/dist --wo
 echo "Smoke test: starting the server"
 port=$(uv run --locked python -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 smoke_home=$(mktemp -d)
-# A temporary HOME keeps the test out of the real data and log folders.
+stage=$(mktemp -d)
+server=
+trap '[[ -n $server ]] && kill "$server" 2>/dev/null; rm -rf "$smoke_home" "$stage"' EXIT
+# A temporary HOME keeps the test out of the real data folder.
 HOME="$smoke_home" STREAMLIT_SERVER_SCRIPT_HEALTH_CHECK_ENABLED=true "$app/Contents/MacOS/Grant Matcher" --serve "$port" >"$smoke_home/server.log" 2>&1 &
 server=$!
-stage=$(mktemp -d)
-trap 'kill "$server" 2>/dev/null || true; rm -rf "$smoke_home" "$stage"' EXIT
 healthy=
 for _ in $(seq 60); do
   if curl -fsS "http://127.0.0.1:$port/_stcore/script-health-check" >/dev/null 2>&1; then healthy=1; break; fi
+  kill -0 "$server" 2>/dev/null || break
   sleep 0.5
 done
 kill "$server" 2>/dev/null || true

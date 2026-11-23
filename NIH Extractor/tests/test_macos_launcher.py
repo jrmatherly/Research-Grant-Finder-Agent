@@ -1,15 +1,20 @@
 import http.server
 import importlib.util
+import os
+import socket
 import subprocess
 import sys
 import threading
+import types
+
+import pytest
 from pathlib import Path
 
 LAUNCHER = Path(__file__).resolve().parent.parent / "macos" / "launcher.py"
 
 
 def _load(monkeypatch):
-    # A None entry makes the import fail, as on Linux CI where the macos group is not installed.
+    # A None entry makes the import fail: webview is absent on Linux CI, and loading the launcher must import neither package.
     for name in ("webview", "streamlit", "streamlit.web"):
         monkeypatch.setitem(sys.modules, name, None)
     spec = importlib.util.spec_from_file_location("grant_matcher_launcher", LAUNCHER)
@@ -23,7 +28,7 @@ def test_server_binds_loopback_on_the_given_port_and_runs_the_dashboard(monkeypa
     argv = launcher.server_argv(Path("/bundle/streamlit_app.py"), 51234)
     assert argv[:3] == ["streamlit", "run", "/bundle/streamlit_app.py"]
     assert "--server.address=127.0.0.1" in argv and "--server.port=51234" in argv and "--server.headless=true" in argv
-    assert "--browser.gatherUsageStats=false" in argv
+    assert "--browser.gatherUsageStats=false" in argv and "--global.developmentMode=false" in argv and "--server.fileWatcherType=none" in argv
     # Without this a page whose domain is rebound to 127.0.0.1 can drive the dashboard.
     assert "--server.allowedHosts=127.0.0.1" in argv
 
@@ -79,17 +84,25 @@ def _healthy_server_url() -> str:
     return f"http://127.0.0.1:{server.server_port}"
 
 
-def _lsof_reports(monkeypatch, launcher, pids: str) -> None:
-    monkeypatch.setattr(launcher.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=pids))
+def _lsof_reports(monkeypatch, launcher, pids: str) -> list[list[str]]:
+    calls: list[list[str]] = []
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout=pids)
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    return calls
 
 
 def test_window_loads_the_dashboard_from_its_own_server_even_behind_a_proxy(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
     monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
-    _lsof_reports(monkeypatch, launcher, "4242\n")
+    for name in ("no_proxy", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    calls = _lsof_reports(monkeypatch, launcher, "4242\n")
     window, child, url = _Window(), _Child(), _healthy_server_url()
     launcher.wait_and_load(window, child, url, tmp_path / "server.log")
     assert window.shown == [("url", url)] and not child.terminated
+    assert f"-iTCP:{url.rsplit(':', 1)[1]}" in calls[0] and "-sTCP:LISTEN" in calls[0]
 
 
 def test_window_refuses_a_server_that_is_not_its_child(monkeypatch, tmp_path) -> None:
@@ -97,11 +110,79 @@ def test_window_refuses_a_server_that_is_not_its_child(monkeypatch, tmp_path) ->
     _lsof_reports(monkeypatch, launcher, "999\n")
     window, child = _Window(), _Child()
     launcher.wait_and_load(window, child, _healthy_server_url(), tmp_path / "server.log")
-    assert [kind for kind, _ in window.shown] == ["html"] and "server.log" in window.shown[0][1] and child.terminated
+    assert [kind for kind, _ in window.shown] == ["html"] and "held by another process" in window.shown[0][1] and child.terminated
+    assert "held by another process" in (tmp_path / "server.log").read_text()
 
 
-def test_window_names_the_log_when_the_server_exits(monkeypatch, tmp_path) -> None:
+def test_window_names_the_log_and_the_exit_code_when_the_server_exits(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
-    window = _Window()
-    launcher.wait_and_load(window, _Child(exit_code=1), "http://127.0.0.1:9", tmp_path / "server.log")
-    assert [kind for kind, _ in window.shown] == ["html"] and str(tmp_path / "server.log") in window.shown[0][1]
+    window, child = _Window(), _Child(exit_code=3)
+    launcher.wait_and_load(window, child, "http://127.0.0.1:9", tmp_path / "server.log")
+    assert [kind for kind, _ in window.shown] == ["html"] and child.terminated
+    assert str(tmp_path / "server.log") in window.shown[0][1] and "exited with code 3" in window.shown[0][1]
+
+
+def test_window_shows_the_error_page_when_the_wait_itself_fails(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(launcher, "start_failure", lambda child, url: 1 / 0)
+    window, child = _Window(), _Child()
+    launcher.wait_and_load(window, child, "http://127.0.0.1:9", tmp_path / "server.log")
+    assert [kind for kind, _ in window.shown] == ["html"] and "ZeroDivisionError" in (tmp_path / "server.log").read_text() and child.terminated
+
+
+def test_a_listener_that_does_not_speak_http_is_not_taken_for_the_server(monkeypatch) -> None:
+    launcher = _load(monkeypatch)
+    listener = socket.create_server(("127.0.0.1", 0))
+    def answer() -> None:
+        while True:
+            conn, _ = listener.accept()
+            conn.sendall(b"not http\r\n\r\n")
+            conn.close()
+    threading.Thread(target=answer, daemon=True).start()
+    ticks = iter(range(0, 1000, 30))
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(launcher.time, "sleep", lambda seconds: None)
+    assert launcher.start_failure(_Child(), f"http://127.0.0.1:{listener.getsockname()[1]}") == "its server did not answer within 60 seconds"
+
+
+def test_port_ownership_matches_whole_process_ids_among_listeners(monkeypatch) -> None:
+    launcher = _load(monkeypatch)
+    for listeners, owned in (("7\n4242\n", True), ("14242\n42420\n", False), ("", False)):
+        _lsof_reports(monkeypatch, launcher, listeners)
+        assert launcher.owns_port(4242, "5000") is owned
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("lsof"), subprocess.TimeoutExpired("lsof", 5)])
+def test_port_is_not_owned_when_lsof_cannot_answer(monkeypatch, error) -> None:
+    launcher = _load(monkeypatch)
+    def run(argv, **kwargs):
+        raise error
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    assert launcher.owns_port(4242, "5000") is False
+
+
+def test_serve_flag_runs_the_server_and_never_opens_a_window(monkeypatch) -> None:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(launcher, "serve", lambda port: port)
+    monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("a served child must not open a window"))
+    monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--serve", "51234"])
+    assert launcher.main() == 51234
+
+
+def test_server_runs_from_the_data_folder(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    seen: dict = {}
+    def fake_main() -> int:
+        seen.update(cwd=Path.cwd(), argv=list(sys.argv))
+        return 0
+    web = types.ModuleType("streamlit.web")
+    web.cli = types.SimpleNamespace(main=fake_main)
+    monkeypatch.setitem(sys.modules, "streamlit", types.ModuleType("streamlit"))
+    monkeypatch.setitem(sys.modules, "streamlit.web", web)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    # The watchdog exits the process when its parent is PID 1, which is how pytest can run in a container.
+    monkeypatch.setattr(launcher.threading, "Thread", lambda **kwargs: types.SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(sys, "argv", list(sys.argv))
+    monkeypatch.chdir(tmp_path)
+    assert launcher.serve(51234) == 0
+    assert seen["cwd"].resolve() == launcher.data_dir(tmp_path).resolve() and "--server.port=51234" in seen["argv"]

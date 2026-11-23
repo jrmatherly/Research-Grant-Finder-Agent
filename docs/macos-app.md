@@ -42,7 +42,7 @@ Git ignores `NIH Extractor/macos/build` and `NIH Extractor/macos/dist`.
 | Folder | Contents |
 | --- | --- |
 | `~/Library/Application Support/Grant Matcher` | The database `data/grants.sqlite3` and the Excel files in `outputs/`. The dashboard writes them here in place of `NIH Extractor/`. |
-| `~/Library/Logs/Grant Matcher/server.log` | The dashboard server's output from the last launch. Read it when the window says the server could not start. |
+| `~/Library/Logs/Grant Matcher/server.log` | The dashboard server's output from the last launch, with the launch before it in `server.log.1`. Read it when the window says the server could not start. |
 
 The app does not read the database in your clone. To keep earlier results, copy `NIH Extractor/data/grants.sqlite3` to `~/Library/Application Support/Grant Matcher/data/`.
 
@@ -57,6 +57,6 @@ You need this step only to move the `.dmg` to another Mac you own. Gatekeeper on
    CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=grant-matcher "NIH Extractor/macos/build.sh"
    ```
 
-   This command has not been run.
+   The notarization step is untested.
 
 Use a Developer ID Application certificate issued by the Developer ID G2 Sub-CA. The older Developer ID Certification Authority expires on 2027-02-01, and the certificates it issued expire with it. `security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -issuer -enddate` shows the issuer and the end date of your certificate.
