@@ -16,7 +16,7 @@ def _words(*words: str, end: str = r"\b") -> re.Pattern[str]:
 
 # The month May is not a hedge.
 _HEDGES = r"(?:(?-i:may)|might|could|possibly|potentially|perhaps|arguably|somewhat)"
-# Rules 15 to 18 are left out because NIH headings are title case by rule and the editor is plain text.
+# Not every unslop rule is here. Rules 15 to 18 are left out because NIH headings are title case by rule and the editor is plain text.
 PROSE_RULES: tuple[ProseRule, ...] = (
     ProseRule(3, "-ing opener", "A clause after a comma opens with a word like highlighting or ensuring and adds no fact. Cut it or state the fact.", re.compile(r", (?:highlighting|ensuring|reflecting|showcasing|fostering)\b", re.I)),
     ProseRule(5, "vague attribution", "A claim rests on unnamed experts or studies. Name the source or cut the claim.", None),

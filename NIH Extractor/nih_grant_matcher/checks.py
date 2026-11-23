@@ -10,7 +10,7 @@ from .rules import Limit, PageFormat, SectionRule
 
 _PLACEHOLDER = re.compile(r"\[NEEDS INPUT:[^\]]*\]")
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
-# The author is the whole surname, so McDonald is not read as Donald. A year may carry a letter, as in 2021a.
+# The author is the whole surname, so McDonald is not read as Donald.
 _CITATION_LIKE = re.compile(r"(?P<doi>10\.\d{4,9}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>[A-Z][A-Za-z'-]{0,40}[a-z]) et al\.?,? \(?(?P<year>\d{4}[a-z]?)\)?")
 _DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)", re.I)
 _FIGURE = re.compile(r"!\[|<img|^[ \t]*(?:Figure|Table)[ \t]+\d", re.M)
@@ -76,9 +76,9 @@ def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, 
     elif limit.unit == "sentences" and (high := len(_sentences(text, _TITLE, _ANY_SENTENCE_END))) > limit.amount:
         findings.append(Finding("sentence-count-unsure", "warning", f"Grant Matcher counts {figure} sentence{'' if count == 1 else 's'} one way and {high} another, and the limit is {amount}. A single letter or an initial may have been read as an abbreviation. Count the sentences by hand."))
     elif count > limit.amount:
-        findings.append(Finding("over-limit", "warning", f"This section comes to about {figure} {limit.unit} against a limit of {amount}. The figure is an estimate at NIH's densest legal format, so cut the text and check the final PDF, which is the authority."))
+        findings.append(Finding("over-limit", "warning", f"This section comes to about {figure} {limit.unit} against a limit of {amount}. The figure is an estimate at NIH's densest allowed format, so cut the text and check the final PDF, which is the authority."))
     elif limit.unit != "sentences" and count > 0.9 * limit.amount:
-        findings.append(Finding("near-limit", "warning", f"This section comes to about {figure} {limit.unit} against a limit of {amount}. The figure is an estimate at NIH's densest legal format, so check the final PDF, which is the authority, before you add more."))
+        findings.append(Finding("near-limit", "warning", f"This section comes to about {figure} {limit.unit} against a limit of {amount}. The figure is an estimate at NIH's densest allowed format, so check the final PDF, which is the authority, before you add more."))
     findings += [Finding("url", "warning", "NIH allows a link only where the announcement says so. Remove it unless the announcement allows one in this section.", m.group().rstrip(".,;:)]")) for m in _URL.finditer(text)]
     if not rule.first_person and (m := _FIRST_PERSON.search(text)):
         findings.append(Finding("first-person", "warning", f"{rule.title} is written in the third person. Rewrite each sentence that uses I, we, my or our.", _from(text, m.start())))

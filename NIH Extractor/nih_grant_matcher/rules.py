@@ -64,7 +64,7 @@ _SOURCES = (
     Source("https://grants.nih.gov/grants/guide/notice-files/NOT-OD-24-010.html", "2026-11-23", "The simplified review framework for R01, R03, R15, R16, R21, R34, RF1 and U01: Importance of the Research (Significance, Innovation) scored 1-9, Rigor and Feasibility (Approach) scored 1-9, Expertise and Resources (Investigator(s), Environment) rated Appropriate or in need of more."),
     Source("https://grants.nih.gov/grants-process/write-application/how-to-apply-application-guide/format-attachments", "2026-11-23", "Letter paper with at least half-inch margins, no more than 15 characters per linear inch and no more than six lines per vertical inch."),
     Source("https://grants.nih.gov/funding/activity-codes", "2026-11-23", "The title of each activity code."))
-# 15 characters per inch over 7.5 inches and 6 lines per inch over 10 inches: the most a legal page can hold.
+# 15 characters per inch over 7.5 inches and 6 lines per inch over 10 inches, the most a Letter page can hold within NIH's format rules.
 _DENSEST = PageFormat(chars_per_line=112, lines_per_page=60)
 _R01 = GrantType("NIH", "R01", "Research Project", (_INTRODUCTION, _AIMS, _STRATEGY, _SUMMARY, _NARRATIVE), _FACTORS, _DENSEST, _SOURCES)
 
@@ -77,7 +77,7 @@ GRANT_TYPES: dict[str, GrantType] = {f"NIH:{g.code}": g for g in (
 
 # These agencies post in the NIH Guide and review by their own criteria.
 OTHER_AGENCIES = ("FDA", "NIOSH")
-# A phased award's announcement sets its own structure, so it is out of scope until a later stage.
+# A phased award's announcement sets its own structure, so the standing rules do not fit it.
 SECOND_PHASE_CODES = ("R33", "UH3")
 
 def why_not_covered(opportunity: Opportunity) -> str:
