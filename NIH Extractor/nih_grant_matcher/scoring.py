@@ -56,10 +56,11 @@ class MLRelevanceScorer:
         text = opportunity.searchable_text.lower()
         title = opportunity.title.lower()
         matched_terms, keyword_score, centrality_score = [], 0.0, 0.0
-        if AI_WORD_RE.search(opportunity.searchable_text):
+        if "artificial intelligence" in self.config.keywords and AI_WORD_RE.search(opportunity.searchable_text):
+            weight, in_title = self.config.keywords["artificial intelligence"], bool(AI_WORD_RE.search(opportunity.title))
             matched_terms.append("AI")
-            keyword_score += 18
-            centrality_score += 12 if AI_WORD_RE.search(opportunity.title) else 4
+            keyword_score += weight
+            centrality_score += min(weight * (0.8 if in_title else 0.25), 12 if in_title else 4)
         title_hits = self._keyword_hits(title)
         for phrase in self._keyword_hits(text):
             weight = self.config.keywords[phrase]
@@ -101,24 +102,22 @@ class MLRelevanceScorer:
     def _completeness_score(opportunity: Opportunity) -> float:
         fields = [opportunity.description, opportunity.close_date, opportunity.eligibility, opportunity.funding_instruments, opportunity.funding_categories, opportunity.award_ceiling, opportunity.source_url]
         return sum(1.0 for field in fields if field) / len(fields) * 7.0
-    @staticmethod
-    def _generic_penalty(text: str, matched_terms: list[str]) -> float:
-        generic_hits = sum(1 for term in GENERIC_BIOMEDICAL_TERMS if term in text)
+    def _generic_penalty(self, text: str, matched_terms: list[str]) -> float:
+        generic_hits = sum(1 for term in GENERIC_BIOMEDICAL_TERMS.difference(self.config.keywords) if term in text)
         return max(0.0, generic_hits * 2.0 - len(matched_terms)) if matched_terms else generic_hits * 5.0
     @staticmethod
     def _classification(score: float) -> str:
         return "High" if score >= 70 else "Medium" if score >= 35 else "Watchlist"
-    @staticmethod
-    def _reasons(opportunity: Opportunity, matched_terms: list[str], semantic_score: float, urgency_score: float, generic_penalty: float, shared_terms: list[str]) -> list[str]:
+    def _reasons(self, opportunity: Opportunity, matched_terms: list[str], semantic_score: float, urgency_score: float, generic_penalty: float, shared_terms: list[str]) -> list[str]:
         reasons = []
         if matched_terms:
-            reasons.append("Matched computational terms: " + ", ".join(matched_terms[:6]))
+            reasons.append(f"Matched {self.config.focus} terms: " + ", ".join(matched_terms[:6]))
         if semantic_score >= 8:
-            reasons.append("Description is close to curated ML/data-science grant examples (shared terms: " + ", ".join(shared_terms) + ")")
+            reasons.append(f"Description is close to {self.config.examples_name} (shared terms: " + ", ".join(shared_terms) + ")")
         if MLRelevanceScorer._is_nih_hhs(opportunity):
             reasons.append("Source agency appears to be NIH/HHS")
         if opportunity.close_date and urgency_score > 0:
             reasons.append(f"Open until {opportunity.close_date.isoformat()}")
         if generic_penalty > 0 and not matched_terms:
             reasons.append("Mostly generic biomedical wording; keep only as watchlist")
-        return reasons or ["Weak computational signal; included for monitoring only"]
+        return reasons or [f"Weak {self.config.focus} signal; included for monitoring only"]

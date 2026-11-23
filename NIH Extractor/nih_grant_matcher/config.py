@@ -48,3 +48,5 @@ class MatcherConfig:
     db_path: str = "data/grants.sqlite3"
     keywords: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_KEYWORDS))
     semantic_examples: tuple[str, ...] = CURATED_COMPUTATIONAL_EXAMPLES
+    focus: str = "computational"
+    examples_name: str = "curated ML/data-science grant examples"

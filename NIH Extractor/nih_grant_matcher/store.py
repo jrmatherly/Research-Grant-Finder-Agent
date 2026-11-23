@@ -1,13 +1,15 @@
 from __future__ import annotations
 import json, sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Iterable
 from .models import Opportunity, ScoreBreakdown, ScoredOpportunity
+from .profile import BUILTIN_PROFILE, Profile, from_export, to_export
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS opportunities (source_id TEXT PRIMARY KEY, opportunity_number TEXT, title TEXT NOT NULL, agency_code TEXT, agency_name TEXT, status TEXT, open_date TEXT, close_date TEXT, description TEXT, eligibility_json TEXT, funding_instruments_json TEXT, funding_categories_json TEXT, award_ceiling REAL, award_floor REAL, source_url TEXT, attachments_json TEXT, raw_json TEXT);
 CREATE TABLE IF NOT EXISTS scores (source_id TEXT PRIMARY KEY, score REAL NOT NULL, classification TEXT NOT NULL, reasons_json TEXT NOT NULL, matched_terms_json TEXT NOT NULL, breakdown_json TEXT NOT NULL, scored_at TEXT NOT NULL, FOREIGN KEY(source_id) REFERENCES opportunities(source_id));
+CREATE TABLE IF NOT EXISTS profile (id INTEGER PRIMARY KEY CHECK (id = 1), profile_json TEXT NOT NULL, updated_at TEXT NOT NULL);
 """
 class OpportunityStore:
     def __init__(self, db_path: str | Path) -> None:
@@ -15,10 +17,24 @@ class OpportunityStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.executescript(SCHEMA)
-        self.conn.commit()
+        try:
+            self.conn.executescript(SCHEMA)
+            self.conn.commit()
+        except sqlite3.OperationalError as exc:
+            # A read-only database from an earlier version lacks the newer tables, and reads them as empty.
+            if exc.sqlite_errorcode & 0xFF != sqlite3.SQLITE_READONLY:
+                raise
     def close(self) -> None:
         self.conn.close()
+    def profile(self) -> Profile:
+        row = self.conn.execute("SELECT profile_json FROM profile WHERE id = 1").fetchone() if self.conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile'").fetchone() else None
+        return from_export(row["profile_json"]) if row else BUILTIN_PROFILE
+    def save_profile(self, profile: Profile | None) -> None:
+        with self.conn:
+            if profile is None:
+                self.conn.execute("DELETE FROM profile")
+            else:
+                self.conn.execute("INSERT INTO profile VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json, updated_at=excluded.updated_at", (to_export(profile), datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
     def upsert_scored(self, scored: ScoredOpportunity) -> bool:
         with self.conn:
             return self._upsert(scored)

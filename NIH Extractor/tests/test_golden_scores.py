@@ -13,7 +13,7 @@ def load_golden() -> list[tuple[Opportunity, dict]]:
         row = dict(row, **{k: date.fromisoformat(row[k]) for k in ("open_date", "close_date") if row[k]})
         return Opportunity(**{k: tuple(v) if isinstance(v, list) else v for k, v in row.items()})
     opportunities = [build(row) for row in json.loads((FIXTURES / "golden_opportunities.json").read_text(encoding="utf-8"))]
-    return list(zip(opportunities, json.loads((FIXTURES / "golden_scores.json").read_text(encoding="utf-8"))))
+    return list(zip(opportunities, json.loads((FIXTURES / "golden_scores.json").read_text(encoding="utf-8")), strict=True))
 
 def as_golden(scored) -> dict:
     return {"source_id": scored.opportunity.source_id, "score": scored.score, "classification": scored.classification, "reasons": list(scored.reasons), "matched_terms": list(scored.matched_terms), "breakdown": asdict(scored.breakdown)}
@@ -32,3 +32,9 @@ def test_the_fixture_exercises_every_rule_the_profile_work_touches() -> None:
 def test_the_fallback_reason_keeps_its_wording() -> None:
     plain = Opportunity(source_id="x:1", opportunity_number="X-1", title="Road repair", agency_code="DOT", agency_name="Department of Transportation", status="posted")
     assert MLRelevanceScorer().score(plain, today=TODAY).reasons == ("Weak computational signal; included for monitoring only",)
+
+def test_a_saved_copy_of_the_builtin_profile_scores_the_same(tmp_path) -> None:
+    from nih_grant_matcher.profile import BUILTIN_PROFILE, from_export, to_export
+    scorer = MLRelevanceScorer(from_export(to_export(BUILTIN_PROFILE)).matcher_config())
+    for opportunity, expected in load_golden():
+        assert as_golden(scorer.score(opportunity, today=TODAY)) == expected
