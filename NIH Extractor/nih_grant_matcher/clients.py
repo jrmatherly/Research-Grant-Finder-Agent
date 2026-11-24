@@ -9,6 +9,10 @@ from .normalizer import _nih_guide_url
 class ApiError(RuntimeError):
     pass
 
+class NoAnswer(ApiError):
+    # The service gave no answer: a timeout, a dropped connection, a 429 or a 5xx after the retries.
+    pass
+
 UNTITLED = "(the record has no title)"
 
 def one_line(text: str) -> str:
@@ -38,6 +42,13 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
         time.sleep(2 ** (attempt - 1))
     raise AssertionError("unreachable")
 
+def _body(exc: urllib.error.HTTPError) -> bytes:
+    # An error page that drops while it arrives says nothing.
+    try:
+        return exc.read(2000) if exc.fp else b""
+    except (OSError, http.client.HTTPException):
+        return b""
+
 def _address(request: urllib.request.Request) -> str:
     # The NIH Guide query string is over 300 characters, and it would push the reason off the line.
     return request.full_url.split("?")[0]
@@ -46,7 +57,8 @@ def _read_json(request: urllib.request.Request, timeout: int) -> dict[str, Any]:
     body = _read(request, timeout)
     try:
         parsed = json.loads(body.decode("utf-8"))
-    except ValueError as exc:
+    # A body nested deeper than the parser's limit raises RecursionError, which is a reply that is not readable JSON too.
+    except (ValueError, RecursionError) as exc:
         # A proxy or a block page answers 200 with HTML.
         raise ApiError(f"{_address(request)} did not return JSON. The reply starts with {body[:80]!r}") from exc
     if not isinstance(parsed, dict):
@@ -198,7 +210,7 @@ class ReferenceClient:
     crossref_url: str = CROSSREF_WORKS_URL
     # NCBI allows three requests a second without a key, and the lookups share one pace across both services.
     pause_seconds: float = 0.4
-    # _read tries three times, so a dead network costs about half a minute per reference rather than a minute and a half.
+    # _read tries three times, so a server that does not answer costs about half a minute per reference.
     timeout: int = 10
     def lookup(self, pmid: str = "", doi: str = "") -> str:
         if not (pmid or doi):
@@ -207,30 +219,35 @@ class ReferenceClient:
         try:
             title = self._pubmed(pmid) if pmid else self._crossref(doi)
         except ApiError as exc:
-            raise ApiError(f"Checking {f'PMID {pmid} with PubMed' if pmid else f'DOI {doi} with Crossref'} failed: {exc}") from exc
+            # _read keeps the failure as the cause. An error status below 500 other than 429 is an answer, and a reply that could not be read is one too.
+            cause = exc.__cause__
+            silent = cause.code >= 500 or cause.code == 429 if isinstance(cause, urllib.error.HTTPError) else isinstance(cause, (OSError, http.client.HTTPException))
+            raise (NoAnswer if silent else ApiError)(f"Checking {f'PMID {pmid} with PubMed' if pmid else f'DOI {doi} with Crossref'} failed: {exc}") from exc
         return "" if title is None else one_line(title)[:300] or UNTITLED
     def _pubmed(self, pmid: str) -> str | None:
         query = urllib.parse.urlencode({"db": "pubmed", "id": pmid, "retmode": "json", "tool": "nih-grant-matcher"})
         parsed = _read_json(urllib.request.Request(f"{self.pubmed_url}?{query}", headers={"User-Agent": "nih-grant-matcher/0.1"}), self.timeout)
-        # NCBI answers an id it does not hold with 200 and an error, and a rate limit with an error too, so only the id's own errors mean no record.
+        # NCBI answers an id it does not hold with 200 and an error, and a rate limit or a busy backend with an error too, so only the two observed errors for this id mean no record.
         if "error" in parsed:
-            if str(parsed["error"]).startswith("Invalid uid"):
+            if str(parsed["error"]).startswith(f"Invalid uid {pmid} at position"):
                 return None
             raise ApiError(f"PubMed answered with an error: {parsed['error']}")
         record = (parsed.get("result") or {}).get(pmid) if isinstance(parsed.get("result"), dict) else None
-        if isinstance(record, dict) and "error" in record:
+        if isinstance(record, dict) and str(record.get("error", "")).strip().lower() == "cannot get document summary":
             return None
-        if not isinstance(record, dict) or not isinstance(record.get("title"), str):
-            raise ApiError("PubMed's reply holds no record or title for this PMID")
-        return record["title"]
+        if isinstance(record, dict) and isinstance(record.get("title"), str):
+            return record["title"]
+        if isinstance(record, dict) and "error" in record:
+            raise ApiError(f"PubMed answered with an error: {record['error']}")
+        raise ApiError("PubMed's reply holds no record or title for this PMID")
     def _crossref(self, doi: str) -> str | None:
         # The DOI goes into the URL path, so a ? or # in it cannot start a query or a fragment.
         request = urllib.request.Request(f"{self.crossref_url}/{urllib.parse.quote(doi, safe='/')}", headers={"User-Agent": "nih-grant-matcher/0.1"})
         try:
             parsed = _read_json(request, self.timeout)
         except ApiError as exc:
-            # Crossref answers a DOI it does not hold with a 404, which _read keeps as the cause.
-            if isinstance(exc.__cause__, urllib.error.HTTPError) and exc.__cause__.code == 404:
+            # Crossref answers a DOI it does not hold with a 404 and "Resource not found.", and a proxy or a gateway can answer 404 for a DOI it does hold.
+            if isinstance(cause := exc.__cause__, urllib.error.HTTPError) and cause.code == 404 and _body(cause).strip().startswith(b"Resource not found"):
                 return None
             raise
         title = parsed["message"].get("title") if isinstance(parsed.get("message"), dict) else None

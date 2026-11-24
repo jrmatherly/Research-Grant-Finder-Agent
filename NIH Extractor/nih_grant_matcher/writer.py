@@ -7,7 +7,7 @@ from typing import Any, Literal
 from . import __version__, prompts
 from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
 from .checks import check_section, identifiers, not_in_crossref
-from .clients import ApiError, ReferenceClient, one_line
+from .clients import ApiError, NoAnswer, ReferenceClient, one_line
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Review, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
@@ -93,6 +93,9 @@ def lookup_line(reference: Fact) -> str:
 
 def dropped_points(review: Review) -> str:
     return f"Grant Matcher dropped {review.dropped} point{'' if review.dropped == 1 else 's'} of the reply. {REVIEW_DROPPED}"
+
+def _references(n: int) -> str:
+    return f"{n} reference{'' if n == 1 else 's'}"
 
 def _profile(store: OpportunityStore) -> Profile:
     # The dashboard already says that the saved profile cannot be read, and an application can still be started and checked without it.
@@ -210,9 +213,13 @@ class Workspace:
         # Without a saved record the fetch goes by the number saved with the application.
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
+        saved = self.store.announcement(app.opportunity_number)
         # Grants.gov is the official source, and the Guide can serve an older text when Grants.gov does not answer.
-        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "grants.gov" and announcement.origin != "grants.gov":
+        if saved is not None and saved.origin == "grants.gov" and announcement.origin != "grants.gov":
             raise ApiError(f"{announcement.grants_says} Grant Matcher kept the copy it saved from Grants.gov on {saved.fetched_at:%Y-%m-%d}, because the NIH Guide's text can be older.")
+        # The applicant's confirmed quotes stand on the page's text, which the search service serves damaged.
+        if saved is not None and saved.origin == "nih-guide-page" and announcement.origin == "nih-guide":
+            raise ApiError(f"{announcement.page_says} {announcement.grants_says} Grant Matcher kept the copy it saved from the notice's page in the NIH Guide on {saved.fetched_at:%Y-%m-%d}, because the Guide's search service drops brackets and spaces that the page keeps.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.
         notes = [f"{announcement.grants_says} So this text is from the NIH Guide and may not be the official one. Fetch again later."] if announcement.grants_says.startswith(GRANTS_FAILED) else []
@@ -265,29 +272,33 @@ class Workspace:
         self.store.retire_fact(fact_id)
 
     def verify_references(self, client: ReferenceClient | None = None) -> int:
-        client, checked, failed, streak = client or ReferenceClient(), 0, [], 0
+        client, checked, failed, silent = client or ReferenceClient(), 0, [], []
         references = [f for f in self.store.facts(self.application_id) if f.kind == "reference" and f.retired_at is None and any(identifiers(f))]
         for n, f in enumerate(references):
             pmid, doi = identifiers(f)
+            service = "PubMed" if pmid else "Crossref"
             try:
                 title = client.lookup(pmid, doi)
             except ApiError as exc:
                 # Nothing is recorded for this reference, so "no record" in detail always means that the index said so.
                 failed.append(f"{f'[@{f.label}]' if f.label else f.text[:40]}: {str(exc).rstrip('.')}.")
-                # Two in a row most likely mean the index is not answering, and each further try can wait half a minute.
-                if (streak := streak + 1) == 2:
+                # Two lookups in a row with no answer most likely mean the service or the connection is down, and each further try can wait half a minute. A reply that could not be read is an answer.
+                silent = [*silent, service] if isinstance(exc, NoAnswer) else []
+                if len(silent) == 2:
                     break
                 continue
-            streak, sent = 0, f"PMID {pmid} to PubMed" if pmid else f"DOI {doi} to Crossref"
+            silent, sent = [], f"PMID {pmid} to PubMed" if pmid else f"DOI {doi} to Crossref"
             # The applicant typed the text, so the index's answer goes in detail beside it.
             try:
-                self.store.set_fact_detail(self.application_id, f.id, {**f.detail, "lookup": {"service": "PubMed" if pmid else "Crossref", "id": f"PMID {pmid}" if pmid else f"DOI {doi}", "on": date.today().isoformat(), "title": title}})
+                written = self.store.set_fact_detail(self.application_id, f.id, {**f.detail, "lookup": {"service": service, "id": f"PMID {pmid}" if pmid else f"DOI {doi}", "on": date.today().isoformat(), "title": title}})
             except sqlite3.Error as exc:
-                raise WorkspaceError(f"Grant Matcher sent {sent}, but could not save what it found ({exc}). It checked {checked} reference{'' if checked == 1 else 's'} before it." + (" What it found for them is saved." if checked else "")) from None
-            checked += 1
+                raise WorkspaceError(f"Grant Matcher sent {sent}, but could not save what it found ({exc}). It checked {_references(checked)} before it." + (f" What it found for {'it' if checked == 1 else 'them'} is saved." if checked else "") + (f" It could not check {_references(len(failed))} before it. {' '.join(failed)}" if failed else "")) from None
+            # A reference retired while its lookup ran keeps no result, so it is not counted.
+            checked += written
         if failed:
             rest = len(references) - n - 1
-            raise ApiError(f"Grant Matcher could not check {len(failed)} reference{'' if len(failed) == 1 else 's'}. {' '.join(failed)} It checked {checked} reference{'' if checked == 1 else 's'} and saved what it found." + (f" Two lookups in a row failed, so the index is most likely not answering, and Grant Matcher did not try the {rest} reference{'' if rest == 1 else 's'} after them." if streak == 2 and rest else "") + " Nothing was recorded for a reference it could not check. Try again later. For a reference that fails every time, correct its identifier or retire it.")
+            why = f" from {silent[0]}, so it is most likely not answering" if len(set(silent)) == 1 else ", one from PubMed and one from Crossref, so this computer's connection is most likely down"
+            raise ApiError(f"Grant Matcher could not check {_references(len(failed))}. {' '.join(failed)} It checked {_references(checked)} and saved what it found." + (f" Two lookups in a row got no answer{why}, and Grant Matcher did not try the {_references(rest)} after them." if len(silent) == 2 and rest else "") + " Nothing was recorded for a reference it could not check. Try again later. For a reference that fails every time, correct its identifier or retire it.")
         return checked
 
     def write(self, section: str, text: str, parent: int | None) -> Revision:

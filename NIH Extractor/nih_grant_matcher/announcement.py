@@ -30,8 +30,9 @@ class Announcement:
     url: str
     sha256: str
     fetched_at: datetime
-    # What Grants.gov answered when the text is the Guide's. It is not saved.
+    # What Grants.gov answered when the text is the Guide's, and what the notice's page answered when the text is the search service's. Neither is saved.
     grants_says: str = field(default="", compare=False)
+    page_says: str = field(default="", compare=False)
     def section(self, numeral: str) -> str:
         starts = _section_starts(self.text)
         if numeral not in starts:
@@ -129,7 +130,7 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
     if len(notice) >= _SHORTEST_ANNOUNCEMENT and number in notice:
         return replace(_announcement(opportunity, notice, "nih-guide-page", _nih_guide_url(number)), grants_says=grants_says)
     if len(text.strip()) >= _SHORTEST_ANNOUNCEMENT:
-        return replace(_announcement(opportunity, text, "nih-guide", _nih_guide_url(number)), grants_says=grants_says)
+        return replace(_announcement(opportunity, text, "nih-guide", _nih_guide_url(number)), grants_says=grants_says, page_says=page_says)
     if text.strip():
         guide_says = f"The NIH Guide answered with only {len(text.strip())} characters, too few to be the announcement."
     raise ApiError(f"No announcement text for {number}. {guide_says} {page_says} {grants_says}")

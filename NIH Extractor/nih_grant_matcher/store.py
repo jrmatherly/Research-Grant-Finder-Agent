@@ -148,10 +148,10 @@ class OpportunityStore:
         with self._write("facts"):
             fact_id = self.conn.execute("INSERT INTO facts (application_id, kind, label, text, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?)", (app_id, kind, label, text, json.dumps(detail or {}), _now())).lastrowid
         return next(f for f in self.facts(app_id) if f.id == fact_id)
-    def set_fact_detail(self, app_id: int, fact_id: int, detail: dict[str, Any]) -> None:
-        # A fact retired or deleted while a lookup ran is left as it is.
+    def set_fact_detail(self, app_id: int, fact_id: int, detail: dict[str, Any]) -> bool:
+        # A fact retired or deleted while a lookup ran is left as it is, and the caller learns that nothing was written.
         with self._write("facts"):
-            self.conn.execute("UPDATE facts SET detail_json = ? WHERE id = ? AND application_id = ? AND retired_at IS NULL", (json.dumps(detail), fact_id, app_id))
+            return self.conn.execute("UPDATE facts SET detail_json = ? WHERE id = ? AND application_id = ? AND retired_at IS NULL", (json.dumps(detail), fact_id, app_id)).rowcount > 0
     def retire_fact(self, fact_id: int) -> None:
         with self._write("facts"):
             self.conn.execute("UPDATE facts SET retired_at = ? WHERE id = ? AND retired_at IS NULL", (_now(), fact_id))

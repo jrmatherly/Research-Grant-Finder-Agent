@@ -93,7 +93,7 @@ def _sign(ws: Workspace, section: str, title: str) -> str:
     shown = next((r for r in ws.store.revisions(ws.application_id) if r.id == base), None)
     if shown is not None and shown.text != st.session_state.get(text_key, ""):
         raise NotReady("Save your text before you sign off. A sign-off covers the revision you saved.")
-    signed = ws.sign(section, st.session_state.get("apply_signer", ""), base or 0, st.session_state.get(f"apply_acknowledge_{ws.application_id}_{section}", False))
+    signed = ws.sign(section, st.session_state.get("apply_signer", ""), base or 0, st.session_state.get(f"apply_acknowledge_{ws.application_id}_{section}_{base}", False))
     return f"Signed off the {title} at revision {signed.revision_id}."
 
 def _fetch(ws: Workspace) -> str:
@@ -408,7 +408,8 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
             st.session_state["apply_signer"] = _investigator(ws.store)
         st.text_input("Your name", key="apply_signer", persist_state="session")
         if any(f.code == "mostly-drafted" for f in s.findings):
-            st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}", persist_state="session")
+            # An acknowledgement is of one revision, so a new revision draws a new, unticked box.
+            st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}_{s.revision_id}", persist_state="session")
         st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title), "sign"))
     # Review reads only the saved text, so every section offers it, and the section's rule says which of the others a model may do.
     edits = ["Polish", "Revise"] if s.rule.model != "none" else []

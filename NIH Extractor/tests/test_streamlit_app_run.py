@@ -483,8 +483,63 @@ def test_a_typed_delete_confirmation_does_not_carry_to_a_new_application(tmp_pat
 
 def test_the_keys_of_a_deleted_application_are_its_own() -> None:
     from nih_grant_matcher.ui.apply_page import owned_by
-    assert [key for key in ("apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary", "apply_delete_11", "apply_text_11_specific-aims", "apply_section", "apply_signer", "apply_restore_1_button", "application_id") if owned_by(1, key)] == ["apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary"]
+    assert [key for key in ("apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary_7", "apply_delete_11", "apply_text_11_specific-aims", "apply_section", "apply_signer", "apply_restore_1_button", "application_id") if owned_by(1, key)] == ["apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary_7"]
 
+
+def _model_draft(path, section: str, text: str) -> int:
+    store = OpportunityStore(path)
+    try:
+        parent = next((r.id for r in reversed(store.revisions(1)) if r.section == section), None)
+        call = store.add_call(1, section, "draft", "fake", "fake-1", "s", "p", text, parent_id=parent)
+        return store.add_revision(1, section, parent, "model", "draft", text, call_id=call.id).id
+    finally:
+        store.close()
+
+
+def _acknowledgement(app):
+    from nih_grant_matcher.ui.apply_page import ACKNOWLEDGE
+    return next(box for box in app.checkbox if box.label == ACKNOWLEDGE)
+
+
+def _signed(path) -> list[int]:
+    store = OpportunityStore(path)
+    try:
+        return [s.revision_id for s in store.signoffs(1)]
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("sign_first", [True, False], ids=["signed", "not-signed"])
+def test_an_acknowledgement_is_of_one_revision_and_a_new_model_draft_needs_a_new_one(tmp_path, monkeypatch, sign_first) -> None:
+    path, section = _r21_database(tmp_path, start=True), "project-narrative"
+    first = _model_draft(path, section, "The model wrote this whole narrative about heart cells and public health.")
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value(section).run(timeout=30)
+    app.text_input(key="apply_signer").set_value("Ada Lovelace")
+    # A box in a form reaches the server with one of the form's buttons, so a tick without a sign-off goes with Save.
+    _acknowledgement(app).check()
+    app.button(key="apply_sign_button" if sign_first else "apply_save_button").click().run(timeout=30)
+    assert not app.exception and _signed(path) == ([first] if sign_first else [])
+    second = _model_draft(path, section, "Another model draft of the narrative, written in a second tab about failing hearts.")
+    app.run(timeout=30)
+    assert _acknowledgement(app).value is False
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert _signed(path) == ([first] if sign_first else []) and any("Confirm that you have rewritten" in e.value for e in [*app.error, *app.warning])
+    _acknowledgement(app).check()
+    app.button(key="apply_sign_button").click().run(timeout=30)
+    assert _signed(path) == ([first, second] if sign_first else [second])
+
+
+def test_an_acknowledgement_stays_ticked_across_a_visit_to_another_section(tmp_path, monkeypatch) -> None:
+    path, section = _r21_database(tmp_path, start=True), "project-narrative"
+    first = _model_draft(path, section, "The model wrote this whole narrative about heart cells and public health.")
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value(section).run(timeout=30)
+    _acknowledgement(app).check()
+    app.button(key="apply_save_button").click().run(timeout=30)
+    for shown in ("specific-aims", section):
+        app.selectbox(key="apply_section").set_value(shown).run(timeout=30)
+    assert not app.exception and _acknowledgement(app).value is True and _acknowledgement(app).key == f"apply_acknowledge_1_{section}_{first}"
 
 def test_a_call_id_in_another_applications_key_is_not_this_applications_id() -> None:
     from nih_grant_matcher.ui.apply_page import owned_by
