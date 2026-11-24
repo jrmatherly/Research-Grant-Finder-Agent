@@ -21,7 +21,7 @@ DROPPED_FOUR = 'Your decision on "Research Strategy: at most 4 pages." was dropp
 READ = "Section I. Notice of Funding Opportunity Description\nApplicants must describe data sharing.\nSection IV. Application and Submission Information\nThe Specific Aims must state one hypothesis.\nSection V. Application Review Information\nReviewers will judge rigor." + " More text." * 100
 item = lambda kind, section, text, quote: {"kind": kind, "section": section, "text": text, "quote": quote, "limit": None}
 READ_I = json.dumps([item("must", "", "Describe data sharing.", "Applicants must describe data sharing.")])
-READ_REPLIES = (READ_I, json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis.")]), json.dumps([item("criterion", "", "Rigor.", "Reviewers will judge rigor."), item("must", "", "Invented.", "Not in the text.")]))
+READ_REPLIES = (READ_I, json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis.")]), json.dumps([item("criterion", "", "Rigor.", "Reviewers will judge rigor."), item("must", "", "Invented.", "Applicants must include a power analysis for every aim.")]))
 MUST = "Section IV. Application and Submission Information\nPHS 398 Research Plan\nAll instructions must be followed, with the following additional instructions: Describe the cohort in 2 tables.\nSection V. Review\nx" + " More text." * 100
 
 def test_a_new_application_lists_its_sections_and_gaps(tmp_path) -> None:
@@ -56,13 +56,15 @@ def test_signing_is_refused_while_an_error_stands_and_goes_stale_on_an_edit(tmp_
     ws.write("project-narrative", "One. Two.", parent=fixed.id)
     assert ws.view().section("project-narrative").state == "draft"
 
-def test_a_confirmed_announcement_limit_replaces_the_standing_one(tmp_path) -> None:
-    ws = start(tmp_path)
+def test_a_confirmed_announcement_limit_replaces_the_standing_one_in_the_view_and_the_draft(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Draft."), facts=dict.fromkeys(("aim", "significance", "innovation", "method"), "An input."))
     ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))
     requirement = next(r for r in ws.view().requirements if r.kind == "limit")
     assert ws.view().section("research-strategy").limit.amount == 6
     ws.decide(requirement.id, True)
     assert ws.view().section("research-strategy").limit.amount == 4
+    ws.propose("research-strategy", "draft")
+    assert "Its limit is 4 pages." in ws.model.seen[-1].system
 
 def test_two_confirmed_limits_for_a_section_apply_the_smaller_with_a_notice(tmp_path) -> None:
     ws = start(tmp_path)
@@ -527,10 +529,12 @@ def test_a_draft_call_can_be_accepted(tmp_path) -> None:
 
 def test_no_text_is_sent_without_consent_for_the_host(tmp_path) -> None:
     model = FakeModel("We study cardiac muscle cells.")
-    ws = start(tmp_path, model=model, consent=False)
+    ws = start(tmp_path, model=model, consent=False, facts={"aim": "Test drug X.", "hypothesis": "X lowers pressure."})
     ws.write("specific-aims", "We study heart cells.", parent=None)
-    with pytest.raises(NotReady, match="Agree to send text to example.test first"):
-        ws.propose("specific-aims", "polish")
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    for ask in (lambda: ws.propose("specific-aims", "polish"), lambda: ws.propose("specific-aims", "draft"), ws.extract_requirements):
+        with pytest.raises(NotReady, match="Agree to send text to example.test first"):
+            ask()
     assert model.seen == [] and ws.store.calls(ws.application_id) == []
 
 def test_consent_for_one_host_does_not_send_text_to_another(tmp_path) -> None:
@@ -704,13 +708,17 @@ def test_the_exported_statement_names_a_suggestion_that_is_waiting(tmp_path) -> 
     statement = (ws.export(tmp_path / "out") / "ai-use-statement.md").read_text(encoding="utf-8")
     assert "A suggestion from fake-1 for the Specific Aims is waiting for my decision." in statement and "The Specific Aims was written without a model." in statement
 
-def test_a_draft_is_refused_until_the_inputs_are_there(tmp_path) -> None:
-    ws = start(tmp_path, model=FakeModel("Aim 1."))
+def test_a_draft_is_refused_until_the_inputs_are_there_and_again_once_one_is_retired(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Aim 1.", "Aim 2."))
     with pytest.raises(NotReady):
         ws.propose("specific-aims", "draft")
-    ws.add_fact("aim", "Test whether drug X lowers pressure.")
+    aim = ws.add_fact("aim", "Test whether drug X lowers pressure.")
     ws.add_fact("hypothesis", "Drug X lowers pressure.")
     assert ws.propose("specific-aims", "draft").text == "Aim 1."
+    ws.retire_fact(aim.id)
+    assert ws.view().section("specific-aims").gaps == ("aim",)
+    with pytest.raises(NotReady, match="needs aim before"):
+        ws.propose("specific-aims", "draft")
 
 def test_an_accepted_draft_with_gaps_cannot_be_signed(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel("We enrolled 412 patients. [NEEDS INPUT: effect size]"), facts={"aim": "A pilot cohort.", "hypothesis": "It works."})
@@ -856,6 +864,14 @@ def test_a_reply_that_holds_no_list_fails_the_read_and_keeps_every_row(tmp_path,
         ws.extract_requirements()
     assert [(r.text, r.confirmed) for r in ws.store.requirements(ws.application_id) if r.origin == "model"] == [(r.text, True if r.id == found[0].id else None) for r in found]
     assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["extract"] * 5
+
+def test_a_read_whose_later_call_fails_raises_and_keeps_every_row(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES, READ_I, ModelError("HTTP 500"), "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    with pytest.raises(ModelError, match="HTTP 500"):
+        ws.extract_requirements()
+    assert tuple(r for r in ws.store.requirements(ws.application_id) if r.origin == "model") == found
 
 def test_an_empty_list_from_each_section_leaves_only_the_decided_rows_and_says_so(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel(*READ_REPLIES, "[]", "[]", "[]"))

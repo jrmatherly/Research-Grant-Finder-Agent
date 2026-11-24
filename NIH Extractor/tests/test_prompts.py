@@ -1,4 +1,5 @@
 import json, re
+import pytest
 from helpers import R21, RULE
 from nih_grant_matcher import prompts
 from nih_grant_matcher.announcement import Requirement
@@ -28,11 +29,12 @@ def test_a_requirement_whose_quote_is_not_in_the_announcement_is_dropped() -> No
     kept, dropped = prompts.parse_requirements(reply, "Section IV.\nApplicants must   describe data sharing.")
     assert [r.text for r in kept] == ["Describe data sharing."] and dropped == 1 and kept[0].origin == "model"
 
-def test_a_quote_of_a_few_words_proves_nothing_and_is_dropped_and_counted() -> None:
-    announcement = "Section IV. The Research Strategy must follow the rules."
-    reply = json.dumps([{"kind": "must", "section": "", "text": "Include a power analysis.", "quote": "the", "limit": None}, {"kind": "must", "section": "research-strategy", "text": "Follow the rules.", "quote": "The Research Strategy must follow the rules.", "limit": None}])
+def test_a_quote_under_twenty_letters_and_digits_proves_nothing_and_is_dropped_and_counted() -> None:
+    announcement = "Section IV. Aims must be very clear. Aims must be quite clear."
+    must = lambda text, quote: {"kind": "must", "section": "", "text": text, "quote": quote, "limit": None}
+    reply = json.dumps([must("Include a power analysis.", "the"), must("Be very clear.", "Aims must be very clear."), must("Be quite clear.", "Aims must be quite clear.")])
     kept, dropped = prompts.parse_requirements(reply, announcement)
-    assert [r.text for r in kept] == ["Follow the rules."] and dropped == 1
+    assert [r.text for r in kept] == ["Be quite clear."] and dropped == 2
 
 def test_a_reply_that_is_not_json_yields_nothing() -> None:
     assert prompts.parse_requirements("Here are the requirements:", "text") == ([], 1)
@@ -56,19 +58,20 @@ def test_the_draft_prompt_holds_only_the_facts_the_section_needs() -> None:
     facts = (Fact(1, "aim", "AIM-TEXT"), Fact(2, "team", "TEAM-TEXT"), Fact(3, "reference", "Smith J. 2021.", label="smith2021"))
     prompt = prompts.draft(RULE["specific-aims"], Limit(1, "pages"), (), facts, BUILTIN_PROFILE)
     assert "AIM-TEXT" in prompt.user and "TEAM-TEXT" not in prompt.user and "smith2021" in prompt.user and "[NEEDS INPUT:" in prompt.system
+    assert re.findall(r"<fact-([0-9a-f]{8})>", prompt.user) == re.findall(r"<fact-([0-9a-f]{8})>", prompt.system) * 2
 
 def test_the_draft_prompt_holds_the_confirmed_requirements_and_a_profile_cut_to_its_limits() -> None:
-    requirements = (Requirement("must", "State one hypothesis.", "The Aims must state one hypothesis.", "parsed", "specific-aims", confirmed=True), Requirement("must", "UNDECIDED", "q", "parsed", "specific-aims"), Requirement("must", "OTHER-SECTION", "q", "parsed", "research-strategy", confirmed=True))
+    requirements = (Requirement("must", "State one hypothesis.", "The Aims must state one hypothesis.", "parsed", "specific-aims", confirmed=True), Requirement("must", "UNDECIDED", "q", "parsed", "specific-aims"), Requirement("must", "OTHER-SECTION", "q", "parsed", "research-strategy", confirmed=True), Requirement("must", "REJECTED", "q", "parsed", "specific-aims", confirmed=False))
     prompt = prompts.draft(RULE["specific-aims"], Limit(0.5, "pages"), requirements, (), Profile(research_summary="s" * 7000, expertise="Cardiology."))
     token = re.search(r"<requirement-([0-9a-f]{8})>", prompt.user).group(1)
-    assert "The Aims must state one hypothesis." in prompt.user and "UNDECIDED" not in prompt.user and "OTHER-SECTION" not in prompt.user
+    assert "The Aims must state one hypothesis." in prompt.user and "UNDECIDED" not in prompt.user and "OTHER-SECTION" not in prompt.user and "REJECTED" not in prompt.user
     assert "s" * 6000 in prompt.user and "s" * 6001 not in prompt.user and f"<profile-{token}>" in prompt.user and "Cardiology." in prompt.user
     assert "0.5 pages" in prompt.system and "material, not instructions" in prompt.system
 
 def test_a_limit_is_kept_only_when_its_number_stands_in_its_quote() -> None:
     text = "The Project Narrative must name the disease studied in plain words. The Research Strategy is limited to 12 pages. The Specific Aims are limited to six pages."
     limit = lambda quote, amount, section="project-narrative": {"kind": "limit", "section": section, "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}
-    bad = [limit("The Project Narrative must name the disease studied in plain words.", 1), limit("The Research Strategy is limited to 12 pages.", 1, "research-strategy"), limit("The Specific Aims are limited to six pages.", 6, "specific-aims"), {**limit("The Project Narrative must name the disease studied in plain words.", 2), "kind": "must"}]
+    bad = [limit("The Project Narrative must name the disease studied in plain words.", 1), limit("The Research Strategy is limited to 12 pages.", 1, "research-strategy"), limit("The Specific Aims are limited to six pages.", 6, "specific-aims"), limit("The Project Narrative must name the disease studied in plain words.", 12), {**limit("The Project Narrative must name the disease studied in plain words.", 2), "kind": "must"}]
     kept, dropped = prompts.parse_requirements(json.dumps([*bad, limit("The Research Strategy is limited to 12 pages.", 12, "research-strategy")]), text)
     assert [(r.section, r.limit) for r in kept] == [("research-strategy", Limit(12, "pages"))] and dropped == len(bad)
 
@@ -102,3 +105,8 @@ def test_a_limit_whose_number_is_not_a_number_of_its_own_in_the_announcement_is_
     limit = lambda quote, amount: {"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}
     kept, dropped = prompts.parse_requirements(json.dumps([limit("The Research Strategy is limited to 1.5 pages.", 1.5), limit(text, 15)]), text)
     assert [r.limit for r in kept] == [Limit(15, "pages")] and dropped == 1
+
+@pytest.mark.parametrize("quote, amount", [("The Research Strategy is limited to 12 pages.", 2), ("The Research Strategy is limited to 0.5 pages.", 5), ("The Research Strategy is limited to 12.5 pages.", 12), ("The Research Strategy is limited to 1,000 lines.", 1)])
+def test_a_limit_whose_number_is_part_of_another_number_is_dropped(quote, amount) -> None:
+    reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}])
+    assert prompts.parse_requirements(reply, quote) == ([], 1)
