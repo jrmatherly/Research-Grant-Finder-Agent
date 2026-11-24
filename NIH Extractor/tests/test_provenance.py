@@ -88,7 +88,22 @@ def test_a_proposal_still_waiting_is_not_counted() -> None:
     from nih_grant_matcher.rules import GRANT_TYPES
     waiting = ModelCall(8, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1)
     statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], LOG[:1], (waiting,), (), (), (8,))
-    assert "No AI model" not in statement and "I also sent" not in statement and "The Specific Aims was written without a model." in statement
+    assert "No AI model" not in statement and "I also sent" not in statement and "I used" not in statement and "The Specific Aims was written without a model." in statement
+    assert statement.endswith("A suggestion from fake-1 for the Specific Aims is waiting for my decision. This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere.")
+
+def test_a_waiting_suggestion_is_named_once_per_model_with_its_sections() -> None:
+    from nih_grant_matcher.models import Application, ModelCall
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    calls = (ModelCall(8, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1), ModelCall(9, "project-narrative", "revise", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 2), ModelCall(10, "specific-aims", "polish", "other", "other-2", "s", "p", "r", 1, 1, NOW, 1), ModelCall(11, "specific-aims", "polish", "fake", "fake-3", "s", "p", "r", 1, 1, NOW, 1))
+    log = (LOG[0], Revision(2, "project-narrative", None, "applicant", "write", "One.", None, NOW))
+    statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], log, calls, (), (), (8, 9, 10))
+    assert "A suggestion from fake-1 for the Specific Aims and Project Narrative is waiting for my decision. A suggestion from other-2 for the Specific Aims is waiting for my decision." in statement
+    assert "fake-3 for" not in statement and "I also sent text to fake-3 to produce suggestions that I did not use (1)." in statement
+
+def test_a_share_is_said_by_its_rounded_value_at_1_and_199_in_200() -> None:
+    from nih_grant_matcher.provenance import percent
+    assert (percent(1 / 200), percent(199 / 200), percent(0), percent(1), percent(3 / 200)) == ("less than 1 percent", "more than 99 percent", "0 percent", "100 percent", "2 percent")
 
 def test_a_share_above_zero_that_rounds_to_zero_reads_less_than_one_percent() -> None:
     from nih_grant_matcher.models import Application, ModelCall

@@ -539,7 +539,10 @@ def test_a_second_accept_with_edits_returns_the_first_result(tmp_path) -> None:
     ws.write("specific-aims", "We study heart cells.", parent=None)
     call_id = ws.propose("specific-aims", "polish").call_id
     first = ws.accept(call_id, edited="We study cardiac cells.")
-    assert ws.accept(call_id, edited="Something else.") == first and first.author == "applicant"
+    assert ws.accept(call_id, edited="We study cardiac cells.") == ws.accept(call_id) == first and first.author == "applicant"
+    with pytest.raises(StaleEdit):
+        ws.accept(call_id, edited="Something else.")
+    assert ws.view().section("specific-aims").text == "We study cardiac cells." and len(ws.view().log) == 3
     with pytest.raises(WorkspaceError, match="accepted"):
         ws.discard(call_id)
     assert "I edited the Specific Aims after I accepted model text." in ws.view().disclosure
@@ -604,3 +607,20 @@ def test_a_model_share_that_rounds_to_zero_reads_less_than_1_percent_at_sign_off
     polished = ws.store.add_revision(ws.application_id, "specific-aims", mine.id, "model", "polish", " ".join(words) + ".", call.id)
     signed = ws.sign("specific-aims", "A. Applicant", polished.id)
     assert "0 percent of its words came from a model's draft or revision that I accepted, and less than 1 percent from a model's polish" in signed.attestation
+
+def test_a_second_accept_with_edits_after_a_plain_accept_is_refused(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    call_id = ws.propose("specific-aims", "polish").call_id
+    first = ws.accept(call_id)
+    assert ws.accept(call_id, edited="We study cardiac muscle cells.") == first
+    with pytest.raises(StaleEdit):
+        ws.accept(call_id, edited="We study our cardiac cells.")
+    assert [r.text for r in ws.view().log] == ["We study heart cells.", "We study cardiac muscle cells."]
+
+def test_the_exported_statement_names_a_suggestion_that_is_waiting(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    ws.propose("specific-aims", "polish")
+    statement = (ws.export(tmp_path / "out") / "ai-use-statement.md").read_text(encoding="utf-8")
+    assert "A suggestion from fake-1 for the Specific Aims is waiting for my decision." in statement and "The Specific Aims was written without a model." in statement

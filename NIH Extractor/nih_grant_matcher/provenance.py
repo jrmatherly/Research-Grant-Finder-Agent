@@ -61,7 +61,8 @@ def section_state(revisions: Sequence[Revision], signoffs: Sequence[Signoff], se
     return "final" if any(s.section == section and s.revision_id == current.id for s in signoffs) else "draft"
 
 def percent(value: float) -> str:
-    return "less than 1 percent" if 0 < value < 0.005 else "more than 99 percent" if 0.995 <= value < 1 else f"{round(value * 100)} percent"
+    rounded = round(value * 100)
+    return "less than 1 percent" if value > 0 and rounded == 0 else "more than 99 percent" if value < 1 and rounded == 100 else f"{rounded} percent"
 
 def _listed(items: Sequence[str]) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
@@ -103,4 +104,9 @@ def disclosure_statement(application: Application, grant_type: GrantType, revisi
         said.append(f"I also sent text to {model} to {_listed(parts)}.")
     if signed := [key for key, h in heads.items() if any(s.section == key and s.revision_id == h.id for s in signoffs)]:
         said.append(f"I read and signed off the {titles(signed)}.")
+    pending: dict[str, set[str]] = {}
+    for c in calls:
+        if c.id in waiting:
+            pending.setdefault(c.model, set()).add(c.section)
+    said += [f"A suggestion from {model} for the {titles(sections)} is waiting for my decision." for model, sections in pending.items()]
     return " ".join([*said, closing])

@@ -119,6 +119,8 @@ def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
     try:
         revision = ws.accept(call_id, edited)
     except StaleEdit:
+        if any(r.call_id == call_id for r in ws.store.revisions(ws.application_id)):
+            raise NotReady(f"Proposal {call_id} was already accepted, so your edits were not saved. The section shows the accepted text.") from None
         raise NotReady(STALE_PROPOSAL) from None
     return f"Accepted the proposal as revision {revision.id}."
 
