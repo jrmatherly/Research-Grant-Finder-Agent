@@ -74,3 +74,9 @@ def test_seed_reaches_the_signer_on_stdin_only(tmp_path) -> None:
     assert sign.startswith("stdin=c2VlZA== args=") and verify.startswith("stdin=c2VlZA== args=")
     assert "c2VlZA==" not in sign.split("args=")[1] and "c2VlZA==" not in verify.split("args=")[1]
     assert sign.endswith(dmg) and verify.endswith(f"{dmg} c2lnbmF0dXJl")
+
+
+def test_the_version_in_pyproject_has_release_notes() -> None:
+    import tomllib
+    version = tomllib.loads((SCRIPT.parent.parent / "pyproject.toml").read_text())["project"]["version"]
+    assert (SCRIPT.parent / "release-notes" / f"{version}.md").read_text().strip()
