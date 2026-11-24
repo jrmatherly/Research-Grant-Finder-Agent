@@ -2,7 +2,7 @@
 # Builds macos/dist/Grant Matcher.app and Grant Matcher.dmg. Signs when CODESIGN_IDENTITY is set. Notarizes when NOTARY_PROFILE (a keychain profile) or APPLE_API_KEY_P8 with APPLE_API_KEY_ID and APPLE_API_ISSUER_ID (an App Store Connect key) is also set.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# The app carries the CA file path of the Python that builds it. uv's own Python reads the file every Mac has, and another Python may read one that only the build machine has.
+# The app carries the CA file path of the Python that builds it. uv's own Python reads the file that macOS ships, and another Python may read one that only the build machine has.
 export UV_MANAGED_PYTHON=1
 
 app="macos/dist/Grant Matcher.app"
