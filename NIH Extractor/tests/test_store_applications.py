@@ -233,7 +233,5 @@ def test_a_lookup_is_written_only_to_a_live_reference_of_its_own_application(sto
     app, other = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t").id
     live, retired, foreign = store.add_fact(app, "reference", "A."), store.add_fact(app, "reference", "B."), store.add_fact(other, "reference", "C.")
     store.retire_fact(retired.id)
-    for fact in (live, retired, foreign):
-        store.set_fact_detail(app, fact.id, {"lookup": 1})
-    store.set_fact_detail(app, 999, {"lookup": 1})
+    assert [store.set_fact_detail(app, fact_id, {"lookup": 1}) for fact_id in (live.id, retired.id, foreign.id, 999)] == [True, False, False, False]
     assert [f.detail for f in store.facts(app)] == [{"lookup": 1}, {}] and store.facts(other)[0].detail == {}

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
 from nih_grant_matcher import __version__
-from nih_grant_matcher.clients import ApiError
+from nih_grant_matcher.clients import ApiError, NoAnswer
 from nih_grant_matcher.llm import ModelError
 from nih_grant_matcher.profile import Profile, Reference
 from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace, WorkspaceError, read_summary
@@ -117,11 +117,14 @@ def test_a_retired_reference_is_not_a_known_citation(tmp_path) -> None:
     assert ws.view().facts == () and "unknown-citation" in {f.code for f in ws.view().section("specific-aims").findings}
 
 class Index:
-    def __init__(self, titles: dict[str, str], fail_on: str | tuple[str, ...] = ()) -> None: self.titles, self.fail_on, self.asked = titles, (fail_on,) if isinstance(fail_on, str) else fail_on, []
+    # fail_on gets no answer, as after a 503 or a timeout, and wrong_on gets a reply the lookup cannot read.
+    def __init__(self, titles: dict[str, str], fail_on: str | tuple[str, ...] = (), wrong_on: tuple[str, ...] = ()) -> None: self.titles, self.fail_on, self.wrong_on, self.asked = titles, (fail_on,) if isinstance(fail_on, str) else fail_on, wrong_on, []
     def lookup(self, pmid: str = "", doi: str = "") -> str:
         self.asked.append((pmid, doi))
         if (pmid or doi) in self.fail_on:
-            raise ApiError("Checking it failed: HTTP Error 503")
+            raise NoAnswer("Checking it failed: HTTP Error 503")
+        if (pmid or doi) in self.wrong_on:
+            raise ApiError("Checking it failed: the reply holds no title")
         return self.titles.get(pmid or doi, "")
 
 REFERENCES = {"known": "Smith J. Heart cells. 2021. PMID: 123 doi:10.1038/smith", "unknown": "Jones K. Lost work. 2020. https://doi.org/10.9999/none.", "bare": "Lee A. Unpublished. 2019."}
@@ -177,8 +180,66 @@ def test_two_failed_lookups_in_a_row_stop_the_check_and_say_so(tmp_path) -> None
         ws.verify_references(index)
     said = str(failed.value)
     assert index.asked == [("33611339", ""), ("111", "")] and "could not check 2 references. [@mine]: Checking it failed: HTTP Error 503. [@smith]: Checking it failed: HTTP Error 503. It checked 0 references" in said
-    assert "Two lookups in a row failed, so the index is most likely not answering, and Grant Matcher did not try the 1 reference after them." in said
+    assert "Two lookups in a row got no answer from PubMed, so it is most likely not answering, and Grant Matcher did not try the 1 reference after them." in said
     assert not any(f.detail.get("lookup") for f in ws.view().facts)
+
+def _numbered(tmp_path, n: int) -> Workspace:
+    ws = start(tmp_path)
+    for k in range(1, n + 1):
+        ws.add_fact("reference", f"Author {k}. 2021. PMID: {k}", label=f"r{k}")
+    return ws
+
+def test_two_replies_the_lookup_cannot_read_do_not_stop_the_check(tmp_path) -> None:
+    ws, index = _numbered(tmp_path, 5), Index({"1": "One.", "4": "Four.", "5": "Five."}, wrong_on=("2", "3"))
+    with pytest.raises(ApiError) as failed:
+        ws.verify_references(index)
+    said = str(failed.value)
+    assert [pmid for pmid, _ in index.asked] == ["1", "2", "3", "4", "5"] and "Two lookups in a row" not in said
+    assert said.startswith("Grant Matcher could not check 2 references. [@r2]: Checking it failed: the reply holds no title. [@r3]: Checking it failed: the reply holds no title. It checked 3 references")
+
+def test_two_lookups_with_no_answer_stop_the_check_and_a_second_press_tries_every_reference(tmp_path) -> None:
+    ws = _numbered(tmp_path, 4)
+    with pytest.raises(ApiError, match="Two lookups in a row got no answer from PubMed, so it is most likely not answering, and Grant Matcher did not try the 1 reference after them."):
+        ws.verify_references(index := Index({"1": "One."}, fail_on=("2", "3")))
+    assert [pmid for pmid, _ in index.asked] == ["1", "2", "3"]
+    assert ws.verify_references(again := Index({k: k for k in "1234"})) == 4 and [pmid for pmid, _ in again.asked] == ["1", "2", "3", "4"]
+
+def test_no_answer_from_pubmed_then_from_crossref_blames_the_network(tmp_path) -> None:
+    ws = _three(tmp_path)
+    ws.add_fact("reference", "Kim L. 2018. PMID: 222", label="kim")
+    with pytest.raises(ApiError, match="Two lookups in a row got no answer, one from PubMed and one from Crossref, so this computer's connection is most likely down, and Grant Matcher did not try"):
+        ws.verify_references(Index({}, fail_on=("111", "10.1000/x")))
+
+def test_two_lookups_with_no_answer_and_an_answer_between_them_do_not_stop_the_check(tmp_path) -> None:
+    ws, index = _numbered(tmp_path, 4), Index({"2": "Two.", "4": "Four."}, fail_on=("1", "3"))
+    with pytest.raises(ApiError) as failed:
+        ws.verify_references(index)
+    assert [pmid for pmid, _ in index.asked] == ["1", "2", "3", "4"]
+    assert "could not check 2 references" in str(failed.value) and "It checked 2 references" in str(failed.value) and "Two lookups in a row" not in str(failed.value)
+
+def test_a_pubmed_central_id_is_not_looked_up_as_a_pmid_and_the_doi_is(tmp_path) -> None:
+    for title, warned in (("Heart cells in failure", False), ("", True)):
+        ws = start(tmp_path / str(warned), profile=Profile(prior_work=(Reference("smith2020", "Smith 2020. Heart cells in failure.", pmid="PMC7654321", doi="10.1000/right"),)))
+        ws.write("specific-aims", "We showed this before [@smith2020].", parent=None)
+        assert ws.verify_references(index := Index({"10.1000/right": title})) == 1 and index.asked == [("", "10.1000/right")]
+        assert ("unverified-reference" in {f.code for f in ws.view().section("specific-aims").findings}) is warned
+
+def test_a_lookup_keeps_the_identifier_a_reference_holds_in_its_detail(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.add_fact("reference", "Smith J. Heart cells. 2021.", label="smith", detail={"pmid": "123"})
+    first, second = Index({"123": "Heart cells."}), Index({"123": "Heart cells."})
+    assert ws.verify_references(first) == 1 and ws.verify_references(second) == 1
+    assert first.asked == second.asked == [("123", "")] and ws.view().facts[0].detail["pmid"] == "123"
+
+def test_a_reference_retired_while_its_lookup_ran_is_not_counted(tmp_path) -> None:
+    ws = _with_references(tmp_path)
+    class Retiring(Index):
+        def lookup(self, pmid: str = "", doi: str = "") -> str:
+            if pmid:
+                ws.store.retire_fact(ws.view().facts[0].id)
+            return super().lookup(pmid, doi)
+    assert ws.verify_references(Retiring({"123": "Heart cells."})) == 1
+    assert [f.label for f in ws.store.facts(ws.application_id) if f.detail.get("lookup")] == ["unknown"]
 
 def test_a_zero_padded_pmid_finds_the_record_ncbi_keys_without_the_zeros(tmp_path, monkeypatch) -> None:
     import io
@@ -216,6 +277,19 @@ def test_a_save_that_fails_after_a_lookup_says_what_was_sent(tmp_path, monkeypat
     with pytest.raises(WorkspaceError, match=r"^Grant Matcher sent PMID 123 to PubMed, but could not save what it found \(attempt to write a readonly database\)\. It checked 0 references before it\.") as failed:
         ws.verify_references(Index({"123": "Heart cells."}))
     assert isinstance(failed.value, ValueError)
+
+def test_a_save_that_fails_names_what_failed_and_what_was_saved_before_it(tmp_path, monkeypatch) -> None:
+    ws, sent = _with_references(tmp_path), "Grant Matcher sent DOI 10.9999/none to Crossref, but could not save what it found (disk I/O error)."
+    def broken(*args): raise sqlite3.OperationalError("disk I/O error")
+    monkeypatch.setattr(ws.store, "set_fact_detail", broken)
+    with pytest.raises(WorkspaceError) as failed:
+        ws.verify_references(Index({}, fail_on="123"))
+    assert str(failed.value) == f"{sent} It checked 0 references before it. It could not check 1 reference before it. [@known]: Checking it failed: HTTP Error 503."
+    saves = [True]
+    monkeypatch.setattr(ws.store, "set_fact_detail", lambda *args: saves.pop() if saves else broken())
+    with pytest.raises(WorkspaceError) as failed:
+        ws.verify_references(Index({"123": "Heart cells."}))
+    assert str(failed.value) == f"{sent} It checked 1 reference before it. What it found for it is saved."
 
 @pytest.mark.parametrize("found, said, gone", [({"service": "Crossref", "id": "DOI 10.48550/arXiv.1706.03762"}, "Crossref holds no record for DOI 10.48550/arXiv.1706.03762. A DOI registered elsewhere, such as an arXiv or Zenodo DOI, which DataCite registers, is not in Crossref. Check the identifier.", "exist"), ({"service": "PubMed", "id": "PMID 999"}, "PubMed has no record of PMID 999.", "DataCite")], ids=["doi", "pmid"])
 def test_a_doi_crossref_does_not_hold_is_not_said_to_be_missing_from_the_world(found, said, gone) -> None:
@@ -370,6 +444,16 @@ def test_a_grants_gov_text_replaces_a_saved_guide_copy_and_the_guide_text_does_n
     with pytest.raises(ApiError, match="Grants.gov has only a link to the announcement. Grant Matcher kept the copy it saved from Grants.gov on"):
         ws.fetch_announcement(Guide("", page=f"<title>PAR-1</title><p>{FOUR_PAGES.replace('4 pages', '5 pages')}</p>"), Grants("<meta http-equiv='refresh' content='0; URL=x'>"))
     assert ws.view().announcement == official and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
+
+def test_a_page_copy_replaces_a_search_text_copy_and_is_not_replaced_by_one(tmp_path) -> None:
+    ws, page = start(tmp_path), f"<title>PAR-1</title><p>{FOUR_PAGES}</p>"
+    assert ws.fetch_announcement(Guide(FOUR_PAGES), Grants(""))[0].origin == "nih-guide"
+    kept, _ = ws.fetch_announcement(Guide(FOUR_PAGES, page=page), Grants(""))
+    assert kept.origin == "nih-guide-page" and ws.view().announcement == kept
+    with pytest.raises(ApiError, match=r"^The request for the notice's page in the NIH Guide failed \(HTTP Error 404: Not Found\)\. Grants\.gov has no full announcement attached\. Grant Matcher kept the copy it saved from the notice's page in the NIH Guide on \d{4}-\d\d-\d\d, because the Guide's search service drops brackets and spaces that the page keeps\.$"):
+        ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
+    assert ws.view().announcement == kept
+    assert ws.fetch_announcement(Guide(FOUR_PAGES), Grants(GRANTS_PAGE))[0].origin == "grants.gov" == ws.view().announcement.origin
 
 def test_a_guide_text_saved_while_grants_gov_is_down_says_it_may_not_be_the_official_one(tmp_path) -> None:
     ws = start(tmp_path)

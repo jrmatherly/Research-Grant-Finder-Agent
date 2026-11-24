@@ -317,9 +317,15 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
             blocked = blocked or any(f.severity == "error" for f in s.findings)
         return 1 if blocked else 0
     elif args.action == "verify":
-        checked = ws.verify_references()
+        # What was found before a failed lookup is saved, so it is shown before the error.
+        try:
+            checked, failure = ws.verify_references(), None
+        except ApiError as exc:
+            checked, failure = 0, exc
         for f in (f for f in ws.view().facts if f.kind == "reference"):
             print(f"{f'[@{f.label}]' if f.label else f'Input {f.id}'}  {lookup_line(f)}")
+        if failure:
+            raise failure
         print(f"Checked {checked} reference{'' if checked == 1 else 's'} with PubMed or Crossref.")
     elif args.action == "sign":
         signed = ws.sign(args.section, args.signer, ws.view().section(args.section).revision_id or 0, args.acknowledge)

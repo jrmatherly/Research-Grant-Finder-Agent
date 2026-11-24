@@ -15,6 +15,7 @@ _CITATION = re.compile(r"\[@([^\]\s]+)\]")
 _SURNAME = r"[^\W\d_a-zß-öø-ÿ](?:[^\W\d_]|['-]){0,40}[a-zß-öø-ÿ]"
 _CITATION_LIKE = re.compile(rf"(?P<doi>10\.\d{{4,9}}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>{_SURNAME})(?: et al\.?,? \(?| and {_SURNAME}(?: \(|, ))(?P<year>\d{{4}}[a-z]?)\)?|\((?P<lone>{_SURNAME}), (?P<lone_year>\d{{4}}[a-z]?)\)")
 _DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)", re.I)
+_PMID_FIELD = re.compile(r"\s*(?:PMID:?\s*)?(\d+)\s*", re.I)
 _FIGURE = re.compile(r"!\[|<img|^[ \t]*(?:Figure|Table)[ \t]+\d", re.M)
 _URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+", re.I)
 # A roman numeral after one of these words is not the pronoun.
@@ -43,24 +44,34 @@ def _from(text: str, at: int) -> str:
 def _numbers(text: str) -> list[str]:
     return [n for n in _NUMBER.findall(text) if "." in n or "%" in n or sum(c.isdigit() for c in n) >= 2]
 
+def _trimmed(doi: str) -> str:
+    # A DOI ends before what closes a wrapper or a sentence, and a ")" is its own only while it closes a "(" in it.
+    while doi and (doi[-1] in ".,;:\"'>}]" or doi[-1] == ")" and doi.count(")") > doi.count("(")):
+        doi = doi[:-1]
+    return doi
+
 def _doi(found: str) -> str:
-    return found.rstrip(".,;:)]").lower()
+    return _trimmed(found).lower()
+
+def _field_pmid(reference: Fact) -> list[str]:
+    # The field is a PMID only as a whole, so a PubMed Central ID or a list of numbers is not read as one.
+    return [m[1]] if (m := _PMID_FIELD.fullmatch(str(reference.detail.get("pmid", "")))) else []
 
 def _cites(m: re.Match[str], reference: Fact) -> bool:
     if m["doi"]:
         return _doi(m["doi"]) in set(map(_doi, _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")))
     if m["pmid"]:
-        return m["pmid"] in {*re.findall(r"\d+", str(reference.detail.get("pmid", ""))), *_PMID.findall(reference.text)}
+        return m["pmid"] in {*_field_pmid(reference), *_PMID.findall(reference.text)}
     author, year = (m["author"], m["year"]) if m["author"] else (m["lone"], m["lone_year"])
     year = year if year[-1].isalpha() else year + "[a-z]?"
     return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(author), year))
 
 def identifiers(reference: Fact) -> tuple[str, str]:
     # The profile's prior work keeps the PMID and DOI in detail, and a reference typed under Your inputs keeps them in its text.
-    pmid = re.findall(r"\d+", str(reference.detail.get("pmid", ""))) or _PMID.findall(reference.text)
+    pmid = _field_pmid(reference) or _PMID.findall(reference.text)
     doi = _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")
     # NCBI keys its record by the PMID without leading zeros, so a padded one would never be found.
-    return (pmid[0].lstrip("0") if pmid else "", doi[0].rstrip(".,;:)]") if doi else "")
+    return (pmid[0].lstrip("0") if pmid else "", _trimmed(doi[0]) if doi else "")
 
 def not_in_crossref(doi_id: str) -> str:
     # Crossref answers 404 for a real work that another agency registered, so its silence does not mean the work does not exist.

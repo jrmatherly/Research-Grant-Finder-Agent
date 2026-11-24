@@ -348,6 +348,23 @@ def test_apply_verify_prints_what_each_index_holds(tmp_path, monkeypatch, capsys
     assert "[@known]" in out and "PubMed holds PMID 123 as: Heart cells." in out and "Crossref holds no record for DOI 10.9999/none" in out and "[@bare]  It has no PMID or DOI" in out
 
 
+def test_apply_verify_prints_what_it_saved_before_a_failed_lookup(tmp_path, monkeypatch, capsys) -> None:
+    from nih_grant_matcher.clients import ApiError, ReferenceClient
+    def lookup(self, pmid="", doi=""):
+        if doi:
+            raise ApiError("Checking DOI 10.9999/none with Crossref failed: HTTP Error 403")
+        return "Heart cells."
+    monkeypatch.setattr(ReferenceClient, "lookup", lookup)
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    for label, text in (("unknown", "Jones K. 2020. doi:10.9999/none"), ("known", "Smith J. 2021. PMID: 123")):
+        cli.main(["--db", db, "apply", "add", "1", "--kind", "reference", "--label", label, "--text", text])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "verify", "1"]) == 1
+    out, err = capsys.readouterr()
+    assert out.splitlines() == ["[@unknown]  Not checked yet.", f"[@known]  Checked on {date.today().isoformat()}. PubMed holds PMID 123 as: Heart cells."]
+    assert err.startswith("Request failed: Grant Matcher could not check 1 reference. [@unknown]: Checking DOI 10.9999/none with Crossref failed: HTTP Error 403.")
+
 @pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), (FOUR_PAGES, False)])
 def test_apply_fetch_and_requirements_say_when_the_text_has_no_section_iv(tmp_path, monkeypatch, capsys, text, said) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient

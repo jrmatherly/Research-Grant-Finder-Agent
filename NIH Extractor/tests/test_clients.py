@@ -43,8 +43,9 @@ def _fail_then(monkeypatch, outcomes: list) -> list:
     return calls
 
 
-def _http_error(code: int) -> urllib.error.HTTPError:
-    return urllib.error.HTTPError(REQUEST.full_url, code, "error", None, None)
+def _http_error(code: int, body: bytes | None = None) -> urllib.error.HTTPError:
+    import io
+    return urllib.error.HTTPError(REQUEST.full_url, code, "error", None, None if body is None else io.BytesIO(body))
 
 
 def test_read_retries_a_dropped_connection(monkeypatch) -> None:
@@ -253,10 +254,43 @@ def test_a_doi_gives_the_joined_crossref_title_and_cannot_add_a_query(monkeypatc
 
 
 def test_a_doi_crossref_does_not_hold_gives_an_empty_title(monkeypatch) -> None:
-    calls = _replies(monkeypatch, _http_error(404))
+    calls = _replies(monkeypatch, _http_error(404, b"Resource not found.\n"))
     assert clients.ReferenceClient().lookup(doi="10.9999/does.not.exist") == ""
     assert len(calls) == 1
 
+
+@pytest.mark.parametrize("outcomes", [[_http_error(404, b"<html><h1>404 Not Found</h1>The requested URL was not found on this proxy.</html>")], [_http_error(404, b'{"message": "no route"}')], [_http_error(404)], [_http_error(503), _http_error(503), _http_error(404, b"<html>Not Found</html>")]], ids=["proxy", "gateway-json", "no-body", "after-503s"])
+def test_a_404_that_is_not_crossref_s_own_answer_is_an_error_and_not_a_missing_record(monkeypatch, outcomes) -> None:
+    _replies(monkeypatch, *outcomes)
+    with pytest.raises(clients.ApiError, match="DOI 10.1038/s41586-021-03819-2 with Crossref failed") as failed:
+        clients.ReferenceClient().lookup(doi="10.1038/s41586-021-03819-2")
+    assert not isinstance(failed.value, clients.NoAnswer)
+
+@pytest.mark.parametrize("reply", [{"result": {"uids": ["1"], "1": {"uid": "1", "error": "Backend temporarily unavailable, try again"}}}, {"error": "Invalid uid list: server busy", "result": {"uids": []}}, {"error": "Invalid uid 12 at position= 0", "result": {"uids": []}}], ids=["record-error", "other-invalid-uid", "another-id"])
+def test_a_pubmed_error_that_is_not_its_no_record_answer_is_an_error_in_its_own_words(monkeypatch, reply) -> None:
+    _replies(monkeypatch, reply)
+    error = reply.get("error") or reply["result"]["1"]["error"]
+    with pytest.raises(clients.ApiError, match=f"with PubMed failed: PubMed answered with an error: {error}"):
+        clients.ReferenceClient().lookup(pmid="1")
+
+@pytest.mark.parametrize("record, title", [({"uid": "1", "error": " Cannot get document summary "}, ""), ({"uid": "1", "title": "A title.", "error": "Backend temporarily unavailable"}, "A title.")], ids=["no-record-in-another-case", "title-and-error"])
+def test_a_pubmed_record_is_missing_only_on_its_observed_error_and_found_with_a_title(monkeypatch, record, title) -> None:
+    _replies(monkeypatch, {"result": {"uids": ["1"], "1": record}})
+    assert clients.ReferenceClient().lookup(pmid="1") == title
+
+def test_a_reply_nested_too_deeply_to_read_is_an_api_error(monkeypatch) -> None:
+    import io
+    _fail_then(monkeypatch, [io.BytesIO(b"[" * 200000)])
+    with pytest.raises(clients.ApiError, match="did not return JSON") as failed:
+        clients.ReferenceClient().lookup(pmid="1")
+    assert not isinstance(failed.value, clients.NoAnswer)
+
+@pytest.mark.parametrize("outcomes, silent", [([TimeoutError("timed out")] * 3, True), ([_http_error(503)] * 3, True), ([_http_error(429)] * 3, True), ([urllib.error.URLError(ConnectionRefusedError("refused"))] * 3, True), ([_http_error(403)], False), ([{"result": {"uids": []}}], False)], ids=["timeout", "503", "429", "refused", "403", "shape"])
+def test_a_lookup_says_whether_the_service_gave_no_answer(monkeypatch, outcomes, silent) -> None:
+    _replies(monkeypatch, *outcomes)
+    with pytest.raises(clients.ApiError) as failed:
+        clients.ReferenceClient().lookup(pmid="1")
+    assert isinstance(failed.value, clients.NoAnswer) is silent
 
 def test_a_record_with_no_title_is_not_reported_as_missing(monkeypatch) -> None:
     _replies(monkeypatch, {"message": {"title": []}})
@@ -292,4 +326,27 @@ def test_a_lookup_waits_ten_seconds_for_an_answer(monkeypatch) -> None:
     monkeypatch.setattr(clients.urllib.request, "urlopen", lambda request, timeout: waited.append(timeout) or io.BytesIO(json.dumps({"message": {"title": ["A"]}}).encode()))
     monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
     clients.ReferenceClient().lookup(doi="10.1/a")
+    assert waited == [10]
+
+
+@pytest.mark.parametrize("reply", [{"status": "ok", "message": {}}, {"status": "ok"}, {"message": {"title": "One string"}}, {"message": {"title": [1]}}], ids=["no-title", "no-message", "string", "numbers"])
+def test_a_crossref_reply_without_a_title_list_is_an_error_and_not_a_missing_record(monkeypatch, reply) -> None:
+    _replies(monkeypatch, reply)
+    with pytest.raises(clients.ApiError, match="with Crossref failed"):
+        clients.ReferenceClient().lookup(doi="10.1/x")
+
+
+def test_a_doi_lookup_sends_crossref_no_address(monkeypatch) -> None:
+    calls = _replies(monkeypatch, {"message": {"title": ["A"]}})
+    clients.ReferenceClient().lookup(doi="10.1/x")
+    sent = calls[0].full_url + " " + " ".join(f"{k}: {v}" for k, v in calls[0].header_items())
+    assert calls[0].get_header("User-agent") == "nih-grant-matcher/0.1" and not any(word in sent for word in ("@", "mailto", "email"))
+
+
+def test_a_pmid_lookup_waits_ten_seconds_for_an_answer(monkeypatch) -> None:
+    import io, json
+    waited = []
+    monkeypatch.setattr(clients.urllib.request, "urlopen", lambda request, timeout: waited.append(timeout) or io.BytesIO(json.dumps({"result": {"uids": ["1"], "1": {"uid": "1", "title": "A"}}}).encode()))
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    clients.ReferenceClient().lookup(pmid="1")
     assert waited == [10]
