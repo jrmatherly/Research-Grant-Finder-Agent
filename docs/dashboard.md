@@ -190,7 +190,7 @@ The same steps run on the command line, from `NIH Extractor/`. Confirm or reject
 | `uv run python -m nih_grant_matcher apply discard 1 3` | Sets proposal 3 aside. It stays in the log, and the AI-use statement counts it. |
 | `uv run python -m nih_grant_matcher apply disclosure 1 --on` | Puts the AI-use statement in the export and prints it. `--off` leaves it out. |
 | `uv run python -m nih_grant_matcher apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
-| `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, and the provenance log to the folder, and prints its full path. |
+| `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, the provenance log, and `ai-use-statement.md` while the AI-use statement is on, to the folder, and prints its full path. |
 | `uv run python -m nih_grant_matcher apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
 ### Choose a model

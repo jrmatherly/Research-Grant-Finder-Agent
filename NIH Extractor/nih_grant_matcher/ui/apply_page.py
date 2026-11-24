@@ -12,11 +12,12 @@ from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_o
 from ..models import Finding, Opportunity
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, ApplicationView, NotReady, StaleEdit, Workspace, describe
+from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe
 from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
 HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application."
+ACTION_NOUNS = {"revise": "revision"}
 PROVIDER_LABELS = {"claude": "Claude, from Anthropic", "openai": "OpenAI", "gemini": "Gemini, from Google", "compatible": "A server that speaks the OpenAI API, such as Ollama"}
 
 def _notice(kind: str, text: str) -> None:
@@ -97,8 +98,8 @@ def _fetch(ws: Workspace) -> str:
         raise ApiError(f"{exc} " + ("The announcement saved earlier still applies, with what you decided from it." if ws.view().announcement else "The standing rules of the grant type still apply.")) from exc
     return f"Saved the announcement from {ORIGINS[announcement.origin]}. " + (NO_SECTION_IV if ws.view().no_section_iv else "Confirm or reject what it adds under Requirements.") + "".join(" " + escape_markdown(note) for note in notes)
 
-def _restore(ws: Workspace, section: str, revision_id: int) -> str:
-    restored = ws.restore(section, revision_id)
+def _restore(ws: Workspace, section: str, revision_id: int, parent: int | None) -> str:
+    restored = ws.restore(section, revision_id, parent)
     text_key, base_key = _keys(ws.application_id, section)
     st.session_state[text_key], st.session_state[base_key] = restored.text, restored.id
     return f"Restored the text of revision {revision_id} as revision {restored.id}."
@@ -117,7 +118,7 @@ def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
     try:
         revision = ws.accept(call_id, edited)
     except StaleEdit:
-        raise NotReady("The section changed after the model read it, so this proposal no longer fits. Ask the model again.") from None
+        raise NotReady(STALE_PROPOSAL) from None
     return f"Accepted the proposal as revision {revision.id}."
 
 def _discard(ws: Workspace, call_id: int) -> str:
@@ -136,8 +137,8 @@ def _word_diff(old: str, new: str) -> str:
     return " ".join(parts)
 
 def owned_by(app_id: int, key: str) -> bool:
-    # The parts are split at underscores, so id 1 does not match id 11, and a section key holds no underscore.
-    return key.startswith("apply_") and not key.endswith("_button") and str(app_id) in key.split("_")[2:]
+    # Every key of an application holds its id third, as in apply_edit_{app}_{section}_{call}, and a section key holds no underscore.
+    return key.startswith("apply_") and not key.endswith("_button") and key.split("_")[2:3] == [str(app_id)]
 
 def _delete(ws: Workspace, number: str) -> str:
     if st.session_state.get(f"apply_delete_{ws.application_id}", "").strip() != number:
@@ -372,7 +373,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
     # A proposal waits in the log, so a reload shows it again.
     if (proposal := ws.pending(key)) is not None:
-        st.markdown(f"**A model's {proposal.action}, proposal {proposal.call_id}**")
+        st.markdown(f"**A model's {ACTION_NOUNS.get(proposal.action, proposal.action)}, proposal {proposal.call_id}**")
         current, proposed = st.columns(2)
         current.caption(f"Revision {s.revision_id}")
         current.text(s.text)
@@ -400,13 +401,13 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
 
 def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     st.subheader("Revisions")
-    titles, heads = {s.rule.key: s.rule.title for s in view.sections}, {s.revision_id for s in view.sections}
+    titles, heads = {s.rule.key: s.rule.title for s in view.sections}, {s.rule.key: s.revision_id for s in view.sections}
     if not view.log:
         st.caption("No revisions yet.")
     for r in reversed(view.log):
         line, restore = st.columns([6, 1])
-        line.markdown(f"Revision {r.id}. {titles.get(r.section, r.section)}. " + ("You wrote it" if r.author == "applicant" else f"A model's {r.action}") + f" on {r.created_at:%Y-%m-%d at %H:%M} UTC. {len(r.text.split())} words.")
-        restore.button("Restore", key=f"apply_restore_{r.id}_button", disabled=r.id in heads, on_click=_on, args=(db_path, app_id, lambda w, section=r.section, rid=r.id: _restore(w, section, rid)))
+        line.markdown(f"Revision {r.id}. {titles.get(r.section, r.section)}. " + ("You wrote it" if r.author == "applicant" else f"A model's {ACTION_NOUNS.get(r.action, r.action)}") + f" on {r.created_at:%Y-%m-%d at %H:%M} UTC. {len(r.text.split())} words.")
+        restore.button("Restore", key=f"apply_restore_{r.id}_button", disabled=r.id in heads.values(), on_click=_on, args=(db_path, app_id, lambda w, section=r.section, rid=r.id, parent=heads.get(r.section): _restore(w, section, rid, parent)))
     st.subheader("AI-use statement")
     st.caption("Grant Matcher builds this statement from the log, one sentence for each thing the log holds, with no model. NIH names no field for it, so the export writes it to ai-use-statement.md for you to place.")
     disclosure_key = f"apply_disclosure_{app_id}"

@@ -451,6 +451,11 @@ def test_the_keys_of_a_deleted_application_are_its_own() -> None:
     assert [key for key in ("apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary", "apply_delete_11", "apply_text_11_specific-aims", "apply_section", "apply_signer", "apply_restore_1_button", "application_id") if owned_by(1, key)] == ["apply_delete_1", "apply_export_1", "apply_text_1_specific-aims", "apply_base_1_project-narrative", "apply_acknowledge_1_project-summary"]
 
 
+def test_a_call_id_in_another_applications_key_is_not_this_applications_id() -> None:
+    from nih_grant_matcher.ui.apply_page import owned_by
+    assert not owned_by(1, "apply_edit_2_specific-aims_1") and owned_by(2, "apply_edit_2_specific-aims_1")
+
+
 def test_a_phased_award_says_why_it_cannot_be_started(tmp_path, monkeypatch) -> None:
     from helpers import opportunity
     store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
@@ -525,6 +530,26 @@ def test_each_apply_button_does_its_one_thing(tmp_path, monkeypatch) -> None:
     app.button(key="apply_load_newest_button").click().run(timeout=30)
     assert not app.exception and app.text_area(key="apply_text_1_specific-aims").value == "Aim 1 from elsewhere."
     assert not any("changed after you opened it" in w.value for w in app.warning)
+
+
+def test_a_restore_after_a_save_from_another_tab_restores_nothing(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    for text in ("Aim 1.", "Aim 2."):
+        app.text_area(key="apply_text_1_specific-aims").set_value(text)
+        app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 2, "applicant", "write", "Tab two.")
+    finally:
+        store.close()
+    app.button(key="apply_restore_1_button").click().run(timeout=30)
+    assert not app.exception and not any("Restored" in s.value for s in app.success)
+    store = OpportunityStore(path)
+    try:
+        assert [r.text for r in store.revisions(1)] == ["Aim 1.", "Aim 2.", "Tab two."]
+    finally:
+        store.close()
 
 
 def test_a_stale_sign_off_says_nothing_was_signed(tmp_path, monkeypatch) -> None:
@@ -891,3 +916,24 @@ def test_polish_is_not_offered_without_a_model(tmp_path, monkeypatch) -> None:
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     assert not app.exception and not [b for b in app.button if b.key in ("apply_polish_button", "apply_revise_button")]
+
+
+def test_a_revision_is_named_a_revision_on_the_page_and_in_the_log(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        for name, value in (("llm.provider", "compatible"), ("llm.model", "llama9"), ("consent:localhost", "2026-11-23T00:00:00")):
+            store.set_setting(name, value)
+        store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells.")
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_input(key="apply_instruction_1_specific-aims").set_value("Name the cells.")
+    post.reply(_openai_reply("We study cardiac muscle cells."))
+    app.button(key="apply_revise_button").click().run(timeout=30)
+    assert not app.exception and any("A model's revision, proposal 1" in m.value for m in app.markdown)
+    app.button(key="apply_accept_button").click().run(timeout=30)
+    assert not app.exception and any("A model's revision on" in m.value for m in app.markdown)
+    assert not any("A model's revise" in m.value for m in app.markdown)

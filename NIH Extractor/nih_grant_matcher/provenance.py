@@ -40,6 +40,9 @@ def section_state(revisions: Sequence[Revision], signoffs: Sequence[Signoff], se
         return "empty"
     return "final" if any(s.section == section and s.revision_id == current.id for s in signoffs) else "draft"
 
+def _percent(value: float) -> str:
+    return "less than 1 percent" if 0 < value < 0.005 else f"{round(value * 100)} percent"
+
 def _listed(items: Sequence[str]) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
 
@@ -63,11 +66,15 @@ def disclosure_statement(application: Application, grant_type: GrantType, revisi
         if r.author == "model":
             first_model.setdefault(r.section, r.id)
     if edited := {r.section for r in revisions if r.author == "applicant" and r.id > first_model.get(r.section, r.id)}:
-        said.append(f"I edited {titles(edited)} after I accepted model text.")
+        said.append(f"I edited the {titles(edited)} after I accepted model text.")
     shares = {key: shares[key] if shares is not None else share(attribution(revisions, h.id)) for key, h in heads.items()}
-    said += [f"By the tool's word-level record, {round(s.written_share * 100)} percent of the {r.title} text came from a model's draft or revision that I accepted, and {round(s.polished_share * 100)} percent from a model's polish of my own text." for r in rules if (s := shares.get(r.key)) and s.model_words]
-    if without := [key for key, h in heads.items() if h.text.strip() and not shares[key].model_words]:
+    said += [f"By the tool's word-level record, {_percent(s.written_share)} of the {r.title} text came from a model's draft or revision that I accepted, and {_percent(s.polished_share)} from a model's polish of my own text." for r in rules if (s := shares.get(r.key)) and s.model_words]
+    # A section restored to text from before an accepted proposal has no model word, and was not written without a model.
+    bare, had_model = [key for key, h in heads.items() if h.text.strip() and not shares[key].model_words], {r.section for r in revisions if r.call_id is not None}
+    if without := [key for key in bare if key not in had_model]:
         said.append(f"The {titles(without)} {'was' if len(without) == 1 else 'were'} written without a model.")
+    if gone := [key for key in bare if key in had_model]:
+        said.append(f"No model text remains in the {titles(gone)}.")
     unused = [c for c in calls if c.purpose == "failed" or (c.purpose in PROPOSALS and c.id not in accepted and c.id not in waiting)]
     for model in dict.fromkeys(c.model for c in calls if c.purpose in ("extract", "review") or c in unused):
         parts = [part for purpose, part in (("extract", "read the funding announcement's requirements"), ("review", "review drafts against NIH's review criteria")) if any(c.model == model and c.purpose == purpose for c in calls)]
@@ -75,5 +82,5 @@ def disclosure_statement(application: Application, grant_type: GrantType, revisi
             parts.append(f"produce suggestions that I did not use ({n})")
         said.append(f"I also sent text to {model} to {_listed(parts)}.")
     if signed := [key for key, h in heads.items() if any(s.section == key and s.revision_id == h.id for s in signoffs)]:
-        said.append(f"I read and signed off {titles(signed)}.")
+        said.append(f"I read and signed off the {titles(signed)}.")
     return " ".join([*said, closing])

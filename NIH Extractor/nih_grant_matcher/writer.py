@@ -17,6 +17,7 @@ from .store import OpportunityStore
 
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
 ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
+STALE_PROPOSAL = "The section changed after the model read it, so this proposal no longer fits. Ask the model again."
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
 
 class WorkspaceError(ValueError):
@@ -216,14 +217,16 @@ class Workspace:
             raise StaleEdit(head(self.store.revisions(self.application_id), section))
         return written
 
-    def restore(self, section: str, revision_id: int) -> Revision:
+    def restore(self, section: str, revision_id: int, parent: int | None) -> Revision:
         self._rule(section)
         revisions = self.store.revisions(self.application_id)
         old = next((r for r in revisions if r.id == revision_id and r.section == section), None)
         if old is None:
             raise WorkspaceError(f"The {section} section has no revision {revision_id}.")
         current = head(revisions, section)
-        if current is not None and current.id == old.id:
+        if current.id != parent:
+            raise StaleEdit(current)
+        if current.id == old.id:
             return current
         if (restored := self.store.add_revision(self.application_id, section, old.id, "applicant", "write", old.text, only_on_head=True, head=current.id)) is None:
             raise StaleEdit(head(self.store.revisions(self.application_id), section))

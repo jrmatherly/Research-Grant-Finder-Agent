@@ -14,7 +14,7 @@ from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
-from .writer import DECISIONS, NO_SECTION_IV, ORIGINS, NotReady, StaleEdit, Workspace, describe
+from .writer import DECISIONS, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -318,7 +318,10 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
             print(f"  {finding.severity}  {finding.code}  {finding.message}")
         print(f"Accept it with apply accept {args.id} {proposal.call_id}, or discard it with apply discard {args.id} {proposal.call_id}.")
     elif args.action == "accept":
-        revision = ws.accept(args.call)
+        try:
+            revision = ws.accept(args.call)
+        except StaleEdit:
+            raise NotReady(STALE_PROPOSAL) from None
         print(f"Accepted proposal {args.call} as revision {revision.id} of {revision.section}.")
     elif args.action == "discard":
         ws.discard(args.call)
