@@ -1131,6 +1131,29 @@ def test_the_reviewer_sees_neither_the_profile_nor_a_writer_prompt_and_its_revie
     assert (call.purpose, call.parent_id) == ("review", first.id) and (review.revision_id, review.model, review.scores["expertise"], [p.text for p in review.points]) == (first.id, "fake-1", "No team is named.", ["A clear aim."])
     assert ws.view().section("specific-aims").review == review == ws.store.reviews(ws.application_id)[-1]
 
+def test_a_review_is_not_sent_to_a_host_the_applicant_has_not_agreed_to(tmp_path) -> None:
+    fake = FakeModel(REVIEWED)
+    ws = start(tmp_path, model=fake, consent=False)
+    ws.write("specific-aims", "Aim 1.", parent=None)
+    with pytest.raises(NotReady, match=r"Agree to send text to example\.test first"):
+        ws.review("specific-aims")
+    assert fake.seen == [] and ws.store.calls(ws.application_id) == [] and ws.store.reviews(ws.application_id) == []
+
+def test_the_reviewer_sees_only_the_newest_revision_of_its_own_section(tmp_path) -> None:
+    older = "OLDER-REVISION of the aims, written out in full."
+    earlier = json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "EARLIER-RATING names no team."}, "points": [{"factor": "importance", "kind": "strength", "text": "EARLIER-POINT.", "quote": older}]})
+    fake = FakeModel(earlier, "PENDING-PROPOSAL text of the aims.", REVIEWED)
+    ws = start(tmp_path, model=fake)
+    ws.fetch_announcement(Guide("Section IV. Application and Submission Information\nANNOUNCEMENT-TEXT is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100), Grants(""))
+    ws.write("research-strategy", "OTHER-SECTION text of the strategy.", parent=None)
+    first = ws.write("specific-aims", older, parent=None)
+    assert [p.text for p in ws.review("specific-aims").points] == ["EARLIER-POINT."]
+    ws.write("specific-aims", "The newest text of the aims.", parent=first.id)
+    assert ws.propose("specific-aims", "polish").text == "PENDING-PROPOSAL text of the aims." and ws.pending("specific-aims") is not None
+    ws.review("specific-aims")
+    seen = fake.seen[-1].system + fake.seen[-1].user
+    assert "The newest text of the aims." in seen and [hidden for hidden in ("ANNOUNCEMENT-TEXT", "EARLIER-RATING", "EARLIER-POINT", "PENDING-PROPOSAL", "OTHER-SECTION", "OLDER-REVISION") if hidden in seen] == []
+
 def test_a_section_with_no_text_is_not_sent_for_review(tmp_path) -> None:
     fake = FakeModel(REVIEWED)
     ws = start(tmp_path, model=fake)

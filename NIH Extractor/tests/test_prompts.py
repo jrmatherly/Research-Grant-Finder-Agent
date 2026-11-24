@@ -113,6 +113,11 @@ def test_a_limit_whose_number_is_part_of_another_number_is_dropped(quote, amount
     reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}])
     assert prompts.parse_requirements(reply, quote) == ([], 1)
 
+@pytest.mark.parametrize("quote, amount", [("An R21 application follows the standard page limits.", 21), ("A K99 applicant follows the standard page limits.", 99), ("Applications to PAR25 follow the standard page limits.", 25)])
+def test_a_limit_whose_number_is_part_of_an_activity_code_is_dropped(quote, amount) -> None:
+    reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}])
+    assert prompts.parse_requirements(reply, quote) == ([], 1)
+
 @pytest.mark.parametrize("quote", ["The Research Strategy is a 6-page document at most.", "The Research Strategy is limited to six (6) pages."])
 def test_a_limit_whose_number_stands_beside_a_hyphen_or_bracket_is_kept(quote) -> None:
     reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": 6, "unit": "pages"}}])
