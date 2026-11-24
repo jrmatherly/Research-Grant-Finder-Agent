@@ -1262,7 +1262,7 @@ The profile:
 Keys and the clients:
 
 - The Claude request sends `Authorization: Bearer <key>`, which Anthropic's pages give for direct HTTP requests (`x-api-key` is their legacy fallback). It sends `anthropic-beta: server-side-fallback-2026-07-01` with `"fallbacks": "default"`, so `Completion.model` is the model that answered.
-- The Gemini request has no `Api-Revision` header and carries `generation_config.max_output_tokens`. The `compatible` provider sends `max_tokens`, because Ollama's server ignores `max_completion_tokens` with no error.
+- The Gemini request has no `Api-Revision` header and carries `generation_config.max_output_tokens`. The `compatible` provider sends `max_tokens`, because Ollama's server ignores `max_completion_tokens` with no error. Both OpenAI-wire providers sent the instructions as a `system` message in this stage. Stage 5 changed the `openai` provider to `developer` (see its "Changed in code of earlier stages").
 - A 500 is sent once. Only a 429 that is not a quota error, a 503 and a 529 are sent again. A 402 and a usage-limit error are kind `quota`.
 - `llm._open` is the `open` of an opener that follows no redirect, so a key header never reaches a second host. A 3xx is a `ModelError` that names the other host.
 - `keys.get` strips a value from any source and refuses one that is not printable ASCII, and `_send` refuses such a key before it builds a request. `keys.UnreadableKey` is the base of `KeychainError` and also covers a key file that cannot be read and a `_FILE` path that does not exist. The error is kept for the process until `forget`, `save` or `delete`, and the expander has `Try again`.
@@ -1286,7 +1286,6 @@ The writer and the statement:
 Not fixed, for the owner:
 
 - Two widget labels pass through `escape_markdown`, so their accessible name holds backslashes ("127\.0\.0\.1", "Type PAR\-26\-042 to confirm").
-- OpenAI's page says newer models take a `developer` message where the code sends `system`.
 - `docs/docker.md` holds the `models` commands and the Compose secret, none of them run against the image, and lacks the `apply` commands of Stages 2 and 3.
 - The Model expander can close while no key is saved, though the caption on Sections points at it.
 - After a refused second accept, the edits typed in the other tab are not shown again.
@@ -1868,6 +1867,7 @@ Changed in code of earlier stages:
 - The section's text box is kept when the Section selector moves away and back. Before, the box came back empty and Save recorded an empty revision. The same defect was on `main`.
 - The announcement text no longer loses opening brackets, glues a heading to the next word, or splits a word ("NOFO)", "GoalThe", "data ana lysis" in PAR-25-357). NIH's Guide search service serves its `doctext` that way, and Grant Matcher saved it as it came. When Grants.gov has no full announcement, `fetch_announcement` now reads the notice's own page in the Guide (`NihGuideClient.page`), saved with the origin `nih-guide-page`, and falls back to the search text only when that page is missing or fails. A notice from fiscal 2026 on has no page and gets its text from Grants.gov. A copy saved from the search text keeps the origin `nih-guide`, and the dashboard says under its source that the text drops brackets and spaces. `quoted_in` still compares letters and digits, so a decision made on such a copy carries over to the page's text.
 - A Claude key that is not scoped to one workspace now works. The setting `llm.workspace`, set in the Model expander's **Workspace ID** box (shown for Claude only) or with `models --workspace` (an empty value clears it), goes in `anthropic-workspace-id` on the Claude Messages request and the Claude model list, and on no other provider's request. `llm.checked_workspace` takes only `wrkspc_` and letters and digits, and its error does not repeat the value, which could be a key pasted into the wrong box. A 400 or 404 from api.anthropic.com whose message names the header or starts "Workspace `" gets a line that says where to set the ID. The error shapes come from Anthropic's authentication page and were not seen from a live provider.
+- The `openai` provider sends the instructions as a `developer` message, the role OpenAI's reference gives for o1 and newer models, and `compatible` keeps `system`, the only one of the two that Ollama lists. No page says that OpenAI maps a `system` message itself, or that every model it lists takes `developer`. So a 400 whose message names a role and the role sent gets one more request with the other role, as the token-limit resend does, and when that also gets a 400 the first error is raised. The same request does not resend for both the role and the token limit. The research notes hold the pages read.
 
 Not fixed, for the owner:
 
