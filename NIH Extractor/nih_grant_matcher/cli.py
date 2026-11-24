@@ -14,7 +14,7 @@ from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
-from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe, dropped_points, read_summary, score_line
+from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe, dropped_points, lookup_line, read_summary, score_line
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("number", help="The opportunity number, such as PAR-25-123.")
     start.add_argument("--type", required=True, help="The activity code, such as R21.")
     start.add_argument("--resubmission", action="store_true", help="Add the Introduction of a resubmission.")
-    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("extract", "Ask the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands.")):
+    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("extract", "Ask the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands."), ("verify", "Check that each reference you listed exists. Sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, and nothing else.")):
         apply.add_parser(name, help=text).add_argument("id", type=int)
     add = apply.add_parser("add", help="Add one of your inputs, such as an aim or a reference.")
     add.add_argument("id", type=int)
@@ -310,6 +310,11 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
                 print(f"  {finding.severity}  {finding.code}  {finding.message}")
             blocked = blocked or any(f.severity == "error" for f in s.findings)
         return 1 if blocked else 0
+    elif args.action == "verify":
+        checked = ws.verify_references()
+        for f in (f for f in ws.view().facts if f.kind == "reference"):
+            print(f"{f'[@{f.label}]' if f.label else f'Input {f.id}'}  {lookup_line(f)}")
+        print(f"Checked {checked} reference{'' if checked == 1 else 's'} with PubMed or Crossref.")
     elif args.action == "sign":
         signed = ws.sign(args.section, args.signer, ws.view().section(args.section).revision_id or 0, args.acknowledge)
         print(f"Signed off {args.section} at revision {signed.revision_id}.")

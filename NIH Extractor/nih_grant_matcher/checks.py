@@ -55,6 +55,20 @@ def _cites(m: re.Match[str], reference: Fact) -> bool:
     year = year if year[-1].isalpha() else year + "[a-z]?"
     return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(author), year))
 
+def identifiers(reference: Fact) -> tuple[str, str]:
+    # The profile's prior work keeps the PMID and DOI in detail, and a reference typed under Your inputs keeps them in its text.
+    pmid = re.findall(r"\d+", str(reference.detail.get("pmid", ""))) or _PMID.findall(reference.text)
+    doi = _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")
+    return (pmid[0] if pmid else "", doi[0].rstrip(".,;:)]") if doi else "")
+
+def _unverified(reference: Fact) -> str:
+    key, lookup = f"[@{reference.label}]", reference.detail.get("lookup")
+    if lookup:
+        return f"{lookup.get('service')} has no record of {lookup.get('id')}, which the reference {key} gives. Check the identifier and that the work exists, or remove the citation."
+    if not any(identifiers(reference)):
+        return f"The reference {key} has no PMID or DOI, so Grant Matcher cannot check that it exists. Check it yourself before you sign off."
+    return f"Grant Matcher has not yet checked that the reference {key} exists. Choose Check that each reference exists under Your inputs, or run apply verify."
+
 def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, facts: Sequence[Fact], grounding: str, words: Sequence[tuple[str, str]]) -> tuple[Finding, ...]:
     references = [f for f in facts if f.kind == "reference" and f.retired_at is None]
     findings = [Finding("placeholder", "error", "The draft needed an input from you here. Replace the placeholder with what it asks for or cut the sentence.", m.group()) for m in _PLACEHOLDER.finditer(text)]
@@ -65,6 +79,8 @@ def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, 
     labels = {f.label for f in references}
     findings += [Finding("unknown-citation", "error", f"The citation [@{key}] names no reference you listed. Add the reference to your inputs or remove the citation.", f"[@{key}]")
                  for key in dict.fromkeys(m.group(1) for m in _CITATION.finditer(text) if m.group(1) not in labels)]
+    cited = dict.fromkeys(m.group(1) for m in _CITATION.finditer(text))
+    findings += [Finding("unverified-reference", "warning", _unverified(f), f"[@{f.label}]") for f in references if f.label in cited and not (f.detail.get("lookup") or {}).get("title")]
     joined, starts = " ".join(w for w, _ in words), list(accumulate((len(w) + 1 for w, _ in words), initial=0))
     unmatched: dict[str, None] = {}
     for m in _CITATION_LIKE.finditer(joined):

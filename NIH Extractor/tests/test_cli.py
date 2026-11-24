@@ -335,6 +335,19 @@ def test_apply_delete_with_yes_deletes(tmp_path, capsys) -> None:
 FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100
 
 
+def test_apply_verify_prints_what_each_index_holds(tmp_path, monkeypatch, capsys) -> None:
+    from nih_grant_matcher.clients import ReferenceClient
+    monkeypatch.setattr(ReferenceClient, "lookup", lambda self, pmid="", doi="": "Heart cells." if pmid == "123" else "")
+    db = _apply_db(tmp_path)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    for label, text in (("known", "Smith J. 2021. PMID: 123"), ("unknown", "Jones K. 2020. doi:10.9999/none"), ("bare", "Lee A. 2019.")):
+        cli.main(["--db", db, "apply", "add", "1", "--kind", "reference", "--label", label, "--text", text])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "verify", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "[@known]" in out and "PubMed holds PMID 123 as: Heart cells." in out and "Crossref has no record of DOI 10.9999/none" in out and "[@bare]  It has no PMID or DOI" in out
+
+
 @pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), (FOUR_PAGES, False)])
 def test_apply_fetch_and_requirements_say_when_the_text_has_no_section_iv(tmp_path, monkeypatch, capsys, text, said) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient

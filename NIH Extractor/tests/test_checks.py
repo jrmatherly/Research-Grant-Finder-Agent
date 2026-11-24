@@ -168,3 +168,23 @@ def test_a_model_citation_in_the_other_author_year_forms_must_match_a_reference(
 def test_a_placeholder_in_any_case_or_form_is_an_error(placeholder) -> None:
     found = check_section(f"Aim 1 tests {placeholder} today.", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", ())
     assert [f.excerpt for f in found if f.code == "placeholder" and f.severity == "error"] == [placeholder]
+
+
+def _found(title: str) -> dict:
+    return {"lookup": {"service": "PubMed", "id": "PMID 123", "on": "2026-11-23", "title": title}}
+
+
+@pytest.mark.parametrize("reference,said", [
+    (Fact(1, "reference", "Smith J. Heart cells. 2021. PMID: 123", label="smith2021"), "not yet checked"),
+    (Fact(1, "reference", "Smith J. Heart cells. 2021.", label="smith2021"), "no PMID or DOI"),
+    (Fact(1, "reference", "Smith J. Heart cells. 2021.", label="smith2021", detail={"pmid": "123", **_found("")}), "PubMed has no record of PMID 123"),
+], ids=["unchecked", "no-identifier", "not-found"])
+def test_a_cited_reference_that_was_not_found_is_a_warning(reference, said) -> None:
+    found = [f for f in check_section("As shown [@smith2021].", RULE["specific-aims"], Limit(1, "pages"), R21.page, (reference,), "", ()) if f.code == "unverified-reference"]
+    assert [(f.severity, f.excerpt) for f in found] == [("warning", "[@smith2021]")] and said in found[0].message
+
+
+def test_a_found_or_uncited_reference_raises_no_unverified_warning() -> None:
+    found = Fact(1, "reference", "Smith J. Heart cells. 2021.", label="smith2021", detail={"pmid": "123", **_found("Heart cells.")})
+    assert "unverified-reference" not in _codes("As shown [@smith2021].", facts=(found,))
+    assert "unverified-reference" not in _codes("As shown before.", facts=(REFERENCE,))

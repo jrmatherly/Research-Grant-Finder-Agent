@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Literal
 from . import __version__, prompts
 from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
-from .checks import check_section
-from .clients import ApiError
+from .checks import check_section, identifiers
+from .clients import ApiError, ReferenceClient
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Review, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
@@ -80,6 +80,13 @@ class ApplicationView:
 
 def score_line(factor: ReviewFactor, score: int | str) -> str:
     return f"{factor.title}, {ESTIMATE}. " + (f"{score} on NIH's scale from 1, exceptional, to 9, poor." if factor.scale == "1-9" else "Appropriate." if score == "appropriate" else f"Not yet appropriate. {score}")
+
+def lookup_line(reference: Fact) -> str:
+    if not any(identifiers(reference)):
+        return "It has no PMID or DOI, so Grant Matcher cannot check that it exists."
+    if (found := reference.detail.get("lookup")) is None:
+        return "Not checked yet."
+    return f"Checked on {found['on']}. " + (f"{found['service']} holds {found['id']} as: {found['title']}" if found["title"] else f"{found['service']} has no record of {found['id']}.")
 
 def dropped_points(review: Review) -> str:
     return f"Grant Matcher dropped {review.dropped} point{'' if review.dropped == 1 else 's'} of the reply. {REVIEW_DROPPED}"
@@ -253,6 +260,22 @@ class Workspace:
         if fact_id not in {f.id for f in self.store.facts(self.application_id)}:
             raise WorkspaceError(f"Application {self.application_id} has no input {fact_id}.")
         self.store.retire_fact(fact_id)
+
+    def verify_references(self, client: ReferenceClient | None = None) -> int:
+        client, checked = client or ReferenceClient(), 0
+        for f in [f for f in self.store.facts(self.application_id) if f.kind == "reference" and f.retired_at is None]:
+            pmid, doi = identifiers(f)
+            if not (pmid or doi):
+                continue
+            try:
+                title = client.lookup(pmid, doi)
+            except ApiError as exc:
+                # Nothing is recorded for this reference, so "no record" in detail always means that the index said so.
+                raise ApiError(f"{exc} Grant Matcher checked {checked} reference{'' if checked == 1 else 's'} before this one and saved what it found. Nothing was recorded for the rest.") from exc
+            # The applicant typed the text, so the index's answer goes in detail beside it.
+            self.store.set_fact_detail(f.id, {**f.detail, "lookup": {"service": "PubMed" if pmid else "Crossref", "id": f"PMID {pmid}" if pmid else f"DOI {doi}", "on": datetime.now(timezone.utc).date().isoformat(), "title": title}})
+            checked += 1
+        return checked
 
     def write(self, section: str, text: str, parent: int | None) -> Revision:
         self._rule(section)

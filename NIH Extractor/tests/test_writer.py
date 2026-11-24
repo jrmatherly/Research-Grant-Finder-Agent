@@ -1,4 +1,5 @@
 import json, sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 import pytest
 from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
@@ -114,6 +115,52 @@ def test_a_retired_reference_is_not_a_known_citation(tmp_path) -> None:
     assert "unknown-citation" not in {f.code for f in ws.view().section("specific-aims").findings}
     ws.retire_fact(fact.id)
     assert ws.view().facts == () and "unknown-citation" in {f.code for f in ws.view().section("specific-aims").findings}
+
+class Index:
+    def __init__(self, titles: dict[str, str], fail_on: str = "") -> None: self.titles, self.fail_on, self.asked = titles, fail_on, []
+    def lookup(self, pmid: str = "", doi: str = "") -> str:
+        self.asked.append((pmid, doi))
+        if (pmid or doi) == self.fail_on:
+            raise ApiError("Checking it failed: HTTP Error 503")
+        return self.titles.get(pmid or doi, "")
+
+REFERENCES = {"known": "Smith J. Heart cells. 2021. PMID: 123 doi:10.1038/smith", "unknown": "Jones K. Lost work. 2020. https://doi.org/10.9999/none.", "bare": "Lee A. Unpublished. 2019."}
+
+def _with_references(tmp_path) -> Workspace:
+    ws = start(tmp_path)
+    for label, text in REFERENCES.items():
+        ws.add_fact("reference", text, label=label)
+    ws.write("specific-aims", "We showed [@known], [@unknown] and [@bare].", parent=None)
+    return ws
+
+def test_verify_records_what_each_index_holds_and_warns_on_what_it_does_not(tmp_path) -> None:
+    ws, index = _with_references(tmp_path), Index({"123": "Heart cells."})
+    assert ws.verify_references(index) == 2
+    assert index.asked == [("123", "10.1038/smith"), ("", "10.9999/none")]
+    lookups = {f.label: f.detail.get("lookup") for f in ws.view().facts}
+    assert {k: (v["service"], v["id"], v["title"]) for k, v in lookups.items() if v} == {"known": ("PubMed", "PMID 123", "Heart cells."), "unknown": ("Crossref", "DOI 10.9999/none", "")}
+    assert lookups["bare"] is None and lookups["known"]["on"] == datetime.now(timezone.utc).date().isoformat()
+    assert [f.excerpt for f in ws.view().section("specific-aims").findings if f.code == "unverified-reference"] == ["[@unknown]", "[@bare]"]
+    assert ws.store.facts(ws.application_id)[0].text == REFERENCES["known"]
+
+def test_an_unverified_reference_does_not_block_sign_off(tmp_path) -> None:
+    ws = _with_references(tmp_path)
+    s = ws.view().section("specific-aims")
+    assert ws.sign("specific-aims", "A. Applicant", s.revision_id).findings.count("unverified-reference") == 1
+
+def test_a_failed_lookup_keeps_earlier_results_and_records_nothing_for_the_rest(tmp_path) -> None:
+    ws = _with_references(tmp_path)
+    with pytest.raises(ApiError, match="checked 1 reference before"):
+        ws.verify_references(Index({"123": "Heart cells."}, fail_on="10.9999/none"))
+    assert [bool(f.detail.get("lookup")) for f in ws.view().facts] == [True, False, False]
+
+def test_a_second_run_looks_every_live_reference_up_again(tmp_path) -> None:
+    ws = _with_references(tmp_path)
+    ws.verify_references(Index({}))
+    ws.retire_fact(ws.view().facts[1].id)
+    index = Index({"123": "Heart cells."})
+    assert ws.verify_references(index) == 1 and index.asked == [("123", "10.1038/smith")]
+    assert ws.view().facts[0].detail["lookup"]["title"] == "Heart cells."
 
 def test_a_second_grant_type_for_the_same_announcement_is_its_own_application(tmp_path) -> None:
     ws = start(tmp_path)
