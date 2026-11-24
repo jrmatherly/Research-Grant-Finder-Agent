@@ -2,7 +2,7 @@ import http.server, io, threading, traceback, urllib.error
 import pytest
 from helpers import error_with_unreadable_body, fixture, model, model_for, strict_open
 from nih_grant_matcher import llm
-from nih_grant_matcher.llm import PROVIDERS, ModelError, cautions, connect, list_models
+from nih_grant_matcher.llm import PROVIDERS, ModelError, cautions, connect, list_models, writes_text
 from nih_grant_matcher.store import OpportunityStore
 
 @pytest.mark.parametrize("name, wire", [("claude", "anthropic"), ("openai", "openai"), ("gemini", "gemini"), ("compatible", "openai")])
@@ -188,6 +188,21 @@ def test_each_provider_lists_its_models(name, reply, names, post) -> None:
     post.reply(reply)
     assert list_models(PROVIDERS[name], PROVIDERS[name].base_url, "sk-list-1") == names
     assert "sk-list-1" not in post.url and "sk-list-1" in " ".join(post.headers.values()) and post.body is None
+
+@pytest.mark.parametrize("name, reply, names", [
+    ("claude", {"data": [{"id": "claude-opus-5-5", "type": "model", "lifecycle": "active"}, {"id": "claude-opus-4-5", "type": "model", "lifecycle": "deprecated"}], "has_more": False}, ["claude-opus-5-5"]),
+    ("openai", {"object": "list", "data": [{"id": "model-id-0", "object": "model", "created": 1686935002}, {"id": "gpt-6.2-astra", "object": "model", "created": 1790000000}]}, ["gpt-6.2-astra", "model-id-0"])])
+def test_a_list_leaves_out_a_deprecated_model_and_puts_the_newest_first(name, reply, names, post) -> None:
+    post.reply(reply)
+    assert list_models(PROVIDERS[name], PROVIDERS[name].base_url, "k") == names
+
+@pytest.mark.parametrize("name, listed, kept", [
+    ("openai", ["text-embedding-3-small", "gpt-5.5-pro", "gpt-6.2-astra", "whisper-1"], ["gpt-6.2-astra"]),
+    ("gemini", ["gemini-4-hydrogen", "gemini-2.5-flash-preview-tts", "gemma-4-31b-it"], ["gemini-4-hydrogen", "gemma-4-31b-it"]),
+    ("claude", ["claude-opus-5-5"], ["claude-opus-5-5"]),
+    ("compatible", ["nomic-embed-text", "llama9"], ["nomic-embed-text", "llama9"])])
+def test_only_models_that_write_text_are_offered(name, listed, kept) -> None:
+    assert writes_text(PROVIDERS[name], listed) == kept
 
 def test_a_key_with_a_line_break_stays_out_of_the_error(monkeypatch) -> None:
     monkeypatch.setattr(llm, "_open", strict_open)

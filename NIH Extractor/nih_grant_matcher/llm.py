@@ -28,12 +28,15 @@ class Provider:
     key_env: str
     needs_key: bool = True
     default_model: str = ""
+    key_page: str = ""
+    key_url: str = ""
+    key_note: str = ""
 
 PROVIDERS = {p.name: p for p in (
-    Provider("claude", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", default_model="claude-opus-5-5"),
-    Provider("openai", "openai", "https://api.openai.com/v1", "OPENAI_API_KEY"),
-    Provider("gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY"),
-    Provider("compatible", "openai", "http://localhost:11434/v1", "GRANT_MATCHER_LLM_KEY", needs_key=False))}
+    Provider("claude", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", default_model="claude-opus-5-5", key_page="API keys page of the Claude Console", key_url="https://platform.claude.com/settings/keys", key_note="The Console shows a key once, so copy it before you close the page. Calls are paid from credits that you buy first on the Console's Billing page."),
+    Provider("openai", "openai", "https://api.openai.com/v1", "OPENAI_API_KEY", default_model="gpt-6.2-astra", key_page="API keys page of the OpenAI platform", key_url="https://platform.openai.com/api-keys", key_note="Copy the key when it is shown and keep it somewhere safe. After a first test request, calls need credits that you add on the platform's billing page."),
+    Provider("gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY", default_model="gemini-4-hydrogen", key_page="API Keys page of Google AI Studio", key_url="https://aistudio.google.com/apikey", key_note="A key belongs to a Google Cloud project. A project on the free tier can use some models and not others, and setting up billing for it opens the rest."),
+    Provider("compatible", "openai", "http://localhost:11434/v1", "GRANT_MATCHER_LLM_KEY", needs_key=False, key_note="A server on your own computer, such as Ollama, needs no key. Save one only if the server asks for it."))}
 
 class ModelError(ApiError):
     def __init__(self, message: str, kind: Kind = "other", status: int = 0, wait: float = 2.0) -> None:
@@ -227,14 +230,23 @@ def _gemini_reply(m: HttpModel, data: dict) -> Completion:
 
 _WIRES = {"anthropic": (_anthropic_request, _anthropic_reply), "openai": (_openai_request, _openai_reply), "gemini": (_gemini_request, _gemini_reply)}
 
+# shortcut: a pattern on the name, since only Anthropic's list says what a model does. Add a family when a provider lists a new kind that cannot write text.
+NOT_TEXT = {"openai": r"embedding|moderation|tts|whisper|transcribe|realtime|audio|image|dall-e|sora|live|translate|computer-use|codex|deep-research|-pro\b|babbage|davinci", "gemini": r"tts|image|embedding|live|audio|transcribe|translate|omni|genie|lyria|imagen|veo|robotics|computer-use|deep-research|antigravity|decision|nano-banana|aqa"}
+
+def writes_text(provider: Provider, names: list[str]) -> list[str]:
+    skip = NOT_TEXT.get(provider.name)
+    return [name for name in names if not (skip and re.search(skip, name))]
+
 def list_models(provider: Provider, base_url: str, key: str | None, workspace: str = "") -> list[str]:
     base = base_url.rstrip("/")
     try:
         if provider.wire == "anthropic":
-            return [m["id"] for m in _send(f"{base}/models?limit=1000", {**_bearer(key), **_workspace(workspace), "anthropic-version": ANTHROPIC_VERSION}, None, key, 30)["data"]]
+            # Anthropic's page: a deprecated model stays callable only for an organization that already used it.
+            return [m["id"] for m in _send(f"{base}/models?limit=1000", {**_bearer(key), **_workspace(workspace), "anthropic-version": ANTHROPIC_VERSION}, None, key, 30)["data"] if m.get("lifecycle", "active") == "active"]
         if provider.wire == "gemini":
             return [m["name"].removeprefix("models/") for m in _send(f"{base}/models?pageSize=1000", {"x-goog-api-key": key} if key else {}, None, key, 30)["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
-        return [m["id"] for m in _send(f"{base}/models", _bearer(key), None, key, 30)["data"]]
+        # Newest first, as Anthropic lists its models. OpenAI's page names no order.
+        return [m["id"] for m in sorted(_send(f"{base}/models", _bearer(key), None, key, 30)["data"], key=lambda m: -_count(m.get("created")))]
     except (KeyError, TypeError, AttributeError) as exc:
         raise ModelError(f"The model list from {host_of(base_url)} was not in the form Grant Matcher reads: {exc!r}") from None
 

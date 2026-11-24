@@ -1007,6 +1007,24 @@ def test_the_model_expander_saves_a_key_asks_for_consent_and_tests_the_connectio
     assert b"sk-local-4f2a" not in path.read_bytes()
 
 
+def test_the_model_section_links_the_key_page_and_says_how_many_models_it_left_out(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setenv("GEMINI_API_KEY", "g-key-test-1234")
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    for name, url in (("claude", "https://platform.claude.com/settings/keys"), ("openai", "https://platform.openai.com/api-keys"), ("gemini", "https://aistudio.google.com/apikey")):
+        app.selectbox(key="apply_llm_provider").set_value(name).run(timeout=30)
+        assert any(f"]({url})." in c.value for c in app.caption), name
+    post.reply({"models": [{"name": "models/gemini-4-hydrogen", "supportedGenerationMethods": ["generateContent"]}, {"name": "models/gemini-2.5-flash-preview-tts", "supportedGenerationMethods": ["generateContent"]}]})
+    app.button(key="apply_llm_list_button").click().run(timeout=30)
+    assert any("lists 1 model that writes text and 1 that does not, which is left out." in s.value.replace("\\", "") for s in app.success)
+    # The count alone would pass a build that stores the whole list.
+    assert app.selectbox(key="apply_llm_model").options == ["gemini-4-hydrogen"]
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert any("needs no key" in c.value for c in app.caption)
+
+
 def test_the_workspace_id_box_is_shown_for_claude_only_and_saves_only_an_id(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-1")
     path = _r21_database(tmp_path, start=True)
