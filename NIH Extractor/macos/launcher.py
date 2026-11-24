@@ -5,7 +5,7 @@ from pathlib import Path
 NAME = "Grant Matcher"
 # Holds the one SPUStandardUpdaterController, which stops working once it is released.
 UPDATER: list = []
-# The CA file that macOS ships. The app reads the file its Python was built to read, and only these two names exist on every Mac.
+# The CA file that macOS ships, under both of its names, since /etc links to /private/etc. The app reads the file its Python was built to read.
 OS_CA_FILES = ("/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem")
 
 
@@ -149,7 +149,7 @@ def main() -> int:
         cafile = ssl.get_default_verify_paths().openssl_cafile
         if cafile in OS_CA_FILES:
             return 0
-        print(f"{NAME} would read its CA certificates from {cafile}, which a user's Mac may not have. Build with uv's own Python, which macos/build.sh asks for with UV_MANAGED_PYTHON.", file=sys.stderr)
+        print(f"{NAME} would read its CA certificates from {cafile}, and macOS keeps them in /etc/ssl/cert.pem. Build with a Python that reads that file, as uv's own does, and check that UV_PYTHON does not select another.", file=sys.stderr)
         return 1
     # A windowed app has no console, so an error here would otherwise close the app with nothing shown.
     try:

@@ -12,7 +12,7 @@ The app checks for a new release once a day and offers to install it. `Check for
 
 Version 0.1.1 has no updater. Install the next version by hand once, as in [Download](#download).
 
-Versions 0.2.0 and 0.3.0 cannot open a secure connection, so a search fails with a message that names `SSL_CERT_FILE`. Their updater still works. Install version 0.3.1 or later from the update the app offers, or with `Check for Updates…`.
+Versions 0.1.1, 0.2.0 and 0.3.0 look for their trusted certificates in a file that macOS does not ship, so a search fails with a message that names `SSL_CERT_FILE`. The updater of 0.2.0 and 0.3.0 still works, so install version 0.3.1 or later from the update the app offers, or with `Check for Updates…`. Install over 0.1.1 by hand, as in [Download](#download).
 
 The rest of this page is for building the app yourself with `NIH Extractor/macos/build.sh`.
 

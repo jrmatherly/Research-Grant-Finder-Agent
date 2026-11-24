@@ -1,6 +1,7 @@
 import http.server
 import importlib.util
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -267,7 +268,7 @@ def _check_tls(monkeypatch, cafile: str) -> int:
 
 
 @pytest.mark.parametrize("cafile", ["/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem"])
-def test_check_tls_flag_passes_for_the_ca_file_every_mac_has(monkeypatch, cafile) -> None:
+def test_check_tls_flag_passes_for_the_ca_file_that_macos_ships(monkeypatch, cafile) -> None:
     assert _check_tls(monkeypatch, cafile) == 0
 
 
@@ -278,11 +279,12 @@ def test_check_tls_flag_fails_for_a_ca_file_inside_the_python_that_built_the_app
     assert cafile in capsys.readouterr().err
 
 
-def test_the_build_script_pins_its_python_and_runs_the_certificate_check() -> None:
+def test_the_build_script_pins_its_python_before_uv_runs_and_runs_the_certificate_check() -> None:
     # Nothing else fails when either line goes, and the release that follows could open no HTTPS connection.
-    script = (LAUNCHER.parent / "build.sh").read_text()
-    assert "export UV_MANAGED_PYTHON=1" in script
-    assert "--check-tls ||" in script
+    lines = (LAUNCHER.parent / "build.sh").read_text().splitlines()
+    # The first uv run chooses the Python, so the export counts only above it.
+    assert lines.index("export UV_MANAGED_PYTHON=1") < next(i for i, line in enumerate(lines) if re.search(r"\buv run\b", line) and not line.startswith("#"))
+    assert any(line.startswith('"$app/Contents/MacOS/Grant Matcher" --check-tls ||') for line in lines)
 
 
 def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:

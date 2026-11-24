@@ -25,9 +25,15 @@ def _certificate_failed(exc: BaseException) -> bool:
 
 def _certificate_hint() -> str:
     paths = ssl.get_default_verify_paths()
-    # With neither its CA file nor its CA folder, OpenSSL trusts no server, and no proxy is involved. An app built with a Python that names a file its user's computer lacks is in that state.
-    if paths.cafile is None and paths.capath is None:
-        return f". Python found no CA certificates, because {os.environ.get(paths.openssl_cafile_env) or paths.openssl_cafile} does not exist, so it trusts no server. Set SSL_CERT_FILE to a CA bundle."
+    try:
+        # macOS ships its CA folder empty, so a folder counts only when it holds something.
+        bare = paths.cafile is None and (paths.capath is None or not os.listdir(paths.capath))
+    # The hint is built while a failure is reported, so a folder that cannot be read must not replace that failure.
+    except OSError:
+        bare = False
+    # With no CA file and nothing in its CA folder, OpenSSL trusts no server, and no proxy is involved. A wrong SSL_CERT_FILE leaves it so, and so does an app built with a Python that names a file its user's computer lacks.
+    if bare:
+        return f". Python found no CA certificates, because {os.environ.get(paths.openssl_cafile_env) or paths.openssl_cafile} does not exist, so it trusts no server. If SSL_CERT_FILE is set, it must name a CA bundle that exists."
     return ". Python does not trust the server's certificate. Behind a proxy that inspects TLS, set SSL_CERT_FILE to the proxy's CA bundle."
 
 def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> bytes:

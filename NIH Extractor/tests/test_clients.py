@@ -122,8 +122,32 @@ def test_a_certificate_error_with_no_ca_file_names_the_file_and_not_a_proxy(monk
     assert "proxy" not in message
 
 
-def test_a_certificate_error_with_a_ca_file_points_at_a_proxy(monkeypatch) -> None:
-    assert "proxy" in _certificate_error(monkeypatch, cafile="/etc/ssl/cert.pem")
+def test_a_certificate_error_with_an_empty_ca_folder_and_no_ca_file_names_the_file(monkeypatch, tmp_path) -> None:
+    # macOS ships its CA folder empty, so the folder being there says nothing about certificates.
+    message = _certificate_error(monkeypatch, cafile=None, capath=str(tmp_path), openssl_cafile="/gone/cert.pem")
+    assert "/gone/cert.pem does not exist" in message and "proxy" not in message
+
+
+def test_a_certificate_error_names_the_file_that_the_variable_points_at(monkeypatch, tmp_path) -> None:
+    found = ssl.get_default_verify_paths()._replace(cafile=None, capath=str(tmp_path), openssl_cafile="/built-in/cert.pem")
+    monkeypatch.setattr(clients.ssl, "get_default_verify_paths", lambda: found)
+    monkeypatch.setenv(found.openssl_cafile_env, "/typo/bundle.pem")
+    assert "/typo/bundle.pem does not exist" in clients._certificate_hint()
+
+
+@pytest.mark.parametrize("has", ["folder", "file", "both"])
+def test_a_certificate_error_with_a_ca_file_or_certificates_in_the_ca_folder_points_at_a_proxy(monkeypatch, tmp_path, has) -> None:
+    (tmp_path / "ca.0").write_text("a certificate")
+    message = _certificate_error(monkeypatch, cafile=None if has == "folder" else "/etc/ssl/cert.pem", capath=None if has == "file" else str(tmp_path), openssl_cafile="/gone/cert.pem")
+    assert "proxy" in message and "SSL_CERT_FILE" in message
+    assert "does not exist" not in message
+
+
+def test_a_ca_folder_that_cannot_be_read_does_not_replace_the_certificate_error(monkeypatch, tmp_path) -> None:
+    def refuse(path):
+        raise PermissionError(path)
+    monkeypatch.setattr(clients.os, "listdir", refuse)
+    assert "unable to get local issuer certificate" in _certificate_error(monkeypatch, cafile=None, capath=str(tmp_path))
 
 
 def test_a_failed_request_names_the_address_without_its_query(monkeypatch) -> None:

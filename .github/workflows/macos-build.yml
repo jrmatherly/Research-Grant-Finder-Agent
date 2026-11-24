@@ -1,12 +1,15 @@
 name: "🍎 macOS build"
 
-# The release workflow builds the app only on a tag, when a failure costs a release. This builds it unsigned on a
-# pull request that changes how the app is built, so the runner's build is tried before a tag depends on it.
+# The release workflow builds the app only on a tag, when a failure costs a release. This builds it with an ad hoc
+# signature on a pull request that changes what the app bundles or how it is built, so the runner's build is tried
+# before a tag depends on it.
 on:
   pull_request:
     branches: [main]
     paths:
       - 'NIH Extractor/macos/**'
+      - 'NIH Extractor/nih_grant_matcher/**'
+      - 'NIH Extractor/streamlit_app.py'
       - 'NIH Extractor/pyproject.toml'
       - 'NIH Extractor/uv.lock'
       - 'NIH Extractor/.python-version'
@@ -14,7 +17,7 @@ on:
       - .github/workflows/macos-release.yml
   workflow_dispatch:
 
-# Nothing here signs, notarizes or publishes, so the token is read-only and the job reads no secret.
+# Nothing here uses a Developer ID, notarizes or publishes, so the token is read-only and the job reads no secret.
 permissions:
   contents: read
 
@@ -25,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    name: "🏗️ build Grant Matcher unsigned"
+    name: "🏗️ build Grant Matcher ad hoc"
     # The runner the release uses, so that this build meets what the release build meets.
     runs-on: macos-26
     timeout-minutes: 30
@@ -46,11 +49,11 @@ jobs:
       # No signing variable is set, so build.sh signs ad hoc and sends nothing to Apple. Its checks are the test.
       - name: "🏗️ Build the app and run its checks"
         run: macos/build.sh
-      # Kept so that the app the runner built can be opened and tried, which a local build cannot stand in for.
-      - name: "⬆️ Keep the unsigned disk image"
+      # Kept so that the app the runner built can be tried, which a local build cannot stand in for.
+      - name: "⬆️ Keep the ad hoc disk image"
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: unsigned-dmg
+          name: ad-hoc-dmg
           path: NIH Extractor/macos/dist/Grant Matcher.dmg
           if-no-files-found: error
           retention-days: 3

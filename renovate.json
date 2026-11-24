@@ -71,7 +71,7 @@
       "automerge": false
     },
     {
-      "description": "PyInstaller and pywebview build the macOS app, which CI does not build. Their own PR, so that a local macos/build.sh run can check it.",
+      "description": "PyInstaller and pywebview build the macOS app. Their own PR, so that the macos-build.yml check on it tests only them.",
       "matchManagers": [
         "pep621"
       ],
