@@ -21,6 +21,9 @@ jobs:
     runs-on: macos-26
     # A notarytool wait of up to 30 minutes, plus the build.
     timeout-minutes: 60
+    env:
+      # The app carries the CA file path of the Python that builds it, and the runner's own Python reads a file inside its own install, which a user's Mac has only when the same Python is installed there. So the tests and the build both run on uv's Python.
+      UV_MANAGED_PYTHON: "1"
     defaults:
       run:
         working-directory: NIH Extractor

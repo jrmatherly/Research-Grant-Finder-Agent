@@ -258,6 +258,26 @@ def test_check_updater_flag_fails_when_sparkle_cannot_load(monkeypatch, tmp_path
         launcher.main()
 
 
+def _check_tls(monkeypatch, cafile: str) -> int:
+    launcher = _load(monkeypatch)
+    monkeypatch.setattr(launcher.ssl, "get_default_verify_paths", lambda: types.SimpleNamespace(openssl_cafile=cafile))
+    monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("the check must not open a window"))
+    monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--check-tls"])
+    return launcher.main()
+
+
+@pytest.mark.parametrize("cafile", ["/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem"])
+def test_check_tls_flag_passes_for_the_ca_file_every_mac_has(monkeypatch, cafile) -> None:
+    assert _check_tls(monkeypatch, cafile) == 0
+
+
+def test_check_tls_flag_fails_for_a_ca_file_inside_the_python_that_built_the_app(monkeypatch, capsys) -> None:
+    # The file the python.org Python compiles in. The release runner has it and a user's Mac does not.
+    cafile = "/Library/Frameworks/Python.framework/Versions/3.13/etc/openssl/cert.pem"
+    assert _check_tls(monkeypatch, cafile) == 1
+    assert cafile in capsys.readouterr().err
+
+
 def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
     scheduled = []

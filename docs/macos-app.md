@@ -18,7 +18,7 @@ The rest of this page is for building the app yourself with `NIH Extractor/macos
 
 - A Mac with Apple silicon and macOS 14 or later. The build makes an `arm64` app only.
 - The Xcode command line tools, or Xcode. `xcode-select -p` prints their folder when they are installed.
-- [uv](https://docs.astral.sh/uv/). The build installs PyInstaller and pywebview from the `macos` dependency group in `pyproject.toml`. `uv sync` without `--group macos` does not install them.
+- [uv](https://docs.astral.sh/uv/). The build installs PyInstaller and pywebview from the `macos` dependency group in `pyproject.toml`. `uv sync` without `--group macos` does not install them. The build runs on uv's own Python and downloads it when it is missing, because the app reads its CA certificates from the file that Python was built to read. A project environment made from another Python is replaced.
 
 ## Build
 

@@ -1,10 +1,12 @@
-import http.client, multiprocessing, os, socket, subprocess, sys, threading, time, traceback, urllib.request
+import http.client, multiprocessing, os, socket, ssl, subprocess, sys, threading, time, traceback, urllib.request
 from html import escape
 from pathlib import Path
 
 NAME = "Grant Matcher"
 # Holds the one SPUStandardUpdaterController, which stops working once it is released.
 UPDATER: list = []
+# The CA file that macOS ships. The app reads the file its Python was built to read, and only these two names exist on every Mac.
+OS_CA_FILES = ("/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem")
 
 
 def data_dir(home: Path) -> Path:
@@ -142,6 +144,13 @@ def main() -> int:
         # build.sh runs this. Nothing else fails a build whose updater cannot load, and such a release would be the last one its users get.
         sparkle_class(sparkle_framework()).alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(False, None, None)
         return 0
+    if "--check-tls" in sys.argv:
+        # build.sh runs this. Nothing else fails a build that trusts no certificate on a user's Mac, where every search and model call would then fail.
+        cafile = ssl.get_default_verify_paths().openssl_cafile
+        if cafile in OS_CA_FILES:
+            return 0
+        print(f"{NAME} would read its CA certificates from {cafile}, which a user's Mac may not have. Build with uv's own Python, which macos/build.sh asks for with UV_MANAGED_PYTHON.", file=sys.stderr)
+        return 1
     # A windowed app has no console, so an error here would otherwise close the app with nothing shown.
     try:
         run_window()
