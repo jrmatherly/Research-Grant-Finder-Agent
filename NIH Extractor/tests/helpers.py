@@ -1,4 +1,4 @@
-import json, re, subprocess
+import http.client, json, re, subprocess, urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
 from nih_grant_matcher.llm import PROVIDERS, HttpModel, ModelError
@@ -53,6 +53,14 @@ def model(name: str, key: str | None = "k", base_url: str = "") -> HttpModel:
 
 def model_for(wire: str) -> HttpModel:
     return model(next(p.name for p in PROVIDERS.values() if p.wire == wire))
+
+def strict_open(request, timeout=None):
+    # Runs http.client's own header check, which refuses a line break, and connects to nothing.
+    conn = http.client.HTTPConnection(urllib.parse.urlsplit(request.full_url).hostname)
+    conn.putrequest(request.get_method(), request.selector)
+    for name, value in request.header_items():
+        conn.putheader(name, value)
+    raise AssertionError("http.client accepted every header, so no request was refused")
 
 class FakeModel:
     provider, name, host = "fake", "fake-1", "example.test"

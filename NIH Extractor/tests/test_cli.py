@@ -417,7 +417,24 @@ def test_models_without_a_key_says_where_to_put_one(tmp_path, monkeypatch, capsy
     monkeypatch.delenv("OPENAI_API_KEY_FILE", raising=False)
     monkeypatch.setattr("nih_grant_matcher.keys.PLATFORM", "linux")
     assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "openai"]) == 1
-    assert "No key. Set OPENAI_API_KEY" in capsys.readouterr().out
+    assert "No key. Set OPENAI_API_KEY" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("where, says", [("variable", "OPENAI_API_KEY"), ("file", "llm-keys.json cannot be read")])
+def test_models_says_in_one_line_that_a_key_cannot_be_read(where, says, tmp_path, monkeypatch, capsys) -> None:
+    from helpers import strict_open
+    from nih_grant_matcher import llm
+    monkeypatch.setattr(llm, "_open", strict_open)
+    monkeypatch.setattr("nih_grant_matcher.keys.PLATFORM", "linux")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY_FILE", raising=False)
+    if where == "variable":
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-leak\r9z8y")
+    else:
+        (tmp_path / "llm-keys.json").write_text("{not json", encoding="utf-8")
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "openai"]) == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and says in err and "sk-leak" not in err
 
 
 def test_models_refuses_a_base_url_that_is_not_an_address(tmp_path, capsys) -> None:

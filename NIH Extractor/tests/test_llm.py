@@ -1,6 +1,8 @@
+import http.server, io, threading, traceback, urllib.error
 import pytest
-from helpers import fixture, model, model_for
-from nih_grant_matcher.llm import PROVIDERS, ModelError, connect, list_models
+from helpers import fixture, model, model_for, strict_open
+from nih_grant_matcher import llm
+from nih_grant_matcher.llm import PROVIDERS, ModelError, cautions, connect, list_models
 from nih_grant_matcher.store import OpportunityStore
 
 @pytest.mark.parametrize("name, wire", [("claude", "anthropic"), ("openai", "openai"), ("gemini", "gemini"), ("compatible", "openai")])
@@ -109,6 +111,95 @@ def test_each_provider_lists_its_models(name, reply, names, post) -> None:
     post.reply(reply)
     assert list_models(PROVIDERS[name], PROVIDERS[name].base_url, "sk-list-1") == names
     assert "sk-list-1" not in post.url and "sk-list-1" in " ".join(post.headers.values()) and post.body is None
+
+def test_a_key_with_a_line_break_stays_out_of_the_error(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "_open", strict_open)
+    with pytest.raises(ModelError) as failed:
+        model("claude", key="sk-leak\r9z8y").complete("s", "u")
+    shown = "".join(traceback.format_exception_only(failed.value))
+    assert "sk-leak" not in shown and "9z8y" not in shown and "[key]" in shown and failed.value.__context__ is None and failed.value.__cause__ is None
+
+def _serve(answer) -> http.server.HTTPServer:
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.server.seen.append(self.headers.get("Authorization"))
+            answer(self)
+        def log_message(self, *args) -> None: pass
+    httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    httpd.seen = []
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd
+
+def _redirect_to(port: int):
+    def answer(handler) -> None:
+        handler.send_response(302)
+        handler.send_header("Location", f"http://127.0.0.1:{port}/elsewhere/v1/models")
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+    return answer
+
+def _models_reply(handler) -> None:
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.end_headers()
+    handler.wfile.write(b'{"data": []}')
+
+def test_a_redirect_is_not_followed_so_the_key_reaches_no_other_server(monkeypatch) -> None:
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    other = _serve(_models_reply)
+    first = _serve(_redirect_to(other.server_port))
+    try:
+        list_models(PROVIDERS["openai"], f"http://127.0.0.1:{first.server_port}/v1", "sk-redirect-1")
+        failed = None
+    except ModelError as exc:
+        failed = exc
+    finally:
+        for httpd in (first, other):
+            httpd.shutdown()
+            httpd.server_close()
+    assert other.seen == [] and first.seen == ["Bearer sk-redirect-1"]
+    assert failed.kind == "other" and "redirect" in str(failed) and "127.0.0.1" in str(failed) and "/elsewhere" not in str(failed)
+
+def test_an_openai_reply_whose_text_is_not_a_string_has_no_text(post) -> None:
+    ok = fixture("openai-ok")
+    post.reply({**ok, "choices": [{**ok["choices"][0], "message": {"role": "assistant", "content": [{"type": "text", "text": "Hello."}]}}]})
+    with pytest.raises(ModelError, match="no text"):
+        model("openai").complete("s", "u")
+
+@pytest.mark.parametrize("name, wire, usage", [("claude", "anthropic", {"input_tokens": None, "output_tokens": None}), ("openai", "openai", {"prompt_tokens": None, "completion_tokens": None}), ("gemini", "gemini", {"total_input_tokens": None})])
+def test_a_missing_or_null_token_count_is_zero(name, wire, usage, post) -> None:
+    post.reply({**fixture(f"{wire}-ok"), "usage": usage})
+    done = model(name).complete("s", "u")
+    assert (done.input_tokens, done.output_tokens) == (0, 0)
+
+def test_a_model_list_of_the_wrong_shape_is_a_model_error(post) -> None:
+    post.reply({"models": ["gemini-3.8-flash"]})
+    with pytest.raises(ModelError, match="not in the form"):
+        list_models(PROVIDERS["gemini"], PROVIDERS["gemini"].base_url, "g-key-1")
+
+@pytest.mark.parametrize("header", ["-5", "nan", "soon"])
+def test_a_retry_after_that_is_not_a_wait_means_two_seconds(header, post) -> None:
+    post.fail(429, fixture("anthropic-error"), headers={"retry-after": header})
+    post.reply(fixture("anthropic-ok"))
+    model("claude").complete("s", "u")
+    assert post.slept == [2.0]
+
+def test_a_reply_that_is_not_json_is_shown_without_the_key(post) -> None:
+    post.queue.append(lambda url: io.BytesIO(b"<html>Bad key sk-test-123</html>"))
+    with pytest.raises(ModelError, match="did not return JSON") as failed:
+        model("openai", key="sk-test-123").complete("s", "u")
+    assert "sk-test" not in str(failed.value)
+
+def test_an_error_body_cut_short_does_not_keep_part_of_the_key(post) -> None:
+    def failed_with_html(url: str):
+        raise urllib.error.HTTPError(url, 502, "", {}, io.BytesIO(("x" * 292 + " sk-test-123").encode()))
+    post.queue.append(failed_with_html)
+    with pytest.raises(ModelError) as failed:
+        model("openai", key="sk-test-123").complete("s", "u")
+    assert "sk-test" not in str(failed.value)
+
+def test_an_address_in_capitals_still_gets_the_unencrypted_warning() -> None:
+    assert any("unencrypted" in said for said in cautions(PROVIDERS["compatible"], "HTTP://gpu.example:8000/v1"))
 
 def test_connect_needs_a_provider_and_its_key(tmp_path, monkeypatch) -> None:
     store = OpportunityStore(tmp_path / "g.sqlite3")
