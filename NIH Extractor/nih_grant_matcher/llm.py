@@ -155,17 +155,23 @@ class HttpModel:
         self._key = key
         # Ollama's page lists max_tokens, and OpenAI calls it deprecated in favour of max_completion_tokens.
         self._limit = "max_tokens" if provider.name == "compatible" else "max_completion_tokens"
+        # OpenAI's page says developer messages replace system messages from o1 on, and Ollama's lists system and no developer role.
+        self._role = "system" if provider.name == "compatible" else "developer"
     def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion:
         build, read = _WIRES[self.wire]
         url, headers, body = build(self, system, user, max_tokens)
         try:
             data = _retry(lambda: _send(url, headers, body, self._key))
         except ModelError as exc:
-            if not (self.wire == "openai" and exc.status == 400 and self._limit in str(exc)):
+            said = str(exc) if self.wire == "openai" and exc.status == 400 else ""
+            # The server named the token limit or the role it was sent, so it did not process the request.
+            if self._limit in said:
+                other = "max_tokens" if self._limit == "max_completion_tokens" else "max_completion_tokens"
+                body = {**{k: v for k, v in body.items() if k != self._limit}, other: max_tokens}
+            elif re.search(r"\brole\b", said) and re.search(rf"\b{self._role}\b", said):
+                body = {**body, "messages": [{"role": "system" if self._role == "developer" else "developer", "content": system}, body["messages"][1]]}
+            else:
                 raise
-            # The server named the token limit it was sent, so it did not process the request.
-            other = "max_tokens" if self._limit == "max_completion_tokens" else "max_completion_tokens"
-            body = {**{k: v for k, v in body.items() if k != self._limit}, other: max_tokens}
             try:
                 data = _retry(lambda: _send(url, headers, body, self._key))
             except ModelError as again:
@@ -194,7 +200,7 @@ def _anthropic_reply(m: HttpModel, data: dict) -> Completion:
     return Completion(text, data.get("model") or m.name, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0, data["stop_reason"] in ("max_tokens", "model_context_window_exceeded"))
 
 def _openai_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:
-    return f"{m.base_url}/chat/completions", _bearer(m._key), {"model": m.name, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}], m._limit: max_tokens}
+    return f"{m.base_url}/chat/completions", _bearer(m._key), {"model": m.name, "messages": [{"role": m._role, "content": system}, {"role": "user", "content": user}], m._limit: max_tokens}
 
 def _openai_reply(m: HttpModel, data: dict) -> Completion:
     choice = data["choices"][0]

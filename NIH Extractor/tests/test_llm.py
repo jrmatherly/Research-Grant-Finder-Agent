@@ -135,6 +135,33 @@ def test_a_server_that_wants_the_other_token_limit_gets_it_on_the_second_request
     assert model(name, key=None, base_url="http://localhost:11434/v1").complete("s", "u").text == "Hello."
     assert post.calls == 2 and then in post.body and sent not in post.body
 
+# OpenAI's page: from o1 on, developer messages replace system messages. Ollama's page lists system and no developer role.
+@pytest.mark.parametrize("name, role", [("openai", "developer"), ("compatible", "system")])
+def test_the_instructions_go_in_the_role_each_provider_documents(name, role, post) -> None:
+    post.reply(fixture("openai-ok"))
+    model(name, base_url="http://localhost:11434/v1" if name == "compatible" else "").complete("the instructions", "u")
+    assert post.body["messages"] == [{"role": role, "content": "the instructions"}, {"role": "user", "content": "u"}]
+
+@pytest.mark.parametrize("name, sent, then", [("openai", "developer", "system"), ("compatible", "system", "developer")])
+def test_a_server_that_refuses_the_role_gets_the_other_one_on_the_second_request(name, sent, then, post) -> None:
+    post.fail(400, {"error": {"message": f"Unsupported value: 'messages[0].role' does not support '{sent}' with this model.", "type": "invalid_request_error", "param": "messages[0].role", "code": "unsupported_value"}})
+    post.reply(fixture("openai-ok"))
+    assert model(name, base_url="http://localhost:11434/v1" if name == "compatible" else "").complete("s", "u").text == "Hello."
+    assert post.calls == 2 and post.body["messages"][0] == {"role": then, "content": "s"} and post.body["messages"][1]["role"] == "user"
+
+def test_when_the_other_role_is_refused_too_the_first_error_is_shown_and_nothing_more_is_sent(post) -> None:
+    post.fail(400, {"error": {"message": "Unsupported value: 'messages[0].role' does not support 'developer' with this model."}})
+    post.fail(400, {"error": {"message": "Unsupported value: 'messages[0].role' does not support 'system' with this model."}})
+    with pytest.raises(ModelError, match="'developer'"):
+        model("openai").complete("s", "u")
+    assert post.calls == 2
+
+def test_a_400_that_names_neither_the_role_nor_the_limit_is_not_sent_again(post) -> None:
+    post.fail(400, {"error": {"message": "The developer of this model has not enabled it for your project."}})
+    with pytest.raises(ModelError):
+        model("openai").complete("s", "u")
+    assert post.calls == 1
+
 def test_a_refusal_is_an_error_of_its_own_kind(post) -> None:
     post.reply({**fixture("anthropic-ok"), "stop_reason": "refusal", "content": [], "stop_details": {"type": "refusal", "category": "bio", "explanation": "Declined."}})
     with pytest.raises(ModelError) as failed:
