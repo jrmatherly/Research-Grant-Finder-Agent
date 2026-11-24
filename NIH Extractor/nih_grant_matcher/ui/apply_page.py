@@ -121,7 +121,7 @@ def _propose(ws: Workspace, section: str, action: str, instruction: str = "") ->
 def _extract(ws: Workspace) -> str:
     ws.model = connect(ws.store)
     found, dropped = ws.extract_requirements()
-    return f"{read_summary(found)} Confirm or reject each under Requirements." + (f" Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply. {DROPPED}" if dropped else "")
+    return f"{read_summary(found)} Confirm or reject each under Requirements." + (f" Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the model's replies. {DROPPED}" if dropped else "")
 
 def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
     try:
@@ -317,7 +317,7 @@ def _requirements_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id
         st.caption(f"[{source.url}]({source.url}), read on {source.read_on}. {source.says}")
     st.subheader("What the announcement adds")
     if ws.model is not None:
-        st.caption(f"A model can read Sections I, IV and V and list what they ask for, each with the sentence it comes from. The text goes to {escape_markdown(ws.model.host)}, and nothing counts until you confirm it.")
+        st.caption(f"A model can read Sections I, IV and V and list what they ask for, each with the words of the announcement it comes from. The text goes to {escape_markdown(ws.model.host)}, and nothing counts until you confirm it.")
     else:
         st.caption(f"Reading the announcement needs a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     st.button("Ask the model to read the announcement", key="apply_extract_button", disabled=ws.model is None or view.announcement is None, help="Set up a model under Model first." if ws.model is None else "Fetch the announcement under Announcement first." if view.announcement is None else None, on_click=_on, args=(db_path, app_id, _extract))

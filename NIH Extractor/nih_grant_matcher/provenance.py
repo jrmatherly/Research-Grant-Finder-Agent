@@ -39,6 +39,9 @@ def attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[
         words = [(w, "applicant") for w in ordered[first - 1].text.split()] if first else []
     for revision in ordered[first:]:
         new, origin = revision.text.split(), "applicant" if revision.author == "applicant" else revision.action
+        # The draft prompt never holds the section's text, so a word that a draft shares with it is the model's all the same.
+        if origin == "draft":
+            words = []
         opcodes = SequenceMatcher(a=[w for w, _ in words], b=new, autojunk=False).get_opcodes()
         words = [pair for tag, i1, i2, j1, j2 in opcodes for pair in (words[i1:i2] if tag == "equal" else [(w, origin) for w in new[j1:j2]])]
     with _LOCK:

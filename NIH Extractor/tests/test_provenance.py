@@ -135,7 +135,7 @@ def _plain(revisions, revision_id):
     words = []
     for revision in chain[::-1]:
         new, origin = revision.text.split(), "applicant" if revision.author == "applicant" else revision.action
-        opcodes = SequenceMatcher(a=[w for w, _ in words], b=new, autojunk=False).get_opcodes()
+        opcodes = SequenceMatcher(a=[] if origin == "draft" else [w for w, _ in words], b=new, autojunk=False).get_opcodes()
         words = [pair for tag, i1, i2, j1, j2 in opcodes for pair in (words[i1:i2] if tag == "equal" else [(w, origin) for w in new[j1:j2]])]
     return tuple(words)
 
@@ -172,3 +172,11 @@ def test_two_histories_that_end_in_the_same_text_keep_their_own_records() -> Non
     mine = (_rev(1, None, "applicant", "We study cardiac cells."),)
     polished = (_rev(1, None, "applicant", "We study heart cells."), _rev(2, 1, "model", "We study cardiac cells.", call=7))
     assert attribution(mine, 1) == _plain(mine, 1) and attribution(polished, 2) == _plain(polished, 2) and attribution(mine, 1) != attribution(polished, 2)
+
+def test_every_word_of_a_draft_is_the_models_and_a_later_edit_is_the_applicants() -> None:
+    mine, text = _rev(1, None, "applicant", "We study heart cells in mice."), "We study heart cells in rats."
+    drafted = (mine, Revision(2, "specific-aims", 1, "model", "draft", text, 5, NOW), Revision(3, "specific-aims", 2, "applicant", "write", "We study heart cells in old rats.", None, NOW))
+    assert attribution(drafted, 2) == tuple((w, "draft") for w in text.split())
+    assert [origin for _, origin in attribution(drafted, 3)] == ["draft"] * 5 + ["applicant", "draft"]
+    for action in ("polish", "revise"):
+        assert [origin for _, origin in attribution((mine, Revision(2, "specific-aims", 1, "model", action, text, 5, NOW)), 2)] == ["applicant"] * 5 + [action]

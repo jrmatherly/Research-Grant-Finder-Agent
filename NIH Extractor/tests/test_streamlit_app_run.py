@@ -1282,7 +1282,7 @@ def test_the_model_reads_the_announcement_and_says_what_it_dropped(tmp_path, mon
     app.button(key="apply_extract_button").click().run(timeout=30)
     assert not app.exception and post.calls == 2
     page = _page_text(app)
-    assert "The model read 1 new requirement" in page and "dropped 1 item" in page and "a limit whose number is not in its quote" in page
+    assert "The model read 1 requirement from the announcement that you have not decided." in page and "dropped 1 item of the model's replies" in page and "a limit whose number does not stand on its own" in page
     assert any("A model read this." in m.value and "At most 4 pages." in m.value for m in app.markdown)
 
 

@@ -19,7 +19,7 @@ DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
 ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
 STALE_PROPOSAL = "The section changed after the model read it, so this proposal no longer fits. Ask the model again."
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
-DROPPED = "It drops an item whose quote is not a whole sentence of the announcement, a limit whose number is not in its quote, and an item that is not in the form asked for."
+DROPPED = "It drops an item whose quote is not in the announcement or holds fewer than 20 letters and digits, a limit whose number does not stand on its own in its quote and in the announcement or that names no section, and an item that is not in the form asked for."
 
 class WorkspaceError(ValueError):
     pass
@@ -102,9 +102,9 @@ def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -
     return [(r, "the new text no longer has the sentence it came from") for r in gone if r.confirmed is not None] + [(r, "Grant Matcher no longer reads that requirement from the new text" if _same(r) in carried else "the new text no longer has the sentence it came from") for r in decided if _same(r) not in carried or _same(r) not in parsed]
 
 def read_summary(found: tuple[Requirement, ...]) -> str:
-    # A decided row is carried over from an earlier read, and a row this read added is not yet decided.
+    # A decided row is carried over from an earlier read, and every other row is from this read, new or read again.
     new, kept = sum(r.confirmed is None for r in found), sum(r.confirmed is not None for r in found)
-    return f"The model read {new} new requirement{'' if new == 1 else 's'} from the announcement." + (f" Your decision on {kept} requirement{'' if kept == 1 else 's'} read earlier still stands." if kept else "")
+    return f"The model read {new} requirement{'' if new == 1 else 's'} from the announcement that you have not decided." + (f" Your decision on {kept} requirement{'' if kept == 1 else 's'} read earlier still stands." if kept else "")
 
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
@@ -210,13 +210,20 @@ class Workspace:
         found, dropped = [], 0
         for numeral, text in parts:
             call, done = self._ask("", "extract", prompts.extract(text, numeral, GRANT_TYPES[app.grant_type]), None)
+            # A save would delete the undecided rows of the last read, so a reply with no list fails the read as a failed call does.
+            if prompts.reply_items(done.text) is None:
+                raise ModelError(f"The reply for Section {numeral} was not a list of requirements, so nothing was read. Nothing was changed, and the calls are in the log. Ask again.")
             kept, lost = prompts.parse_requirements(done.text, announcement.text)
             found, dropped = found + [replace(r, call_id=call.id) for r in kept], dropped + lost
         # A decision stays with its item while the item's quote is in the text, and a new reading of the same item does not add it twice.
         items = {_quoted(r): r for r in self.store.requirements(app.id) if r.origin == "model" and r.confirmed is not None and quoted_in(r.quote, announcement.text)}
         for r in found:
             items.setdefault(_quoted(r), r)
-        return tuple(self.store.replace_requirements(app.id, "model", items.values())), dropped
+        # The announcement has reached the host by now, so a bare database error would hide that it was sent.
+        try:
+            return tuple(self.store.replace_requirements(app.id, "model", items.values())), dropped
+        except sqlite3.Error as exc:
+            raise ModelError(f"The announcement text was sent to {self.model.host} and the calls are in the log, but Grant Matcher could not save what the model read ({exc}). Nothing was saved, and asking again sends the text again.") from None
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
         if requirement_id not in {r.id for r in self.store.requirements(self.application_id)}:
