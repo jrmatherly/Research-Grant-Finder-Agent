@@ -10,6 +10,10 @@ class ApiError(RuntimeError):
 
 UNTITLED = "(the record has no title)"
 
+def one_line(text: str) -> str:
+    # Text from the network or a model is printed in a terminal too, so a control character goes and it becomes one line.
+    return " ".join("".join(c if c.isprintable() else " " for c in text).split())
+
 def _certificate_failed(exc: BaseException) -> bool:
     # urllib wraps a failure on connect in URLError and leaves a later one bare.
     return isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
@@ -198,8 +202,7 @@ class ReferenceClient:
             title = self._pubmed(pmid) if pmid else self._crossref(doi)
         except ApiError as exc:
             raise ApiError(f"Checking {f'PMID {pmid} with PubMed' if pmid else f'DOI {doi} with Crossref'} failed: {exc}") from exc
-        # The title is text from the network, printed in a terminal too, so a control character goes and it is cut to a line.
-        return "" if title is None else " ".join("".join(c if c.isprintable() else " " for c in title).split())[:300] or UNTITLED
+        return "" if title is None else one_line(title)[:300] or UNTITLED
     def _pubmed(self, pmid: str) -> str | None:
         query = urllib.parse.urlencode({"db": "pubmed", "id": pmid, "retmode": "json", "tool": "nih-grant-matcher"})
         parsed = _read_json(urllib.request.Request(f"{self.pubmed_url}?{query}", headers={"User-Agent": "nih-grant-matcher/0.1"}), self.timeout)

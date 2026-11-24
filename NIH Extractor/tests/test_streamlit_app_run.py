@@ -1302,7 +1302,7 @@ def test_a_review_shows_each_score_as_the_model_s_estimate_and_each_point_with_i
     app.button(key="apply_review_button").click().run(timeout=30)
     page = _page_text(app)
     assert not app.exception and post.calls == 1 and "We study heart cells in failing hearts." in post.body["messages"][1]["content"]
-    assert page.count("the model's estimate, not NIH's") == 3 and "5 on NIH's scale" in page and "Not yet appropriate. No cardiologist is named." in page
+    assert page.count("the model's estimate, not NIH's") == 3 and "5 on NIH's scale" in page and "The model wrote: No cardiologist is named." in page and "Not yet appropriate" not in page
     assert "No sample size." in page and "dropped 1 point" in page and "We study heart cells in failing hearts." in [t.value for t in app.text]
 
 def test_the_model_reads_the_announcement_and_says_what_it_dropped(tmp_path, monkeypatch, post) -> None:
@@ -1354,3 +1354,40 @@ def test_a_draft_for_an_empty_section_says_the_section_has_no_text_yet(tmp_path,
     app.button(key="apply_draft_button").click().run(timeout=30)
     captions = [c.value for c in app.caption]
     assert not app.exception and "The section has no text yet." in captions and "Revision None" not in captions
+
+
+def test_a_saved_review_without_a_factor_shows_it_as_not_scored(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.models import Review
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        revision = store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells in failing hearts.")
+        call = store.add_call(1, "specific-aims", "review", "openai", "llama9", "s", "p", "r", parent_id=revision.id)
+        store.add_review(1, revision.id, call.id, Review(revision.id, {"importance": 2}, (), "llama9"))
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and "Rigor and Feasibility. This review has no score for it." in _page_text(app)
+
+
+def test_a_review_of_a_revision_saved_over_during_the_call_is_not_said_to_be_shown(tmp_path, monkeypatch) -> None:
+    import json
+    from helpers import FakeModel
+    from nih_grant_matcher.ui import apply_page
+    from nih_grant_matcher.writer import Workspace
+    store = OpportunityStore(_r21_database(tmp_path, start=True))
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    ws = Workspace(store, 1)
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    class SavedMeanwhile(FakeModel):
+        def complete(self, system, user, max_tokens=16000):
+            ws.write("specific-aims", "Aim 1, changed in another tab.", parent=first.id)
+            return super().complete(system, user)
+    notices = []
+    monkeypatch.setattr(apply_page, "connect", lambda store: SavedMeanwhile(json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "appropriate"}, "points": []})))
+    monkeypatch.setattr(apply_page, "_notice", lambda kind, text: notices.append((kind, text)))
+    try:
+        assert apply_page._review(ws, "specific-aims") is None
+    finally:
+        store.close()
+    assert notices == [("warning", f"The section changed while the model was reading it, so this review is of revision {first.id}, an earlier one, and is not shown. Review the section again.")]

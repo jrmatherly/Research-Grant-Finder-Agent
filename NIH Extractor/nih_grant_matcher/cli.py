@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from . import keys
 from .agents import DigestAgent, NihContextAgent
-from .clients import ApiError, NihGuideClient, NihReporterClient
+from .clients import ApiError, NihGuideClient, NihReporterClient, one_line
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
 from .llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models, missing
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
-from .rules import FACT_KINDS
+from .rules import FACT_KINDS, GRANT_TYPES
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
@@ -337,10 +337,10 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
     elif args.action == "review":
         review = ws.review(args.section)
         print(f"The model's review of revision {review.revision_id} of {args.section}. It saw only the section and the review criteria you confirmed.")
-        for factor in ws.view().grant_type.factors:
-            print(f"  {score_line(factor, review.scores[factor.key])}")
+        for factor in GRANT_TYPES[store.application(args.id).grant_type].factors:
+            print(f"  {one_line(score_line(factor, review.scores.get(factor.key)))}")
         for point in review.points:
-            print(f"  {point.kind}{f'  {point.factor}' if point.factor else ''}  {point.text}\n    \"{point.quote}\"")
+            print(f"  {point.kind}{f'  {point.factor}' if point.factor else ''}  {one_line(point.text)}\n    \"{one_line(point.quote)}\"")
         if review.dropped:
             print(dropped_points(review))
     elif args.action == "accept":

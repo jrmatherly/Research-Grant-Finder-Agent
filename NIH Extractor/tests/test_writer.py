@@ -1063,3 +1063,51 @@ def test_a_review_that_cannot_be_read_stays_in_the_log_and_saves_nothing(tmp_pat
     assert [(c.purpose, c.parent_id) for c in ws.store.calls(ws.application_id)] == [("review", first.id)] and ws.store.reviews(ws.application_id) == []
     view = ws.view()
     assert view.section("specific-aims").review is None and "to review drafts against NIH's review criteria" in view.disclosure
+
+
+def test_a_rating_other_than_the_bare_word_is_shown_as_the_model_wrote_it() -> None:
+    from helpers import R21
+    from nih_grant_matcher.writer import score_line
+    expertise = R21.factors[2]
+    assert score_line(expertise, "appropriate") == "Expertise and Resources, the model's estimate, not NIH's. Appropriate."
+    assert score_line(expertise, "Appropriate, the team is well qualified.") == "Expertise and Resources, the model's estimate, not NIH's. The model wrote: Appropriate, the team is well qualified."
+    assert score_line(expertise, None) == "Expertise and Resources. This review has no score for it."
+
+def test_a_second_review_of_the_same_revision_shows_the_newer(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(REVIEWED, REVIEWED.replace('"importance": 3', '"importance": 7')))
+    ws.write("specific-aims", "Aim 1.", parent=None)
+    ws.review("specific-aims"), ws.review("specific-aims")
+    assert ws.view().section("specific-aims").review.scores["importance"] == 7 and len(ws.store.reviews(ws.application_id)) == 2
+
+def test_a_restore_of_reviewed_text_hides_the_review(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(REVIEWED))
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    ws.review("specific-aims")
+    second = ws.write("specific-aims", "Aim 1, revised.", parent=first.id)
+    back = ws.restore("specific-aims", first.id, second.id)
+    assert back.text == first.text and ws.view().section("specific-aims").review is None
+
+def test_a_failed_save_of_a_review_says_the_text_was_sent(tmp_path, monkeypatch) -> None:
+    ws = start(tmp_path, model=FakeModel(REVIEWED))
+    ws.write("specific-aims", "Aim 1.", parent=None)
+    def locked(*args, **kwargs): raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(ws.store, "add_review", locked)
+    with pytest.raises(ModelError, match=r"^Your text was sent to example\.test and the call is in the log, but Grant Matcher could not save the review \(database is locked\)\.$"):
+        ws.review("specific-aims")
+    assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["review"]
+
+def test_a_read_only_database_with_no_reviews_table_refuses_a_review_before_sending(tmp_path) -> None:
+    import os, shutil
+    from nih_grant_matcher.store import OpportunityStore
+    ws = start(tmp_path)
+    ws.write("specific-aims", "Aim 1.", parent=None)
+    ws.store.conn.executescript("DROP TRIGGER reviews_fixed; DROP TRIGGER reviews_stay; DROP TABLE reviews;")
+    ws.store.close()
+    shutil.copy(ws.store.db_path, tmp_path / "old.sqlite3")
+    os.chmod(tmp_path / "old.sqlite3", 0o444)
+    fake = FakeModel(REVIEWED)
+    old = Workspace(OpportunityStore(tmp_path / "old.sqlite3"), ws.application_id, fake)
+    with pytest.raises(sqlite3.DatabaseError, match="read-only, so it has no reviews table"):
+        old.review("specific-aims")
+    assert fake.seen == []
+    old.store.close()
