@@ -141,6 +141,12 @@ def test_a_fourth_or_unknown_institute_is_refused(institutes) -> None:
     with pytest.raises(ProfileError, match="^institutes: (expected a list|at most 3|'.*' is not the code of an NIH institute)"):
         from_export(json.dumps(data))
 
+def test_a_repeated_institute_is_refused() -> None:
+    data = json.loads(to_export(WET_LAB))
+    data["profile"]["institutes"] = ["NHLBI", "NHLBI"]
+    with pytest.raises(ProfileError, match="^institutes: 'NHLBI' is listed twice"):
+        from_export(json.dumps(data))
+
 def _reference(n: int, citation: str = "Smith J. Heart. 2024.") -> dict:
     return {"key": f"ref-{n}", "citation": citation, "pmid": "", "doi": ""}
 
