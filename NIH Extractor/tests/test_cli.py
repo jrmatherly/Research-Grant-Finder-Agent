@@ -456,6 +456,23 @@ def test_models_says_in_one_line_that_a_key_cannot_be_read(where, says, tmp_path
     assert err.count("\n") == 1 and says in err and "sk-leak" not in err
 
 
+def test_models_saves_a_claude_workspace_sends_it_on_the_list_and_clears_it_when_empty(tmp_path, monkeypatch, capsys, post) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-1")
+    db = str(tmp_path / "g.sqlite3")
+    post.reply({"data": [{"id": "claude-opus-5-5", "type": "model"}], "has_more": False})
+    assert cli.main(["--db", db, "models", "--provider", "claude", "--workspace", "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ"]) == 0
+    assert post.headers["Anthropic-workspace-id"] == "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ" and "Workspace wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ." in capsys.readouterr().out
+    post.reply({"data": [], "has_more": False})
+    assert cli.main(["--db", db, "models", "--workspace", ""]) == 0
+    assert "Anthropic-workspace-id" not in post.headers and "Workspace" not in capsys.readouterr().out
+
+
+def test_models_refuses_a_workspace_that_is_not_an_id(tmp_path, capsys) -> None:
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "claude", "--workspace", "sk-ant-api03-secret"]) == 1
+    err = capsys.readouterr().err
+    assert "starts with wrkspc_" in err and "secret" not in err and not (tmp_path / "g.sqlite3").exists()
+
+
 def test_models_refuses_a_base_url_that_is_not_an_address(tmp_path, capsys) -> None:
     assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "compatible", "--base-url", "localhost:11434"]) == 1
     assert "is not a server address" in capsys.readouterr().err and not (tmp_path / "g.sqlite3").exists()

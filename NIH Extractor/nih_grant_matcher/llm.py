@@ -18,6 +18,7 @@ ANTHROPIC_VERSION = "2026-10-21"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 Kind = Literal["auth", "rate", "quota", "overload", "refused", "other"]
+WORKSPACE_HINT = "A Claude key that is not scoped to one workspace needs the ID of the workspace to use, which the Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists. Set it as the Workspace ID in the Model section of the Apply view, or with models --workspace."
 
 @dataclass(frozen=True)
 class Provider:
@@ -47,6 +48,20 @@ def checked_base_url(base_url: str) -> str:
     if urllib.parse.urlsplit(base_url).scheme not in ("http", "https") or not host_of(base_url):
         raise ValueError(f"{base_url!r} is not a server address. Write it as http://host:port/v1 or https://host/v1.")
     return base_url
+
+def checked_workspace(workspace: str) -> str:
+    # It goes into a header. The message does not repeat the value, which could be a key pasted into the wrong box.
+    workspace = workspace.strip()
+    if workspace and not re.fullmatch(r"wrkspc_[A-Za-z0-9]+", workspace):
+        raise ValueError("A workspace ID starts with wrkspc_ and goes on in letters and digits, as the Workspaces page of the Claude Console shows it. Nothing was saved.")
+    return workspace
+
+def workspace(store: OpportunityStore) -> str:
+    return store.setting("llm.workspace") or ""
+
+def _workspace(workspace: str) -> dict[str, str]:
+    # Anthropic's pages: needed for a key not scoped to one workspace, and a scoped key accepts it only when it names that key's own workspace.
+    return {"anthropic-workspace-id": workspace} if workspace else {}
 
 def _redact(text: str, key: str | None) -> str:
     # A provider can echo the key, or its last four characters after "...", in an error. An error can also quote it escaped, as repr does.
@@ -108,6 +123,9 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     wait = min(wait, 30.0) if wait >= 0 else 2.0
     # Redacted before it is cut, so that a cut cannot leave part of the key.
     message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
+    # Anthropic's pages give these for a workspace ID that is missing, not an ID, or not one the key can use.
+    if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message):
+        message += f" {WORKSPACE_HINT}"
     return ModelError(_redact(f"{host} answered {status}: {message}", key), kind, status, wait)
 
 def _retry(send: Callable[[], dict]) -> dict:
@@ -132,8 +150,8 @@ def _bearer(key: str | None) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"} if key else {}
 
 class HttpModel:
-    def __init__(self, provider: Provider, name: str, base_url: str, key: str | None) -> None:
-        self.provider, self.name, self.base_url, self.host, self.wire = provider.name, name, base_url.rstrip("/"), host_of(base_url), provider.wire
+    def __init__(self, provider: Provider, name: str, base_url: str, key: str | None, workspace: str = "") -> None:
+        self.provider, self.name, self.base_url, self.host, self.wire, self.workspace = provider.name, name, base_url.rstrip("/"), host_of(base_url), provider.wire, workspace
         self._key = key
         # Ollama's page lists max_tokens, and OpenAI calls it deprecated in favour of max_completion_tokens.
         self._limit = "max_tokens" if provider.name == "compatible" else "max_completion_tokens"
@@ -165,7 +183,7 @@ class HttpModel:
 
 def _anthropic_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:
     # fallbacks sends a request that a safety classifier declines on to the model Anthropic recommends, so a declined biology grant can still get an answer.
-    return f"{m.base_url}/messages", {**_bearer(m._key), "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": FALLBACK_BETA}, {"model": m.name, "max_tokens": max_tokens, "system": system, "messages": [{"role": "user", "content": user}], "fallbacks": "default"}
+    return f"{m.base_url}/messages", {**_bearer(m._key), **_workspace(m.workspace), "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": FALLBACK_BETA}, {"model": m.name, "max_tokens": max_tokens, "system": system, "messages": [{"role": "user", "content": user}], "fallbacks": "default"}
 
 def _anthropic_reply(m: HttpModel, data: dict) -> Completion:
     if data["stop_reason"] == "refusal":
@@ -203,11 +221,11 @@ def _gemini_reply(m: HttpModel, data: dict) -> Completion:
 
 _WIRES = {"anthropic": (_anthropic_request, _anthropic_reply), "openai": (_openai_request, _openai_reply), "gemini": (_gemini_request, _gemini_reply)}
 
-def list_models(provider: Provider, base_url: str, key: str | None) -> list[str]:
+def list_models(provider: Provider, base_url: str, key: str | None, workspace: str = "") -> list[str]:
     base = base_url.rstrip("/")
     try:
         if provider.wire == "anthropic":
-            return [m["id"] for m in _send(f"{base}/models?limit=1000", {**_bearer(key), "anthropic-version": ANTHROPIC_VERSION}, None, key, 30)["data"]]
+            return [m["id"] for m in _send(f"{base}/models?limit=1000", {**_bearer(key), **_workspace(workspace), "anthropic-version": ANTHROPIC_VERSION}, None, key, 30)["data"]]
         if provider.wire == "gemini":
             return [m["name"].removeprefix("models/") for m in _send(f"{base}/models?pageSize=1000", {"x-goog-api-key": key} if key else {}, None, key, 30)["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
         return [m["id"] for m in _send(f"{base}/models", _bearer(key), None, key, 30)["data"]]
@@ -246,4 +264,4 @@ def connect(store: OpportunityStore) -> Model | None:
     key = keys.get(provider, store.db_path.parent)
     if (provider.needs_key and not key) or not name:
         return None
-    return HttpModel(provider, name, base_url, key)
+    return HttpModel(provider, name, base_url, key, workspace(store))

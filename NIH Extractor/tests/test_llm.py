@@ -25,6 +25,56 @@ def test_the_claude_request_has_its_headers_and_no_key_in_the_url(post) -> None:
     assert "sk-test-123" not in post.url and post.body["model"] == "claude-opus-5-5"
     assert post.body["fallbacks"] == "default" and post.headers["Anthropic-beta"] == "server-side-fallback-2026-07-01"
 
+# Anthropic's page: a key that is not scoped to one workspace must name one in anthropic-workspace-id on each request.
+def test_a_claude_workspace_goes_on_the_request_and_the_model_list_and_only_when_set(post) -> None:
+    post.reply(fixture("anthropic-ok"))
+    model("claude", workspace="wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ").complete("s", "u")
+    assert post.headers["Anthropic-workspace-id"] == "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ"
+    post.reply({"data": [], "has_more": False})
+    list_models(PROVIDERS["claude"], PROVIDERS["claude"].base_url, "k", "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ")
+    assert post.headers["Anthropic-workspace-id"] == "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ"
+    post.reply(fixture("anthropic-ok"))
+    model("claude").complete("s", "u")
+    assert "Anthropic-workspace-id" not in post.headers
+
+@pytest.mark.parametrize("name, wire", [("openai", "openai"), ("gemini", "gemini"), ("compatible", "openai")])
+def test_a_saved_workspace_reaches_no_other_provider(name, wire, tmp_path, monkeypatch, post) -> None:
+    monkeypatch.setattr("nih_grant_matcher.keys.get", lambda provider, data_dir: "sk-1")
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    for setting, value in (("llm.provider", name), ("llm.model", "m1"), ("llm.workspace", "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ")):
+        store.set_setting(setting, value)
+    try:
+        post.reply(fixture(f"{wire}-ok"))
+        connect(store).complete("s", "u")
+        post.reply({"data": [], "models": []})
+        list_models(PROVIDERS[name], PROVIDERS[name].base_url, "sk-1", llm.workspace(store))
+    finally:
+        store.close()
+    assert "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ" not in " ".join(post.headers.values()) + post.url
+
+@pytest.mark.parametrize("value", ["wrkspc_01Jw\r\nX-Other: 1", "wrkspc_01Jw\xe9", "01JwQvzr7rXLA5AGx3HKfFUJ", "sk-ant-api03-secret"])
+def test_a_workspace_that_is_not_an_id_is_refused_without_repeating_it(value) -> None:
+    with pytest.raises(ValueError, match="starts with wrkspc_") as refused:
+        llm.checked_workspace(value)
+    assert value not in str(refused.value) and "secret" not in str(refused.value)
+
+def test_a_workspace_is_trimmed_and_an_empty_one_clears_it() -> None:
+    assert (llm.checked_workspace(" wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ\n"), llm.checked_workspace("  ")) == ("wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ", "")
+
+# The page's three answers: no header for a key that needs one (400), an ID of the wrong form (400), and a workspace the key cannot use (404).
+@pytest.mark.parametrize("status, message", [(400, "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace."), (400, "anthropic-workspace-id header must be a valid workspace ID."), (404, "Workspace `wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ` not found.")])
+def test_a_claude_workspace_error_says_where_to_set_the_workspace(status, message, post) -> None:
+    post.fail(status, {"type": "error", "error": {"type": "invalid_request_error" if status == 400 else "not_found_error", "message": message}})
+    with pytest.raises(ModelError) as failed:
+        model("claude", key="sk-test-123").complete("s", "u")
+    assert message in str(failed.value) and "platform.claude.com/settings/workspaces" in str(failed.value) and "models --workspace" in str(failed.value) and post.calls == 1
+
+def test_a_404_that_names_no_workspace_gets_no_workspace_hint(post) -> None:
+    post.fail(404, fixture("anthropic-error"))
+    with pytest.raises(ModelError) as failed:
+        model("claude").complete("s", "u")
+    assert "settings/workspaces" not in str(failed.value)
+
 def test_gemini_asks_not_to_be_stored(post) -> None:
     post.reply(fixture("gemini-ok"))
     model("gemini", key="g-key-1").complete("s", "u", max_tokens=99)

@@ -112,7 +112,7 @@ The Apply view can ask a model to help you write. Choose the provider, the model
 
 | Provider | Variable |
 | --- | --- |
-| `claude` | `ANTHROPIC_API_KEY`. Create the key for one workspace in the Claude Console. Grant Matcher does not send a workspace ID. |
+| `claude` | `ANTHROPIC_API_KEY`. A key that is not scoped to one workspace also needs the workspace's ID, which you set in the dashboard's **Model** section. |
 | `openai` | `OPENAI_API_KEY` |
 | `gemini` | `GEMINI_API_KEY` |
 | `compatible` | `GRANT_MATCHER_LLM_KEY`, when the server needs a key. Ollama does not. |
