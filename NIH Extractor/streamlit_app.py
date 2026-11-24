@@ -110,7 +110,7 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
     return filtered
 
 
-# A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget persists.
+# A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
     db_path = st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings.")

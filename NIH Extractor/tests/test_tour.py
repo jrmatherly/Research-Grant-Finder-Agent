@@ -1,4 +1,5 @@
 import hashlib
+import json
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
 from nih_grant_matcher.ui import tour
@@ -28,6 +29,10 @@ def test_every_step_points_at_a_key_the_find_view_draws() -> None:
 def test_the_script_skips_a_step_whose_control_is_not_on_the_page() -> None:
     assert "getClientRects().length" in tour.script()
 
+def test_the_lit_control_cannot_be_used_during_the_tour() -> None:
+    # A view chosen in the lit View control would take the later steps' controls off the page.
+    assert "disableActiveInteraction: true" in tour.script()
+
 def test_show_me_around_starts_the_tour_once_for_each_press(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
@@ -35,6 +40,8 @@ def test_show_me_around_starts_the_tour_once_for_each_press(tmp_path, monkeypatc
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     assert not app.exception
     assert app.session_state["tour_nonce"] == 1
+    sent = json.loads(app.get("bidi_component")[0].proto.json)
+    assert sent["nonce"] == 1 and [step["key"] for step in sent["steps"]] == [key for key, _, _ in tour.TOUR_STEPS]
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     assert app.session_state["tour_nonce"] == 2
 

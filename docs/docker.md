@@ -117,7 +117,7 @@ Add `--help` to a command to see its options. Do not run `rarity-table` in the c
 
 ## Give the container a key for a model
 
-The Apply view can ask a model to help you write. Choose the provider, the model, and a self-hosted server's address in the dashboard's **Model** section or with the `models` command. The container needs only the key, in one of these variables:
+The Apply view can ask a model to help you write. Choose the provider, the model, and a self-hosted server's address in the dashboard's **Model** section, under **Settings** or in the Apply view, or with the `models` command. The container needs only the key, in one of these variables:
 
 | Provider | Variable |
 | --- | --- |

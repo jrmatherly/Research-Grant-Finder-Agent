@@ -237,8 +237,13 @@ def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None 
     picked = chosen(store)
     with st.expander("Model", expanded=expanded if expanded is not None else not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}"))):
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
-        if "apply_llm_provider" not in st.session_state:
-            st.session_state["apply_llm_provider"] = picked[0].name if picked else None
+        # The boxes below are seeded once, so another database starts them again from its own record.
+        if st.session_state.get("apply_llm_db", db_path) != db_path:
+            for key in ("apply_llm_model", "apply_llm_base_url", "apply_llm_workspace"):
+                st.session_state.pop(key, None)
+        st.session_state["apply_llm_db"] = db_path
+        # The provider comes from the record on every run, so a choice that was not saved does not stay shown.
+        st.session_state["apply_llm_provider"] = picked[0].name if picked else None
         st.selectbox("Provider", list(PROVIDERS), format_func=PROVIDER_LABELS.__getitem__, placeholder="Choose a provider", key="apply_llm_provider", persist_state="session", on_change=_act, args=(db_path, _choose_provider))
         if picked is None:
             return

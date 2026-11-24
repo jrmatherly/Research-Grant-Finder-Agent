@@ -20,7 +20,7 @@ export default function(component) {
   window.__grantMatcherTour = data.nonce;
   const shown = step => { if (!step.key) return true; const e = document.querySelector('.st-key-' + step.key); return !!e && e.getClientRects().length > 0; };
   const steps = data.steps.filter(shown).map(s => ({ element: s.key ? '.st-key-' + s.key : undefined, popover: { title: s.title, description: s.text } }));
-  lib.driver({ showProgress: true, steps }).drive();
+  lib.driver({ showProgress: true, disableActiveInteraction: true, steps }).drive();
 }
 """
 
@@ -30,7 +30,7 @@ def styles() -> str:
 
 def script() -> str:
     # The vendored file assigns to this.driver, and this is undefined at the top of a module.
-    return "const lib = (function(){" + (VENDOR / "driver.js.iife.js").read_text(encoding="utf-8") + "; return this.driver.js; }).call({});\n" + GLUE
+    return "// driver.js 1.14.0, MIT licence, see driver.js.LICENSE\nconst lib = (function(){" + (VENDOR / "driver.js.iife.js").read_text(encoding="utf-8") + "; return this.driver.js; }).call({});\n" + GLUE
 
 # isolate_styles=False, because driver.js adds its popover to the page body, outside any shadow root.
 _tour = st.components.v2.component("grant_matcher_tour", js=script(), css=styles(), isolate_styles=False)
