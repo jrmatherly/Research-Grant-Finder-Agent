@@ -1707,3 +1707,36 @@ def test_the_find_controls_explain_themselves(tmp_path, monkeypatch) -> None:
     assert app.sidebar.slider(key="find_min_score").help == "Hides the rows that score lower. It changes what is shown, not what is saved."
     assert app.sidebar.slider(key="find_max_saved").help == "The most saved rows that Load Saved Results reads from the database."
     assert app.sidebar.text_input[0].help == "The file that holds your results, your profile, your applications and your settings."
+
+def test_the_provider_box_follows_the_database_that_is_open(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.sidebar.text_input[0].set_value("data/second.sqlite3").run(timeout=30)
+    assert not app.exception
+    assert app.selectbox(key="apply_llm_provider").value is None
+    assert not [t for t in app.text_input if t.key == "apply_llm_base_url"]
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    store = OpportunityStore(tmp_path / "data" / "second.sqlite3")
+    try:
+        assert store.setting("llm.provider") == "compatible"
+    finally:
+        store.close()
+    app.sidebar.text_input[0].set_value("data/grants.sqlite3").run(timeout=30)
+    assert app.selectbox(key="apply_llm_provider").value == "compatible"
+
+
+def test_a_provider_that_could_not_be_saved_is_not_left_chosen(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    (tmp_path / "data" / "grants.sqlite3").chmod(0o444)
+    (tmp_path / "data").chmod(0o555)
+    try:
+        app.selectbox(key="apply_llm_provider").set_value("openai").run(timeout=30)
+        assert not app.exception
+        assert "readonly" in " ".join(e.value for e in app.error)
+        assert app.selectbox(key="apply_llm_provider").value is None
+    finally:
+        (tmp_path / "data").chmod(0o755)
