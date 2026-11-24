@@ -95,10 +95,19 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `apply list` | Lists the applications. |
 | `apply fetch 1` | Fetches the full announcement of application 1. |
 | `apply requirements 1` | Prints the standing rules and what the announcement adds. |
+| `apply extract 1` | Asks the model you chose to read the fetched announcement and list what it asks for. Nothing counts until you confirm it in the dashboard. |
 | `apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file data/aim.txt` reads the text from a UTF-8 file. For `--kind reference`, add `--label smith2021`, and cite the reference in a section as `[@smith2021]`. |
 | `apply write 1 project-narrative --file data/narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. Put the file under `data/`, so that the container can read it. A file outside the mounted folders fails with "No such file or directory". |
+| `apply verify 1` | Checks that each reference you listed exists, and prints what the index holds for it. It sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, and none of your text. |
+| `apply draft 1 project-narrative` | Asks the model to draft the section from your inputs, and prints the proposal with its number. Nothing changes until you accept it. When an input is missing, it names the input and exits with 1. |
+| `apply polish 1 project-narrative` | Asks the model to polish the newest revision of the section, and prints the proposal with its number. |
+| `apply revise 1 project-narrative --instruction "Shorten it."` | Asks the model to revise the newest revision as you instruct, and prints the proposal with its number. |
+| `apply accept 1 4` | Makes proposal 4 the newest revision of its section. |
+| `apply discard 1 6` | Sets proposal 6 aside. It stays in the log. |
+| `apply review 1 project-narrative` | Asks the model to score the newest revision against NIH's review factors. The model sees only the section and the review criteria you confirmed, and each score is the model's estimate, not NIH's. |
 | `apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
 | `apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
+| `apply disclosure 1 --off` | Leaves the AI-use statement out of the export. `--on` puts it back and prints it. |
 | `apply export 1 --out outputs/application-1` | Writes the section files, the requirements, the provenance log, and the AI-use statement while it is on, to the folder. Give a path under `outputs/`, so that the files land in the mounted folder. A relative path outside the mounted folders fails with "Permission denied". An absolute path such as `/tmp/export` is written inside the container and is lost with it. |
 | `apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 | `models --provider claude` | Chooses the provider of the model that helps you write, prints the host that receives your text and where the key was found, and lists the provider's models. Add `--model NAME` to choose one of them. For a self-hosted server, use `--provider compatible --base-url http://host:port/v1`. |
