@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, sqlite3
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
@@ -202,12 +202,14 @@ class OpportunityStore:
             self.conn.execute("INSERT INTO signoffs (application_id, section, revision_id, signer, attestation, findings_json, tool_version, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, revision_id, signer, attestation, json.dumps(list(findings)), tool_version, signed_at))
         return Signoff(section, revision_id, signer, attestation, tuple(findings), tool_version, datetime.fromisoformat(signed_at))
     def reviews(self, app_id: int) -> list[Review]:
-        return [Review(row["revision_id"], (data := json.loads(row["review_json"]))["scores"], tuple(ReviewPoint(**p) for p in data["points"]), data["model"], data["dropped"]) for row in self._rows("reviews", "SELECT * FROM reviews WHERE application_id = ? ORDER BY id", (app_id,))]
-    def add_review(self, app_id: int, revision_id: int, call_id: int, review: Review) -> None:
+        return [Review(row["revision_id"], (data := json.loads(row["review_json"]))["scores"], tuple(ReviewPoint(**p) for p in data["points"]), data["model"], data["dropped"], datetime.fromisoformat(row["created_at"])) for row in self._rows("reviews", "SELECT * FROM reviews WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_review(self, app_id: int, revision_id: int, call_id: int, review: Review) -> Review:
+        at = _now()
         with self._write("reviews"):
             if self.conn.execute("SELECT 1 FROM model_calls WHERE id = ? AND application_id = ? AND purpose = 'review' AND parent_id = ?", (call_id, app_id, revision_id)).fetchone() is None:
                 raise ValueError(f"Call {call_id} is not a review of revision {revision_id} of application {app_id}.")
-            self.conn.execute("INSERT INTO reviews (application_id, revision_id, call_id, review_json, created_at) VALUES (?, ?, ?, ?, ?)", (app_id, revision_id, call_id, json.dumps({k: v for k, v in asdict(review).items() if k != "revision_id"}), _now()))
+            self.conn.execute("INSERT INTO reviews (application_id, revision_id, call_id, review_json, created_at) VALUES (?, ?, ?, ?, ?)", (app_id, revision_id, call_id, json.dumps({k: v for k, v in asdict(review).items() if k not in ("revision_id", "created_at")}), at))
+        return replace(review, revision_id=revision_id, created_at=datetime.fromisoformat(at))
     def setting(self, key: str) -> str | None:
         rows = self._rows("settings", "SELECT value FROM settings WHERE key = ?", (key,))
         return rows[0]["value"] if rows else None

@@ -95,7 +95,8 @@ def _requirement(item: Any, announcement_text: str) -> Requirement | None:
             return None
         limit = Limit(float(amount), limit["unit"])
     # The applicant confirms a limit by reading its quote, so the quote must hold the number as a number of its own, not inside 12 or 2026, and so must the announcement, since quoted_in passes a quote of 1.5 pages against a text of 15 pages. A limit item with no limit fails in Requirement.
-    if limit is not None and not all(re.search(rf"(?<![\d.]){re.escape(f'{limit.amount:g}')}(?!\d|[.,]\d)", s) for s in (quote, announcement_text)):
+    # A number inside a notice number such as NOT-EY-24-006 or a range such as 3-6 does not stand on its own, and 6-page and (6) do.
+    if limit is not None and not all(re.search(rf"(?<![\w.-]){re.escape(f'{limit.amount:g}')}(?!\d|[.,-]\d)", s) for s in (quote, announcement_text)):
         return None
     # 0 is a placeholder: the call is logged before the reply is read, and Workspace.extract_requirements replaces it with that call's id. SQLite cannot store an unpaired surrogate, and its UnicodeEncodeError is a ValueError.
     try:

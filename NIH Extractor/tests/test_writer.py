@@ -684,7 +684,7 @@ def test_a_proposal_needs_a_model_saved_text_and_for_a_revise_an_instruction(tmp
     with pytest.raises(NotReady, match="no text"):
         ws.propose("specific-aims", "polish")
     ws.write("specific-aims", "We study heart cells.", parent=None)
-    with pytest.raises(NotReady, match="needs aim, hypothesis"):
+    with pytest.raises(NotReady, match="needs aim, hypothesis before a model can draft it. Add them under"):
         ws.propose("specific-aims", "draft")
     with pytest.raises(NotReady, match="what to change"):
         ws.propose("specific-aims", "revise", "  ")
@@ -839,7 +839,7 @@ def test_a_draft_is_refused_until_the_inputs_are_there_and_again_once_one_is_ret
     assert ws.propose("specific-aims", "draft").text == "Aim 1."
     ws.retire_fact(aim.id)
     assert ws.view().section("specific-aims").gaps == ("aim",)
-    with pytest.raises(NotReady, match="needs aim before"):
+    with pytest.raises(NotReady, match="needs aim before a model can draft it. Add it under Your inputs"):
         ws.propose("specific-aims", "draft")
 
 def test_an_accepted_draft_with_gaps_cannot_be_signed(tmp_path) -> None:
@@ -1111,3 +1111,20 @@ def test_a_read_only_database_with_no_reviews_table_refuses_a_review_before_send
         old.review("specific-aims")
     assert fake.seen == []
     old.store.close()
+
+
+def test_the_log_lists_each_review_with_its_scores_and_each_reference_with_its_lookup(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(REVIEWED, REVIEWED.replace('"appropriate"', '"Add a\\nbiostatistician."')))
+    ws.add_fact("reference", "Smith J. Heart cells. 2021. PMID: 123", label="smith")
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    ws.review("specific-aims")
+    second = ws.write("specific-aims", "Aim 1, revised.", parent=first.id)
+    ws.review("specific-aims")
+    ws.verify_references(Index({"123": "Heart cells."}))
+    log = (ws.export(tmp_path / "out") / "provenance-log.md").read_text(encoding="utf-8")
+    when = [r.created_at.isoformat(timespec="seconds") for r in ws.store.reviews(ws.application_id)]
+    assert f"## Reviews\n\n- Specific Aims, revision {first.id}, reviewed by fake-1 at {when[0]} UTC. Scores, the model's estimate, not NIH's: Importance of the Research, 3; Rigor and Feasibility, 4; Expertise and Resources, appropriate.\n- Specific Aims, revision {second.id}, reviewed by fake-1 at {when[1]} UTC. Scores, the model's estimate, not NIH's: Importance of the Research, 3; Rigor and Feasibility, 4; Expertise and Resources, Add a biostatistician.\n" in log
+    assert f"- Input 1. reference, key smith. In use. Checked on {date.today().isoformat()}. PubMed holds PMID 123 as: Heart cells." in log
+
+def test_a_log_with_no_review_says_so(tmp_path) -> None:
+    assert "## Reviews\n\n- None.\n" in (start(tmp_path).export(tmp_path / "out") / "provenance-log.md").read_text(encoding="utf-8")

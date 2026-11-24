@@ -150,6 +150,9 @@ def _discard(ws: Workspace, call_id: int) -> str:
     ws.discard(call_id)
     return "Discarded the proposal. It stays in the log."
 
+def _and(names: list[str]) -> str:
+    return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
+
 def _word_diff(old: str, new: str) -> str:
     a, b, parts = old.split(), new.split(), []
     for tag, i1, i2, j1, j2 in SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
@@ -384,7 +387,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         st.session_state[text_key], st.session_state[base_key] = s.text, s.revision_id
     st.caption(f"{s.rule.title}. At most {describe(s.limit)}. " + {"empty": "No text saved yet.", "draft": f"Draft at revision {s.revision_id}.", "final": f"Signed off at revision {s.revision_id}."}[s.state])
     if s.gaps:
-        st.info(f"This section still needs {', '.join(s.gaps)}. Add them under Your inputs.")
+        st.info(f"This section still needs {', '.join(s.gaps)}. Add {'it' if len(s.gaps) == 1 else 'them'} under Your inputs.")
     if (stale := st.session_state.get("apply_stale")) and stale[:2] == (app_id, key):
         st.warning({"sign": "This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off."}.get(stale[2], "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision."))
         newest, yours = st.columns(2)
@@ -402,8 +405,14 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         if any(f.code == "mostly-drafted" for f in s.findings):
             st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}")
         st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title), "sign"))
+    # Review reads only the saved text, so every section offers it, and the section's rule says which of the others a model may do.
+    edits = ["Polish", "Revise"] if s.rule.model != "none" else []
+    if ws.model is not None:
+        st.caption(f"{_and([*edits, 'Review'])} send{'' if edits else 's'} the saved revision to {escape_markdown(ws.model.host)}" + (", and Draft sends your inputs for it" if s.rule.model == "draft" else "") + ". " + ("A proposal changes nothing until you accept it, and a review changes nothing." if edits else "A review changes nothing."))
+    else:
+        actions = [*(["Draft"] if s.rule.model == "draft" else []), *edits, "Review"]
+        st.caption(f"{_and(actions)} need{'' if len(actions) > 1 else 's'} a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     if ws.model is not None and s.rule.model != "none":
-        st.caption(f"Polish and Revise send the saved revision to {escape_markdown(ws.model.host)}. Nothing changes until you accept what comes back.")
         instruction_key = f"apply_instruction_{app_id}_{key}"
         st.text_input("What to change", key=instruction_key, help="Revise needs this. For example: Make the second aim shorter.")
         polish, revise = st.columns(2)
@@ -411,8 +420,6 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
         if s.rule.model == "draft":
             st.button("Draft from my inputs", key="apply_draft_button", disabled=bool(s.gaps), help=f"Add {', '.join(s.gaps)} under Your inputs first." if s.gaps else f"Sends your inputs for this section, the requirements you confirmed for it, and the research summary and expertise in your profile to {escape_markdown(ws.model.host)}.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "draft")))
-    elif s.rule.model != "none":
-        st.caption(f"{'Draft, Polish and Revise' if s.rule.model == 'draft' else 'Polish and Revise'} need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     if ws.model is not None:
         st.button("Review against NIH criteria", key="apply_review_button", disabled=not s.text.strip(), help=f"Sends only the saved revision and the review criteria you confirmed to {escape_markdown(ws.model.host)}. The model scores it as a reviewer would, and the section does not change.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _review(w, key)))
     # A proposal waits in the log, so a reload shows it again.

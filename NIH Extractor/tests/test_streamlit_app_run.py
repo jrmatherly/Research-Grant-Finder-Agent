@@ -1190,12 +1190,12 @@ def test_the_sections_tab_says_what_the_model_set_up_still_needs(tmp_path, monke
     monkeypatch.setattr(keys, "PLATFORM", "linux")
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
-    needs = lambda: [c.value for c in app.caption if c.value.startswith("Draft, Polish and Revise need")]
-    assert not app.exception and needs() == ["Draft, Polish and Revise need a model. No provider is chosen. Set it up under Model at the top of this page."]
+    needs = lambda: [c.value for c in app.caption if c.value.startswith("Draft, Polish, Revise and Review need")]
+    assert not app.exception and needs() == ["Draft, Polish, Revise and Review need a model. No provider is chosen. Set it up under Model at the top of this page."]
     app.selectbox(key="apply_llm_provider").set_value("openai").run(timeout=30)
-    assert needs() == ["Draft, Polish and Revise need a model. No API key was found for the provider. Set it up under Model at the top of this page."]
+    assert needs() == ["Draft, Polish, Revise and Review need a model. No API key was found for the provider. Set it up under Model at the top of this page."]
     app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
-    assert needs() == ["Draft, Polish and Revise need a model. No model is chosen. Set it up under Model at the top of this page."]
+    assert needs() == ["Draft, Polish, Revise and Review need a model. No model is chosen. Set it up under Model at the top of this page."]
     assert not any(b.key == "apply_polish_button" for b in app.button)
 
 
@@ -1271,6 +1271,8 @@ def test_draft_waits_for_the_inputs_and_then_proposes_a_section(tmp_path, monkey
     _with_model(_r21_database(tmp_path, start=True))
     app = _apply_view(tmp_path, monkeypatch)
     assert not app.exception and app.button(key="apply_draft_button").disabled and "aim, hypothesis" in app.button(key="apply_draft_button").help
+    assert "Polish, Revise and Review send the saved revision to localhost, and Draft sends your inputs for it. A proposal changes nothing until you accept it, and a review changes nothing." in [c.value for c in app.caption]
+    assert "This section still needs aim, hypothesis. Add them under Your inputs." in [i.value for i in app.info]
     for kind, text in (("aim", "Test drug X."), ("hypothesis", "X lowers pressure.")):
         app.selectbox(key="apply_fact_kind").set_value(kind)
         app.text_area(key="apply_fact_text").set_value(text)
