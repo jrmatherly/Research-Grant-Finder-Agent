@@ -32,7 +32,7 @@ Start your coding assistant at the repository root, so that it loads the project
 - `uv.lock` pins the versions that CI and the Docker image install. Add a package with `uv add`, or `uv add --dev` for a test tool. After a hand edit of `pyproject.toml`, run `uv lock`. CI and the image fail when the lockfile is out of date.
 - `pyproject.toml` sets `package = false`: uv installs the dependencies and does not build the project, so run commands from `NIH Extractor/`.
 - `exclude-newer = "1 week"` in `pyproject.toml` and `minimumReleaseAge` in `renovate.json` are the same delay. Change them together.
-- `nih_grant_matcher/ui/vendor/` holds driver.js 1.14.0, copied by hand and pinned by `tests/test_tour.py`. Renovate does not move it, and it is the only JavaScript in the package.
+- `nih_grant_matcher/ui/vendor/` holds driver.js 1.14.0, copied by hand and pinned by `tests/test_tour.py`. Renovate does not move it, and it is the only vendored JavaScript in the package.
 
 ## Gotchas
 

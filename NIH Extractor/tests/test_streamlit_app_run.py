@@ -1663,14 +1663,18 @@ def test_settings_shows_the_model_panel_before_any_database_exists(tmp_path, mon
 
 
 def test_a_provider_chosen_in_settings_is_the_one_apply_shows(tmp_path, monkeypatch) -> None:
-    _r21_database(tmp_path, start=True)
+    _r21_database(tmp_path, start=False)
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
     assert not app.exception
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    next(b for b in app.button if "Start application" in b.label).click().run(timeout=30)
+    assert not app.exception
     store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
     try:
+        assert len(store.applications()) == 1
         assert store.setting("llm.provider") == "compatible"
     finally:
         store.close()
