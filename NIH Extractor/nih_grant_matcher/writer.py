@@ -83,14 +83,20 @@ def _profile(store: OpportunityStore) -> Profile:
     except ProfileError:
         return BUILTIN_PROFILE
 
+def _same(r: Requirement) -> tuple[str, str, str]:
+    return r.kind, r.section, r.text
+
 def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[tuple[Requirement, str]]:
-    same = lambda r: (r.kind, r.section, r.text)
-    decided = [r for r in store.requirements(app_id) if r.origin == "parsed" and r.confirmed is not None]
+    rows = store.requirements(app_id)
+    decided = [r for r in rows if r.origin == "parsed" and r.confirmed is not None]
     # A decision moves to the newly parsed requirement that says the same thing, while the sentence it was made on is still in the text.
-    carried = {same(r): r.confirmed for r in decided if quoted_in(r.quote, announcement.text)}
-    parsed = {same(r): r for r in parse_requirements(announcement)}
+    carried = {_same(r): r.confirmed for r in decided if quoted_in(r.quote, announcement.text)}
+    parsed = {_same(r): r for r in parse_requirements(announcement)}
     store.replace_requirements(app_id, "parsed", [replace(r, confirmed=carried.get(key)) for key, r in parsed.items()])
-    return [(r, "Grant Matcher no longer reads that requirement from the new text" if same(r) in carried else "the new text no longer has the sentence it came from") for r in decided if same(r) not in carried or same(r) not in parsed]
+    # A model's item rests on its quote alone, so it stays while the quote is in the new text.
+    if gone := [r for r in rows if r.origin == "model" and not quoted_in(r.quote, announcement.text)]:
+        store.replace_requirements(app_id, "model", [r for r in rows if r.origin == "model" and r not in gone])
+    return [(r, "the new text no longer has the sentence it came from") for r in gone if r.confirmed is not None] + [(r, "Grant Matcher no longer reads that requirement from the new text" if _same(r) in carried else "the new text no longer has the sentence it came from") for r in decided if _same(r) not in carried or _same(r) not in parsed]
 
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
@@ -184,6 +190,23 @@ class Workspace:
         for app_id in sorted(dropped, key=lambda app_id: app_id != app.id):
             notes += [("Your decision on" if app_id == app.id else f"Application {app_id} lost its decision on") + f' "{r.text}"' + (" was dropped" if app_id == app.id else "") + f", because {why}." for r, why in dropped[app_id]]
         return announcement, notes
+
+    def extract_requirements(self) -> tuple[tuple[Requirement, ...], int]:
+        app = self._application()
+        if (announcement := self.store.announcement(app.opportunity_number)) is None:
+            raise NotReady("Fetch the full announcement first. The model reads its requirements from the saved text.")
+        if not (parts := [(n, text) for n in ("I", "IV", "V") if (text := announcement.section(n))]):
+            raise NotReady("Grant Matcher found none of Sections I, IV and V in the announcement, so there is nothing to send. Read the announcement under Announcement.")
+        found, dropped = [], 0
+        for numeral, text in parts:
+            call, done = self._ask("", "extract", prompts.extract(text, numeral, GRANT_TYPES[app.grant_type]), None)
+            kept, lost = prompts.parse_requirements(done.text, announcement.text)
+            found, dropped = found + [replace(r, call_id=call.id) for r in kept], dropped + lost
+        # A decision stays with its item while the item's quote is in the text, and a new reading of the same item does not add it twice.
+        items = {_same(r): r for r in self.store.requirements(app.id) if r.origin == "model" and r.confirmed is not None and quoted_in(r.quote, announcement.text)}
+        for r in found:
+            items.setdefault(_same(r), r)
+        return tuple(self.store.replace_requirements(app.id, "model", items.values())), dropped
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
         if requirement_id not in {r.id for r in self.store.requirements(self.application_id)}:
@@ -282,19 +305,23 @@ class Workspace:
     def propose(self, section: str, action: Literal["polish", "revise", "draft"], instruction: str = "") -> Proposal:
         rule = self._rule(section)
         if action not in PROPOSALS:
-            raise WorkspaceError(f"{action} is not something a model can do to a section. Use polish or revise.")
+            raise WorkspaceError(f"{action} is not something a model can do to a section. Use polish, revise or draft.")
         if (action == "draft" and rule.model != "draft") or rule.model == "none":
             raise NotReady(f"A model may not {action} the {rule.title}." + (" It may polish or revise it." if rule.model == "edit" else ""))
-        if action == "draft":
-            raise NotReady("Drafts are not available yet. Write the section, then polish or revise it.")
         current = head(self.store.revisions(self.application_id), section)
-        if current is None or not current.text.strip():
+        live = [f for f in self.store.facts(self.application_id) if f.retired_at is None and f.kind in rule.needs + rule.uses]
+        if action == "draft" and (gaps := [k for k in rule.needs if k not in {f.kind for f in live}]):
+            raise NotReady(f"The {rule.title} needs {', '.join(gaps)} before a model can draft it. Add them under Your inputs.")
+        if action != "draft" and (current is None or not current.text.strip()):
             raise NotReady(f"The {rule.title} has no text to {action} yet. Write it and save it first.")
         if action == "revise" and not instruction.strip():
             raise NotReady("Say what to change before you ask for a revision.")
-        live = [f for f in self.store.facts(self.application_id) if f.retired_at is None and f.kind in rule.needs + rule.uses]
-        prompt = prompts.polish(current.text, rule) if action == "polish" else prompts.revise(current.text, instruction.strip(), rule, live)
-        call, _ = self._ask(section, action, prompt, current.id)
+        if action == "draft":
+            requirements = tuple(self.store.requirements(self.application_id))
+            prompt = prompts.draft(rule, _limit(rule, requirements), requirements, live, _profile(self.store))
+        else:
+            prompt = prompts.polish(current.text, rule) if action == "polish" else prompts.revise(current.text, instruction.strip(), rule, live)
+        call, _ = self._ask(section, action, prompt, getattr(current, "id", None))
         return self._proposal(call)
 
     def _proposal(self, call: ModelCall) -> Proposal:

@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("number", help="The opportunity number, such as PAR-25-123.")
     start.add_argument("--type", required=True, help="The activity code, such as R21.")
     start.add_argument("--resubmission", action="store_true", help="Add the Introduction of a resubmission.")
-    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands.")):
+    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("extract", "Ask the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands.")):
         apply.add_parser(name, help=text).add_argument("id", type=int)
     add = apply.add_parser("add", help="Add one of your inputs, such as an aim or a reference.")
     add.add_argument("id", type=int)
@@ -77,14 +77,15 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--out", required=True)
     polish = apply.add_parser("polish", help="Ask the model you chose to polish the newest revision of a section. Nothing changes until you accept.")
     revise = apply.add_parser("revise", help="Ask the model you chose to revise the newest revision of a section. Nothing changes until you accept.")
-    for asked in (polish, revise):
+    draft = apply.add_parser("draft", help="Ask the model you chose to draft a section from your inputs. Nothing changes until you accept.")
+    for asked in (polish, revise, draft):
         asked.add_argument("id", type=int)
         asked.add_argument("section")
     revise.add_argument("--instruction", required=True, help="What to change.")
     for name, text in (("accept", "Make a model's proposal the newest revision of its section."), ("discard", "Set a model's proposal aside. It stays in the log.")):
         proposal = apply.add_parser(name, help=text)
         proposal.add_argument("id", type=int)
-        proposal.add_argument("call", type=int, help="The number of the proposal, which polish and revise print.")
+        proposal.add_argument("call", type=int, help="The number of the proposal, which polish, revise and draft print.")
     disclosure = apply.add_parser("disclosure", help="Turn the AI-use statement in the export on or off, and print it.")
     disclosure.add_argument("id", type=int)
     toggle = disclosure.add_mutually_exclusive_group(required=True)
@@ -270,6 +271,10 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(f"Application {ws.application_id} is {args.number} as {args.type}{', a resubmission' if args.resubmission else ''}.")
         return 0
     ws = Workspace(store, args.id)
+    if args.action in ("extract", "polish", "revise", "draft"):
+        ws.model = connect(store)
+        if ws.model is None:
+            raise NotReady(f"{missing(store)} Set up the model with the models command, starting with models --provider.")
     if args.action == "fetch":
         (announcement, notes), view = ws.fetch_announcement(), ws.view()
         added = sum(r.confirmed is None for r in view.requirements)
@@ -310,10 +315,14 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(signed.attestation)
     elif args.action == "export":
         print(f"Wrote the application to {ws.export(Path(args.out))}.")
-    elif args.action in ("polish", "revise"):
-        ws.model = connect(store)
-        if ws.model is None:
-            raise NotReady(f"{missing(store)} Set up the model with the models command, starting with models --provider.")
+    elif args.action == "extract":
+        found, dropped = ws.extract_requirements()
+        print(f"The model read {len(found)} requirement{'' if len(found) == 1 else 's'} from the announcement. Confirm or reject each in the dashboard.")
+        for r in found:
+            print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}")
+        if dropped:
+            print(f"Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply, because the quote is not in the announcement or the item is not in the form asked for.")
+    elif args.action in ("polish", "revise", "draft"):
         proposal = ws.propose(args.section, args.action, getattr(args, "instruction", ""))
         print(f"Proposal {proposal.call_id} for {args.section}. Nothing has changed yet.\n\n{proposal.text}\n")
         for finding in proposal.findings:

@@ -1236,3 +1236,50 @@ def test_the_model_expander_stays_open_until_the_set_up_is_complete(tmp_path, mo
     assert opened()
     app.checkbox(key="apply_llm_consent_localhost").check().run(timeout=30)
     assert not app.exception and not opened()
+
+
+def _with_model(path):
+    store = OpportunityStore(path)
+    try:
+        for name, value in (("llm.provider", "compatible"), ("llm.model", "llama9"), ("consent:localhost", "2026-11-23T00:00:00")):
+            store.set_setting(name, value)
+    finally:
+        store.close()
+
+
+def test_draft_waits_for_the_inputs_and_then_proposes_a_section(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    _with_model(_r21_database(tmp_path, start=True))
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and app.button(key="apply_draft_button").disabled and "aim, hypothesis" in app.button(key="apply_draft_button").help
+    for kind, text in (("aim", "Test drug X."), ("hypothesis", "X lowers pressure.")):
+        app.selectbox(key="apply_fact_kind").set_value(kind)
+        app.text_area(key="apply_fact_text").set_value(text)
+        app.button(key="apply_add_fact_button").click().run(timeout=30)
+    assert not app.exception and not app.button(key="apply_draft_button").disabled
+    post.reply(_openai_reply("Aim 1 tests whether drug X lowers pressure."))
+    app.button(key="apply_draft_button").click().run(timeout=30)
+    assert not app.exception and post.calls == 1 and "Test drug X." in post.body["messages"][1]["content"]
+    app.button(key="apply_accept_button").click().run(timeout=30)
+    assert not app.exception and app.text_area(key="apply_text_1_specific-aims").value == "Aim 1 tests whether drug X lowers pressure."
+
+
+def test_the_model_reads_the_announcement_and_says_what_it_dropped(tmp_path, monkeypatch, post) -> None:
+    import json
+    from nih_grant_matcher import keys
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
+    _with_model(_r21_database(tmp_path, start=True))
+    app = _apply_view(tmp_path, monkeypatch)
+    assert app.button(key="apply_extract_button").disabled
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    items = [{"kind": "limit", "section": "research-strategy", "text": "Research Strategy: 4 pages.", "quote": "The Research Strategy is limited to 4 pages.", "limit": {"amount": 4, "unit": "pages"}}, {"kind": "must", "section": "", "text": "Invented.", "quote": "Not there.", "limit": None}]
+    post.reply(_openai_reply(json.dumps(items)))
+    post.reply(_openai_reply("[]"))
+    app.button(key="apply_extract_button").click().run(timeout=30)
+    assert not app.exception and post.calls == 2
+    page = _page_text(app)
+    assert "The model read 1 requirement" in page and "dropped 1 item" in page and "A model read this." in page

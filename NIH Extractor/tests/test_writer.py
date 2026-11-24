@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import pytest
 from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
@@ -17,6 +18,10 @@ class GrantsDown:
     def full_announcement(self, opportunity_id): raise ApiError("HTTP 503")
 
 DROPPED_FOUR = 'Your decision on "Research Strategy: at most 4 pages." was dropped, because the new text no longer has the sentence it came from.'
+READ = "Section I. Notice of Funding Opportunity Description\nApplicants must describe data sharing.\nSection IV. Application and Submission Information\nThe Specific Aims must state one hypothesis.\nSection V. Application Review Information\nReviewers will judge rigor." + " More text." * 100
+item = lambda kind, section, text, quote: {"kind": kind, "section": section, "text": text, "quote": quote, "limit": None}
+READ_I = json.dumps([item("must", "", "Describe data sharing.", "Applicants must describe data sharing.")])
+READ_REPLIES = (READ_I, json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis.")]), json.dumps([item("criterion", "", "Rigor.", "Reviewers will judge rigor."), item("must", "", "Invented.", "Not in the text.")]))
 MUST = "Section IV. Application and Submission Information\nPHS 398 Research Plan\nAll instructions must be followed, with the following additional instructions: Describe the cohort in 2 tables.\nSection V. Review\nx" + " More text." * 100
 
 def test_a_new_application_lists_its_sections_and_gaps(tmp_path) -> None:
@@ -553,7 +558,7 @@ def test_a_proposal_needs_a_model_saved_text_and_for_a_revise_an_instruction(tmp
     with pytest.raises(NotReady, match="no text"):
         ws.propose("specific-aims", "polish")
     ws.write("specific-aims", "We study heart cells.", parent=None)
-    with pytest.raises(NotReady, match="not available yet"):
+    with pytest.raises(NotReady, match="needs aim, hypothesis"):
         ws.propose("specific-aims", "draft")
     with pytest.raises(NotReady, match="what to change"):
         ws.propose("specific-aims", "revise", "  ")
@@ -698,3 +703,65 @@ def test_the_exported_statement_names_a_suggestion_that_is_waiting(tmp_path) -> 
     ws.propose("specific-aims", "polish")
     statement = (ws.export(tmp_path / "out") / "ai-use-statement.md").read_text(encoding="utf-8")
     assert "A suggestion from fake-1 for the Specific Aims is waiting for my decision." in statement and "The Specific Aims was written without a model." in statement
+
+def test_a_draft_is_refused_until_the_inputs_are_there(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Aim 1."))
+    with pytest.raises(NotReady):
+        ws.propose("specific-aims", "draft")
+    ws.add_fact("aim", "Test whether drug X lowers pressure.")
+    ws.add_fact("hypothesis", "Drug X lowers pressure.")
+    assert ws.propose("specific-aims", "draft").text == "Aim 1."
+
+def test_an_accepted_draft_with_gaps_cannot_be_signed(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We enrolled 412 patients. [NEEDS INPUT: effect size]"), facts={"aim": "A pilot cohort.", "hypothesis": "It works."})
+    ws.accept(ws.propose("specific-aims", "draft").call_id)
+    codes = {f.code for f in ws.view().section("specific-aims").findings}
+    assert {"placeholder", "number-not-in-inputs", "mostly-drafted"} <= codes
+    with pytest.raises(NotReady):
+        ws.sign("specific-aims", "A. Applicant", ws.view().section("specific-aims").revision_id)
+
+def test_a_draft_goes_on_the_newest_revision_and_sends_only_the_inputs(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Aim 1.", "Aim 2."), facts={"aim": "Test drug X.", "hypothesis": "X lowers pressure.", "team": "TEAM-TEXT"})
+    first = ws.propose("specific-aims", "draft")
+    assert first.parent_id is None and "Test drug X." in ws.model.seen[0].user and "TEAM-TEXT" not in ws.model.seen[0].user
+    mine = ws.write("specific-aims", "We test drug X.", parent=None)
+    second = ws.propose("specific-aims", "draft")
+    assert second.parent_id == mine.id and ws.pending("specific-aims").call_id == second.call_id and "We test drug X." not in ws.model.seen[1].user
+
+def test_a_model_reads_sections_i_iv_and_v_and_each_item_names_its_call(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES))
+    with pytest.raises(NotReady, match="Fetch the full announcement"):
+        ws.extract_requirements()
+    assert ws.model.seen == []
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, dropped = ws.extract_requirements()
+    calls = ws.store.calls(ws.application_id)
+    assert [(c.purpose, c.section, c.parent_id) for c in calls] == [("extract", "", None)] * 3 and dropped == 1
+    assert "Applicants must describe data sharing." in ws.model.seen[0].user and "Reviewers" not in ws.model.seen[0].user and "Section V" in ws.model.seen[2].user
+    assert [(r.text, r.origin, r.call_id, r.confirmed) for r in found] == [("Describe data sharing.", "model", calls[0].id, None), ("State one hypothesis.", "model", calls[1].id, None), ("Rigor.", "model", calls[2].id, None)]
+    assert list(found) == [r for r in ws.view().requirements if r.origin == "model"]
+    assert "read the funding announcement's requirements" in ws.view().disclosure
+
+def test_a_new_reading_keeps_a_decided_item_once_and_replaces_the_rest(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES, READ_I, "[]", "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(found[0].id, True)
+    again, dropped = ws.extract_requirements()
+    assert [(r.text, r.confirmed, r.call_id) for r in again] == [("Describe data sharing.", True, found[0].call_id)] and dropped == 0
+
+def test_reading_needs_section_i_iv_or_v(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("[]"))
+    ws.fetch_announcement(Guide("A notice with no headings at all. " * 40), Grants(""))
+    with pytest.raises(NotReady, match="none of Sections I, IV and V"):
+        ws.extract_requirements()
+    assert ws.model.seen == [] and ws.store.calls(ws.application_id) == []
+
+def test_a_fetch_keeps_a_model_item_while_its_quote_is_in_the_text_and_names_a_dropped_decision(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(found[1].id, False)
+    _, notes = ws.fetch_announcement(Guide(READ.replace("Applicants must describe data sharing.", "").replace("The Specific Aims must state one hypothesis.", "")), Grants(""))
+    assert [r.text for r in ws.view().requirements if r.origin == "model"] == ["Rigor."]
+    assert notes == ['Your decision on "State one hypothesis." was dropped, because the new text no longer has the sentence it came from.']
