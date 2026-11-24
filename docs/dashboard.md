@@ -13,7 +13,7 @@ To start the dashboard, see the [README](../README.md#getting-started) for a loc
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
 
-**Show me around**, at the bottom of the sidebar in the Find view, points at each part of the page in turn. Press Escape to leave it.
+**Show me around**, at the bottom of the sidebar in the Find view, points at each part of the page in turn. The controls do not respond while it runs. Press Escape to leave it.
 
 When you open the dashboard and saved results exist, the dashboard loads them. You do not have to search first.
 
@@ -30,7 +30,7 @@ A green message reports how many records the search fetched and how many it save
 | **Source** | `nih-guide` searches the NIH Guide for Grants and Contracts. `grants.gov` searches Grants.gov for NIH opportunities. `both` searches the two and keeps one row for each opportunity number. When both sources hold the same number, the NIH Guide record is kept. |
 | **Keyword** | The words are sent to the source's own search. With a keyword, the NIH Guide returns the best matches first. Without one, it returns the newest notices first. On 2026-11-22, an empty search returned 371 notices and "machine learning" returned 91. |
 | **Rows per source** | The most rows to fetch from each source, from 25 to 1000. The default is 500. |
-| **Database** | The file that holds the saved results. Leave the default, `data/grants.sqlite3`, unless you keep separate result sets. |
+| **Database** | The file that holds your saved results, your profile, your applications and your settings. A leading `~` means your home folder. Leave the default, `data/grants.sqlite3`, unless you keep separate result sets. |
 
 If a yellow message says that a source reached the row limit, the source holds more rows than you asked for. Raise **Rows per source** and search again.
 
@@ -62,7 +62,7 @@ Use the filter row at the top of the page and the **Display** group in the sideb
 | **NIH institute** | Shows the institutes that you select, such as NCI or NLM. With none selected, every institute shows. |
 | **Filter within results** | Shows the rows whose title, matched terms, or summary contain the text. Capital letters do not matter. The filter does not search the opportunity number or the institute. |
 | **Minimum score shown** | Hides rows below the score. It also applies to the Excel export. |
-| **Saved rows to load** | The most rows that **Load Saved Results** reads, highest score first. The range is 50 to 1000. |
+| **Saved rows to load** | The most saved rows that the dashboard reads, highest score first, when it opens and when you select **Load Saved Results**. The range is 50 to 1000. |
 
 The four metrics follow the filters.
 
@@ -250,6 +250,7 @@ Add `--help` to a command to see its options. To use another database, put `--db
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | "Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar." | The database is empty or is not at the **Database** path. | Select **Run Search**. |
+| A red "Could not open the database at ..." message in the Settings or Apply view | The file at the **Database** path is not a Grant Matcher database, another program has it open, or the file or its folder cannot be opened or made. | Correct the **Database** path in the sidebar, close the other program, or check the permissions of the file and its folder. |
 | A red "Search failed" message with a web address | The named service did not answer, or it sent a reply that the tool cannot read. | Check the internet connection and search again. |
 | A message that names `SSL_CERT_FILE`, in the macOS app at version 0.1.1, 0.2.0 or 0.3.0 | Those versions look for their trusted certificates in a file that macOS does not ship. No proxy is involved. | In 0.2.0 or 0.3.0, choose `Check for Updates…` in the `Grant Matcher` menu, and install version 0.3.1 or later. Install over 0.1.1 by hand, as [the macOS app page](macos-app.md#download) says. |
 | A message that says Python found no CA certificates | The file that the message names does not exist, so the tool trusts no server. No proxy is involved. | If you set `SSL_CERT_FILE`, correct its path or remove it. Otherwise install the tool again. |

@@ -111,7 +111,7 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
     return filtered
 
 
-# A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists.
+# A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists, except the table, whose selection is set on every run.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
     # A path is read as typed everywhere below, and without this a ~ would become a folder of that name.
@@ -126,7 +126,7 @@ with st.sidebar:
         st.divider()
         st.header("Display")
         min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session", help="Hides the rows that score lower. It changes what is shown, not what is saved.")
-        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session", help="The most saved rows that Load Saved Results reads from the database.")
+        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session", help="The most saved rows read from the database, when the page opens and when you select Load Saved Results.")
         load_clicked = st.button("Load Saved Results", width="stretch")
 
         st.divider()
@@ -150,7 +150,7 @@ try:
     saved, unreadable = saved_profile(db_path), None
 except ProfileError as exc:
     saved, unreadable = None, exc
-except sqlite3.Error as exc:
+except (sqlite3.Error, OSError) as exc:
     saved, unreadable, db_error = None, None, exc
 st.caption(f"Run NIH Guide and Grants.gov searches, rank {'computational ' if saved is None or ranks_like_builtin(saved) else ''}opportunities, and explore the results interactively.")
 
@@ -186,7 +186,7 @@ if run_clicked:
             if summary.capped:
                 st.warning("A source reached the row limit and may hold more. Raise Rows per source and run again.")
 
-if load_clicked or (not get_scored_items_from_session() and Path(db_path).exists()):
+if load_clicked or (not get_scored_items_from_session() and os.path.exists(db_path)):
     try:
         with warnings.catch_warnings(record=True) as load_warnings:
             warnings.simplefilter("always", RuntimeWarning)
