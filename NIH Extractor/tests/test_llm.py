@@ -417,6 +417,12 @@ def test_a_429_with_a_limit_above_zero_is_still_a_rate_limit(post) -> None:
     post.reply(fixture("gemini-ok"))
     assert model("gemini").complete("s", "u").text == "Hello." and post.calls == 2
 
+def test_a_429_with_a_fractional_limit_is_a_rate_limit_not_a_quota_of_zero(post) -> None:
+    post.fail(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Rate exceeded, limit: 0.5 per second"}})
+    with pytest.raises(ModelError) as failed:
+        model("gemini").complete("s", "u", probe=True)
+    assert failed.value.kind == "rate"
+
 def test_a_draft_does_not_wait_and_retry_a_quota_of_zero(post) -> None:
     post.fail(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-4-argon"}})
     with pytest.raises(ModelError) as failed:
@@ -428,3 +434,10 @@ def test_a_model_list_that_fails_is_not_told_to_list_the_models(post) -> None:
     with pytest.raises(ModelError) as failed:
         list_models(PROVIDERS["compatible"], "http://localhost:11434", None)
     assert "did not find this model" not in str(failed.value)
+
+def test_a_404_that_is_not_an_api_error_is_not_blamed_on_the_model(post) -> None:
+    # A wrong Base URL path answers 404 with a plain page, and the model's name is not the cause.
+    post.fail_with(urllib.error.HTTPError("http://localhost:11434/chat/completions", 404, "", {}, io.BytesIO(b"404 page not found")))
+    with pytest.raises(ModelError) as failed:
+        model("compatible").complete("s", "u")
+    assert "404 page not found" in str(failed.value) and "did not find this model" not in str(failed.value)
