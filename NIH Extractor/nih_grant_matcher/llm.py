@@ -7,7 +7,6 @@ from .clients import ApiError
 from .models import Completion, Model
 from .store import OpportunityStore
 
-# shortcut: no streaming, so a long reply shows a spinner. Add streaming when a section takes longer than the 600 second timeout.
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     # urllib copies the key header onto a redirect, to a host the applicant never agreed to and perhaps over http.
     def redirect_request(self, *args: Any) -> None:
@@ -53,6 +52,7 @@ def _redact(text: str, key: str | None) -> str:
     # A provider can echo the key, or its last four characters after "...", in an error. An error can also quote it escaped, as repr does.
     return text.replace(key, "[key]").replace(repr(key)[1:-1], "[key]").replace(f"...{key[-4:]}", "...[key]") if key else text
 
+# shortcut: no streaming, so a long reply shows a spinner. Add streaming when a section takes longer than the 600 second timeout.
 def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None, timeout: int = 600) -> dict:
     # One attempt. clients._read retries any failure three times, which would pay for a reply three times.
     host = host_of(url)

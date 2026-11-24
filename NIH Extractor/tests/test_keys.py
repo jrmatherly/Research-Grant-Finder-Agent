@@ -124,6 +124,13 @@ def test_a_keychain_error_is_kept_until_a_key_is_saved(tmp_path, mac) -> None:
     keys.save(PROVIDERS["claude"], "sk-new-1", tmp_path)
     assert keys.get(PROVIDERS["claude"], tmp_path) == "sk-new-1"
 
+def test_a_failed_keychain_write_raises_and_saves_nothing(tmp_path, mac) -> None:
+    mac.exit_with = 36
+    with pytest.raises(keys.KeychainError, match="locked"):
+        keys.save(PROVIDERS["claude"], "sk-new-1", tmp_path)
+    mac.exit_with = None
+    assert keys.get(PROVIDERS["claude"], tmp_path) is None
+
 def test_no_key_reaches_the_database(tmp_path, linux) -> None:
     store = OpportunityStore(tmp_path / "g.sqlite3")
     keys.save(PROVIDERS["claude"], "sk-secret-9", tmp_path)

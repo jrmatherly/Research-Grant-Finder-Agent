@@ -192,6 +192,34 @@ def test_a_model_list_of_the_wrong_shape_is_a_model_error(post) -> None:
     with pytest.raises(ModelError, match="not in the form"):
         list_models(PROVIDERS["gemini"], PROVIDERS["gemini"].base_url, "g-key-1")
 
+def test_a_retry_after_over_30_seconds_waits_30(post) -> None:
+    post.fail(429, fixture("anthropic-error"), headers={"retry-after": "3600"})
+    post.reply(fixture("anthropic-ok"))
+    model("claude").complete("s", "u")
+    assert post.slept == [30.0]
+
+def test_an_openai_reply_cut_by_the_content_filter_is_refused_and_not_returned(post) -> None:
+    ok = fixture("openai-ok")
+    post.reply({**ok, "choices": [{**ok["choices"][0], "message": {"role": "assistant", "content": "We study"}, "finish_reason": "content_filter"}]})
+    with pytest.raises(ModelError, match="content filter") as failed:
+        model("openai").complete("s", "u")
+    assert failed.value.kind == "refused"
+
+def test_a_claude_reply_that_filled_the_context_window_is_cut_off(post) -> None:
+    post.reply({**fixture("anthropic-ok"), "stop_reason": "model_context_window_exceeded"})
+    assert model("claude").complete("s", "u").truncated is True
+
+@pytest.mark.parametrize("name", ["claude", "openai", "gemini"])
+def test_a_base_url_saved_for_a_compatible_server_is_not_used_for_another_provider(name, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("nih_grant_matcher.keys.get", lambda provider, data_dir: "sk-1")
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    for setting, value in (("llm.provider", "compatible"), ("llm.base_url", "http://gpu.example:8000/v1"), ("llm.provider", name), ("llm.model", "m1")):
+        store.set_setting(setting, value)
+    try:
+        assert (connect(store).base_url, connect(store).host) == (PROVIDERS[name].base_url, llm.host_of(PROVIDERS[name].base_url))
+    finally:
+        store.close()
+
 @pytest.mark.parametrize("header", ["-5", "nan", "soon"])
 def test_a_retry_after_that_is_not_a_wait_means_two_seconds(header, post) -> None:
     post.fail(429, fixture("anthropic-error"), headers={"retry-after": header})

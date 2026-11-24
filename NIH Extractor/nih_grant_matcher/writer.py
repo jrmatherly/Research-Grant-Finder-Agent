@@ -254,7 +254,7 @@ class Workspace:
         return [c for c in calls if c.purpose in PROPOSALS and c.id not in accepted and getattr(head(revisions, c.section), "id", None) == c.parent_id and not self.store.setting(f"discarded:{c.id}")]
 
     def _ask(self, section: str, purpose: str, prompt: prompts.Prompt, parent_id: int | None) -> tuple[ModelCall, Completion]:
-        # Every call to a model passes here, so that no text leaves before the applicant agreed to its host and every reply is logged.
+        # Every call that carries the applicant's text passes here, so that none leaves before the applicant agreed to its host and every reply is logged. Test connection calls the model itself, with its own consent check and no log.
         if self.model is None:
             raise NotReady("Choose a model under Model, and save a key if the provider needs one, first.")
         if not self.store.setting(f"consent:{self.model.host}"):
