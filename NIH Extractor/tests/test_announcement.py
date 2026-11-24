@@ -124,3 +124,12 @@ def test_a_record_with_a_bare_grants_gov_id_asks_grants_gov_for_it() -> None:
     grants = Grants(FILLER)
     record = Opportunity(source_id="361234", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active")
     assert fetch_announcement(record, Guide("", ggid=""), grants).origin == "grants.gov" and grants.asked == ["361234"]
+
+def test_a_limit_needs_an_amount_above_zero() -> None:
+    from nih_grant_matcher.announcement import Requirement
+    from nih_grant_matcher.rules import Limit
+    for limit in (None, Limit(0, "pages"), Limit(-1, "pages"), Limit(float("nan"), "pages")):
+        with pytest.raises(ValueError):
+            Requirement("limit", "Specific Aims: at most 0 pages.", "q", "parsed", "specific-aims", limit)
+    assert Requirement("must", "Name a mentor.", "q", "parsed").limit is None
+    assert parse_requirements(_announcement(_in_section_iv("The Specific Aims is limited to 0 pages."))) == ()

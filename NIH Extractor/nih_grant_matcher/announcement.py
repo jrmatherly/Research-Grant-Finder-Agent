@@ -52,6 +52,8 @@ class Requirement:
     def __post_init__(self) -> None:
         if (self.call_id is not None) != (self.origin == "model"):
             raise ValueError("A requirement carries a call_id exactly when a model found it")
+        if (self.kind == "limit" and self.limit is None) or (self.limit is not None and not self.limit.amount > 0):
+            raise ValueError("A limit needs an amount above zero")
 
 # shortcut: assumes the eight sections come in order, as NIH's template has them. A section that is absent and that a later section names would be misread. Upgrade if an announcement is found that drops a section.
 def _section_starts(text: str) -> dict[str, int]:
@@ -148,5 +150,6 @@ def parse_requirements(announcement: Announcement) -> tuple[Requirement, ...]:
             found.append(Requirement("must", "Follow the announcement's additional instructions for the Research Plan.", quote, "parsed", "research-strategy"))
     for match in _PAGE_LIMIT.finditer(part):
         title, pages = next(t for t in _SECTION_KEYS if t.lower() == match.group(1).lower()), float(match.group(2))
-        found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", _sentence_around(part, match.start(), match.end()), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
+        if pages > 0:
+            found.append(Requirement("limit", f"{title}: at most {pages:g} pages.", _sentence_around(part, match.start(), match.end()), "parsed", _SECTION_KEYS[title], Limit(pages, "pages")))
     return tuple(found)
