@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib
+import hashlib, sqlite3
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -261,14 +261,22 @@ class Workspace:
             raise NotReady(f"Agree to send text to {self.model.host} first.")
         try:
             done = self.model.complete(prompt.system, prompt.user)
-        except ModelError:
-            self.store.add_call(self.application_id, section, "failed", self.model.provider, self.model.name, prompt.system, prompt.user, "", parent_id=parent_id)
+        except ModelError as exc:
+            self._log(f"{exc} ", section, "failed", self.model.provider, self.model.name, prompt.system, prompt.user, "", parent_id=parent_id)
             raise
         failure = "The reply was cut off at the token limit." if done.truncated else "The model returned no text." if not done.text.strip() else None
-        call = self.store.add_call(self.application_id, section, "failed" if failure else purpose, self.model.provider, done.model, prompt.system, prompt.user, done.text, done.input_tokens, done.output_tokens, parent_id=parent_id)
+        call = self._log("", section, "failed" if failure else purpose, self.model.provider, done.model, prompt.system, prompt.user, done.text, done.input_tokens, done.output_tokens, parent_id=parent_id)
         if failure:
             raise ModelError(f"{failure} Nothing was changed, and the call is in the log.")
         return call, done
+
+    def _log(self, said: str, *call: Any, **more: Any) -> ModelCall:
+        # The text has reached the host by now, so a bare database error would hide that it was sent.
+        try:
+            return self.store.add_call(self.application_id, *call, **more)
+        except sqlite3.Error as exc:
+            lost = exc
+        raise ModelError(f"{said}Your text was sent to {self.model.host}, but Grant Matcher could not write the call to its log ({lost}), so the AI-use statement will not show this call.")
 
     def propose(self, section: str, action: Literal["polish", "revise", "draft"], instruction: str = "") -> Proposal:
         rule = self._rule(section)

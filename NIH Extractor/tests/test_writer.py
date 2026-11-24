@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from helpers import FakeModel, Grants, Guide, start
+from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
 from nih_grant_matcher import __version__
 from nih_grant_matcher.clients import ApiError
 from nih_grant_matcher.llm import ModelError
@@ -432,6 +432,42 @@ def test_a_refusal_is_reported_and_logged(tmp_path) -> None:
     with pytest.raises(ModelError):
         ws.propose("specific-aims", "polish")
     assert ws.store.calls(ws.application_id)[0].response == ""
+
+def test_a_call_whose_error_cannot_be_read_is_logged_as_failed(tmp_path, post) -> None:
+    post.queue.append(error_with_unreadable_body(TimeoutError("timed out")))
+    ws = start(tmp_path, model=model("compatible", base_url="https://example.test/v1"))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(ModelError, match="may have reached example.test"):
+        ws.propose("specific-aims", "polish")
+    assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["failed"] and "No AI model was used" not in ws.view().disclosure
+
+@pytest.mark.parametrize("odd", [{"model": {"id": "served-2"}}, {"model": ["served-2"]}, {"usage": {"prompt_tokens": "40", "completion_tokens": 7.0}}, {"usage": {"prompt_tokens": True, "completion_tokens": {"text": 7}}}, {"usage": {"prompt_tokens": [40], "completion_tokens": "7"}}])
+def test_a_reply_with_a_model_or_a_count_of_another_type_is_offered_and_logged(odd, tmp_path, post) -> None:
+    post.reply({"model": "served-1", "choices": [{"message": {"role": "assistant", "content": "We study cardiac cells."}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 9, "completion_tokens": 5}, **odd})
+    ws = start(tmp_path, model=model("compatible", base_url="https://example.test/v1"))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    assert ws.propose("specific-aims", "polish").text == "We study cardiac cells."
+    call = ws.store.calls(ws.application_id)[0]
+    assert (call.purpose, call.model, call.input_tokens, call.output_tokens) == ("polish", "m" if "model" in odd else "served-1", *((0, 0) if "usage" in odd else (9, 5)))
+
+@pytest.mark.parametrize("error", [None, ModelError("example.test answered 500: overloaded.", "overload", 500)])
+def test_a_log_that_cannot_be_written_after_the_request_says_the_text_was_sent(error, tmp_path) -> None:
+    import sqlite3
+    fake = FakeModel("We study cardiac cells.", error=error)
+    ws = start(tmp_path, model=fake)
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    blocker = sqlite3.connect(ws.store.db_path)
+    blocker.execute("BEGIN IMMEDIATE")
+    ws.store.conn.execute("PRAGMA busy_timeout = 50")
+    try:
+        with pytest.raises(ModelError) as failed:
+            ws.propose("specific-aims", "polish")
+    finally:
+        blocker.rollback()
+        blocker.close()
+    said = str(failed.value)
+    assert len(fake.seen) == 1 and "sent to example.test" in said and "database is locked" in said and "AI-use statement will not show this call" in said
+    assert error is None or said.startswith("example.test answered 500: overloaded.")
 
 def test_the_statement_says_only_what_the_log_shows(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))

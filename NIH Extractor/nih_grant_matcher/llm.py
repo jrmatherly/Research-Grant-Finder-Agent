@@ -1,6 +1,6 @@
 from __future__ import annotations
 import http.client, json, re, time, urllib.error, urllib.parse, urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Literal
 from . import keys
 from .clients import ApiError
@@ -66,7 +66,11 @@ def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None,
             left = True
             raw = response.read()
     except urllib.error.HTTPError as exc:
-        failed = _http_error(exc, host, key)
+        try:
+            failed = _http_error(exc, host, key)
+        except Exception as unread:
+            # The error page can drop mid-read or name a redirect that does not parse, and the caller logs only a ModelError.
+            failed = ModelError(_redact(f"{host} answered {exc.code}, and Grant Matcher could not read the rest of its answer: {unread}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
     except (OSError, http.client.HTTPException) as exc:
         failed = ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
     except Exception as exc:
@@ -138,7 +142,9 @@ class HttpModel:
             body = {**{k: v for k, v in body.items() if k != self._limit}, other: max_tokens}
             data = _retry(lambda: _send(url, headers, body, self._key))
         try:
-            return read(self, data)
+            done = read(self, data)
+            # Any JSON passes the readers, and the log stores the model as text and each count as a whole number.
+            return replace(done, model=done.model if isinstance(done.model, str) and done.model else self.name, input_tokens=done.input_tokens if type(done.input_tokens) is int else 0, output_tokens=done.output_tokens if type(done.output_tokens) is int else 0)
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise ModelError(f"The reply from {self.host} was not in the form Grant Matcher reads: {exc!r}") from None
 

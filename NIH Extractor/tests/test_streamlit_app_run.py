@@ -882,6 +882,21 @@ def test_test_connection_refuses_a_host_without_consent(tmp_path, monkeypatch, p
     assert post.calls == 0
 
 
+def test_test_connection_reads_a_token_count_that_is_text_as_zero(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    from nih_grant_matcher.ui import apply_page
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    for name, value in (("llm.provider", "compatible"), ("llm.model", "llama9"), ("consent:localhost", "2026-11-23T00:00:00")):
+        store.set_setting(name, value)
+    post.reply({**_openai_reply("Hello."), "usage": {"prompt_tokens": "40", "completion_tokens": 7}})
+    try:
+        said = apply_page._test_connection(store)
+    finally:
+        store.close()
+    assert said == "llama9 at localhost answered. The test used 7 tokens."
+
+
 def _openai_reply(text: str) -> dict:
     return {"model": "llama9", "choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 9, "completion_tokens": 5}}
 

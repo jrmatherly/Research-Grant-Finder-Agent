@@ -1,6 +1,6 @@
 import http.server, io, threading, traceback, urllib.error
 import pytest
-from helpers import fixture, model, model_for, strict_open
+from helpers import error_with_unreadable_body, fixture, model, model_for, strict_open
 from nih_grant_matcher import llm
 from nih_grant_matcher.llm import PROVIDERS, ModelError, cautions, connect, list_models
 from nih_grant_matcher.store import OpportunityStore
@@ -242,6 +242,21 @@ def test_a_failure_while_the_reply_is_read_says_the_request_may_have_reached_the
     with pytest.raises(ModelError, match="may have reached api.openai.com") as failed:
         model("openai").complete("s", "u")
     assert post.calls == 1 and "the reply could not be read" in str(failed.value)
+
+@pytest.mark.parametrize("broken", [TimeoutError("timed out"), ConnectionResetError(54, "Connection reset by peer"), http.client.IncompleteRead(b"{", 120), OSError("reset after sk-test-123")])
+def test_an_error_whose_body_cannot_be_read_is_a_model_error_without_the_key(broken, post) -> None:
+    post.queue.append(error_with_unreadable_body(broken))
+    with pytest.raises(ModelError, match="may have reached api.openai.com") as failed:
+        model("openai", key="sk-test-123").complete("s", "u")
+    assert "502" in str(failed.value) and "not sent again" in str(failed.value) and "sk-test" not in str(failed.value) and post.calls == 1
+
+def test_a_redirect_to_an_address_that_does_not_parse_is_a_model_error(post) -> None:
+    def redirected(url: str):
+        raise urllib.error.HTTPError(url, 302, "Found", {"location": "http://[::1/v1"}, io.BytesIO(b""))
+    post.queue.append(redirected)
+    with pytest.raises(ModelError, match="302") as failed:
+        model("openai").complete("s", "u")
+    assert "api.openai.com" in str(failed.value) and post.calls == 1
 
 def test_a_failure_before_the_request_leaves_does_not_say_it_may_have_reached_the_provider(post) -> None:
     post.fail_with(ValueError("Invalid header value"))

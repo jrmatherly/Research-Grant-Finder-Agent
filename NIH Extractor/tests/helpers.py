@@ -1,4 +1,4 @@
-import http.client, json, re, subprocess, urllib.parse
+import http.client, io, json, re, subprocess, urllib.error, urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
 from nih_grant_matcher.llm import PROVIDERS, HttpModel, ModelError
@@ -72,6 +72,14 @@ def strict_open(request, timeout=None):
     for name, value in request.header_items():
         conn.putheader(name, value)
     raise AssertionError("http.client accepted every header, so no request was refused")
+
+def error_with_unreadable_body(broken: BaseException, status: int = 502):
+    # The connection drops while the error page arrives.
+    class Body(io.BytesIO):
+        def read(self, *args): raise broken
+    def failed(url: str):
+        raise urllib.error.HTTPError(url, status, "Bad Gateway", {}, Body())
+    return failed
 
 class FakeModel:
     provider, name, host = "fake", "fake-1", "example.test"
