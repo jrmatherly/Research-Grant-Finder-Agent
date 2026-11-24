@@ -130,3 +130,10 @@ def test_no_key_reaches_the_database(tmp_path, linux) -> None:
     store.set_setting("llm.provider", "claude")
     store.close()
     assert b"sk-secret-9" not in (tmp_path / "g.sqlite3").read_bytes()
+
+def test_a_key_file_variable_that_names_no_file_names_the_variable_and_the_path(tmp_path, monkeypatch, linux) -> None:
+    missing = tmp_path / "no-such-key"
+    monkeypatch.setenv("OPENAI_API_KEY_FILE", str(missing))
+    with pytest.raises(keys.UnreadableKey) as failed:
+        keys.get(PROVIDERS["openai"], tmp_path)
+    assert "OPENAI_API_KEY_FILE" in str(failed.value) and str(missing) in str(failed.value)

@@ -117,7 +117,7 @@ def test_a_key_with_a_line_break_stays_out_of_the_error(monkeypatch) -> None:
     with pytest.raises(ModelError) as failed:
         model("claude", key="sk-leak\r9z8y").complete("s", "u")
     shown = "".join(traceback.format_exception_only(failed.value))
-    assert "sk-leak" not in shown and "9z8y" not in shown and "[key]" in shown and failed.value.__context__ is None and failed.value.__cause__ is None
+    assert "sk-leak" not in shown and "9z8y" not in shown and "not printable ASCII" in shown and failed.value.__context__ is None and failed.value.__cause__ is None
 
 def _serve(answer) -> http.server.HTTPServer:
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -218,3 +218,33 @@ def test_connect_needs_a_provider_and_its_key(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("nih_grant_matcher.keys.get", lambda provider, data_dir: None)
     assert (connect(store).name, connect(store).host) == ("llama9", "localhost")
     store.close()
+
+@pytest.mark.parametrize("call", [lambda key: model("claude", key=key).complete("s", "u"), lambda key: list_models(PROVIDERS["openai"], PROVIDERS["openai"].base_url, key)])
+def test_a_key_with_a_latin_1_character_and_a_line_break_is_refused_before_a_request(call, monkeypatch) -> None:
+    monkeypatch.setattr(llm, "_open", strict_open)
+    with pytest.raises(ModelError) as failed:
+        call("sk-leak\xe9\r9z8y")
+    shown = "".join(traceback.format_exception_only(failed.value))
+    assert "sk-leak" not in shown and "9z8y" not in shown and "not printable ASCII" in shown
+
+def test_an_openai_reply_with_no_text_at_the_token_limit_is_cut_off(post) -> None:
+    ok = fixture("openai-ok")
+    post.reply({**ok, "choices": [{**ok["choices"][0], "message": {"role": "assistant", "content": None}, "finish_reason": "length"}]})
+    done = model("openai").complete("s", "u")
+    assert (done.text, done.truncated) == ("", True)
+
+class _ReplyThatBreaks(io.BytesIO):
+    def read(self, *args):
+        raise ValueError("the reply could not be read")
+
+def test_a_failure_while_the_reply_is_read_says_the_request_may_have_reached_the_provider(post) -> None:
+    post.queue.append(lambda url: _ReplyThatBreaks())
+    with pytest.raises(ModelError, match="may have reached api.openai.com") as failed:
+        model("openai").complete("s", "u")
+    assert post.calls == 1 and "the reply could not be read" in str(failed.value)
+
+def test_a_failure_before_the_request_leaves_does_not_say_it_may_have_reached_the_provider(post) -> None:
+    post.fail_with(ValueError("Invalid header value"))
+    with pytest.raises(ModelError) as failed:
+        model("openai").complete("s", "u")
+    assert "may have reached" not in str(failed.value) and "Invalid header value" in str(failed.value)
