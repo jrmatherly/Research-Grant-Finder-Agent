@@ -67,7 +67,7 @@ class Model(Protocol):
     provider: str
     name: str
     host: str
-    def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion: ...
+    def complete(self, system: str, user: str, max_tokens: int = 16000, probe: bool = False) -> Completion: ...
 
 @dataclass(frozen=True)
 class Application:

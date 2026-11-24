@@ -296,7 +296,11 @@ def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None 
         st.session_state[consent_key] = agreed
         # A label is its accessible name as written and renders an IPv6 or www. host as an emoji or a link whatever the escape, so the host stays in the caption above.
         st.checkbox("I agree to send my text to this host", disabled=agreed, key=consent_key, on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
-        st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for.", on_click=_act, args=(db_path, _test_connection))
+        # Not a callback, so that the spinner shows while the request waits. Its notice is drawn here, since the notices above were drawn before the click was read.
+        if st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for."):
+            with st.spinner(f"Waiting for {escape_markdown(host)} to answer, for up to a minute."):
+                _act(db_path, _test_connection)
+            show_notices()
 
 def _choose_provider(store: OpportunityStore) -> None:
     store.set_setting("llm.provider", st.session_state["apply_llm_provider"])
@@ -328,7 +332,7 @@ def _test_connection(store: OpportunityStore) -> str:
     # The Base URL's callback runs first when it is edited and the button clicked at once, so the disabled button is not enough.
     if not store.setting(f"consent:{model.host}"):
         raise ValueError(f"Agree to send text to {model.host} first.")
-    done = model.complete("Answer in one word.", "Say hello.", max_tokens=64)
+    done = model.complete("Answer in one word.", "Say hello.", max_tokens=64, probe=True)
     return f"{escape_markdown(done.model)} at {escape_markdown(model.host)} answered. The test used {done.input_tokens + done.output_tokens} tokens."
 
 def _announcement_tab(view: ApplicationView, db_path: str, app_id: int) -> None:

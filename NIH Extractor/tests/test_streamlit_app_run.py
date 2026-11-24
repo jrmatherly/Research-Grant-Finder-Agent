@@ -1592,7 +1592,7 @@ def test_a_review_of_a_revision_saved_over_during_the_call_is_not_said_to_be_sho
     ws = Workspace(store, 1)
     first = ws.write("specific-aims", "Aim 1.", parent=None)
     class SavedMeanwhile(FakeModel):
-        def complete(self, system, user, max_tokens=16000):
+        def complete(self, system, user, max_tokens=16000, probe=False):
             ws.write("specific-aims", "Aim 1, changed in another tab.", parent=first.id)
             return super().complete(system, user)
     notices = []
@@ -1910,3 +1910,18 @@ def test_the_sidebar_says_which_scores_are_shown_while_a_minimum_is_set(tmp_path
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     assert "Showing scores of 35 and up." in [c.value for c in app.sidebar.caption]
+
+def test_test_connection_makes_one_try_and_explains_a_busy_provider(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setenv("GEMINI_API_KEY", "g-key-test-1234")
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("gemini").run(timeout=30)
+    app.checkbox(key="apply_llm_consent_generativelanguage.googleapis.com").check().run(timeout=30)
+    busy = {"error": {"code": "service_unavailable", "message": "gemini-4-hydrogen is currently experiencing high demand."}}
+    post.fail(503, busy)
+    post.fail(503, busy)
+    app.button(key="apply_llm_test_button").click().run(timeout=30)
+    assert not app.exception and post.calls == 1 and post.slept == []
+    assert any("says nothing about your key" in e.value for e in app.error)

@@ -95,7 +95,7 @@ class FakeModel:
     provider, name, host = "fake", "fake-1", "example.test"
     def __init__(self, *replies: str | ModelError, truncated: bool = False, error: ModelError | None = None) -> None:
         self.replies, self.truncated, self.error, self.seen = list(replies), truncated, error, []
-    def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion:
+    def complete(self, system: str, user: str, max_tokens: int = 16000, probe: bool = False) -> Completion:
         self.seen.append(SimpleNamespace(system=system, user=user))
         if self.error is not None:
             raise self.error

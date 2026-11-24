@@ -398,3 +398,33 @@ def test_a_failure_before_the_request_leaves_does_not_say_it_may_have_reached_th
     with pytest.raises(ModelError) as failed:
         model("openai").complete("s", "u")
     assert "may have reached" not in str(failed.value) and "Invalid header value" in str(failed.value)
+
+@pytest.mark.parametrize("status, error, says", [
+    (401, {"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}}, "refused this request"),
+    (429, {"error": {"code": "quota_exceeded", "message": "You have exceeded your daily quota."}}, "quota, credit or spending limit"),
+    (429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-4-argon"}}, "quota, credit or spending limit"),
+    (503, {"error": {"code": "service_unavailable", "message": "gemini-4-hydrogen is currently experiencing high demand."}}, "says nothing about your key"),
+    (404, {"error": {"code": "model_not_found", "message": "The specified model was not found."}}, "did not find this model")])
+def test_a_failed_test_says_what_it_means_for_the_key(status, error, says, post) -> None:
+    post.fail(status, error)
+    post.fail(status, error)
+    with pytest.raises(ModelError) as failed:
+        model("gemini", key="sk-test-123").complete("s", "u", probe=True)
+    assert error["error"]["message"] in str(failed.value) and says in str(failed.value) and post.calls == 1 and post.slept == []
+
+def test_a_429_with_a_limit_above_zero_is_still_a_rate_limit(post) -> None:
+    post.fail(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: requests per minute, limit: 15"}})
+    post.reply(fixture("gemini-ok"))
+    assert model("gemini").complete("s", "u").text == "Hello." and post.calls == 2
+
+def test_a_draft_does_not_wait_and_retry_a_quota_of_zero(post) -> None:
+    post.fail(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-4-argon"}})
+    with pytest.raises(ModelError) as failed:
+        model("gemini").complete("s", "u")
+    assert (failed.value.kind, post.calls, post.slept) == ("quota", 1, [])
+
+def test_a_model_list_that_fails_is_not_told_to_list_the_models(post) -> None:
+    post.fail(404, {"error": {"message": "Not Found"}})
+    with pytest.raises(ModelError) as failed:
+        list_models(PROVIDERS["compatible"], "http://localhost:11434", None)
+    assert "did not find this model" not in str(failed.value)
