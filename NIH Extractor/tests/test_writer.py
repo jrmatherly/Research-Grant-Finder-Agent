@@ -750,6 +750,16 @@ def test_a_new_reading_keeps_a_decided_item_once_and_replaces_the_rest(tmp_path)
     again, dropped = ws.extract_requirements()
     assert [(r.text, r.confirmed, r.call_id) for r in again] == [("Describe data sharing.", True, found[0].call_id)] and dropped == 0
 
+def test_a_draft_sends_a_model_requirement_only_once_the_applicant_confirms_it(tmp_path) -> None:
+    undecided = json.dumps([item("must", "specific-aims", "Describe data sharing.", "Applicants must describe data sharing.")])
+    ws = start(tmp_path, model=FakeModel(undecided, READ_REPLIES[1], "[]", "Aim 1."), facts={"aim": "Test drug X.", "hypothesis": "X lowers pressure."})
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(next(r.id for r in found if r.text == "State one hypothesis."), True)
+    ws.propose("specific-aims", "draft")
+    sent = ws.model.seen[-1].user
+    assert "State one hypothesis. The announcement says: The Specific Aims must state one hypothesis." in sent and "data sharing" not in sent
+
 def test_reading_needs_section_i_iv_or_v(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel("[]"))
     ws.fetch_announcement(Guide("A notice with no headings at all. " * 40), Grants(""))

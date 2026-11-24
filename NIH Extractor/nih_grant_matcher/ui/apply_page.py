@@ -391,7 +391,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         if s.rule.model == "draft":
             st.button("Draft from my inputs", key="apply_draft_button", disabled=bool(s.gaps), help=f"Add {', '.join(s.gaps)} under Your inputs first." if s.gaps else f"Sends your inputs for this section, the requirements you confirmed for it, and the research summary and expertise in your profile to {escape_markdown(ws.model.host)}.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "draft")))
     elif s.rule.model != "none":
-        st.caption(f"Polish and Revise need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
+        st.caption(f"{'Draft, Polish and Revise' if s.rule.model == 'draft' else 'Polish and Revise'} need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     # A proposal waits in the log, so a reload shows it again.
     if (proposal := ws.pending(key)) is not None:
         st.markdown(f"**A model's {ACTION_NOUNS.get(proposal.action, proposal.action)}, proposal {proposal.call_id}**")

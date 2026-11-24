@@ -1172,12 +1172,12 @@ def test_the_sections_tab_says_what_the_model_set_up_still_needs(tmp_path, monke
     monkeypatch.setattr(keys, "PLATFORM", "linux")
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
-    needs = lambda: [c.value for c in app.caption if c.value.startswith("Polish and Revise need")]
-    assert not app.exception and needs() == ["Polish and Revise need a model. No provider is chosen. Set it up under Model at the top of this page."]
+    needs = lambda: [c.value for c in app.caption if c.value.startswith("Draft, Polish and Revise need")]
+    assert not app.exception and needs() == ["Draft, Polish and Revise need a model. No provider is chosen. Set it up under Model at the top of this page."]
     app.selectbox(key="apply_llm_provider").set_value("openai").run(timeout=30)
-    assert needs() == ["Polish and Revise need a model. No API key was found for the provider. Set it up under Model at the top of this page."]
+    assert needs() == ["Draft, Polish and Revise need a model. No API key was found for the provider. Set it up under Model at the top of this page."]
     app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
-    assert needs() == ["Polish and Revise need a model. No model is chosen. Set it up under Model at the top of this page."]
+    assert needs() == ["Draft, Polish and Revise need a model. No model is chosen. Set it up under Model at the top of this page."]
     assert not any(b.key == "apply_polish_button" for b in app.button)
 
 

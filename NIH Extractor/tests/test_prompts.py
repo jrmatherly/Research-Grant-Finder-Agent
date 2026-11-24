@@ -28,6 +28,12 @@ def test_a_requirement_whose_quote_is_not_in_the_announcement_is_dropped() -> No
     kept, dropped = prompts.parse_requirements(reply, "Section IV.\nApplicants must   describe data sharing.")
     assert [r.text for r in kept] == ["Describe data sharing."] and dropped == 1 and kept[0].origin == "model"
 
+def test_a_quote_of_a_few_words_proves_nothing_and_is_dropped_and_counted() -> None:
+    announcement = "Section IV. The Research Strategy must follow the rules."
+    reply = json.dumps([{"kind": "must", "section": "", "text": "Include a power analysis.", "quote": "the", "limit": None}, {"kind": "must", "section": "research-strategy", "text": "Follow the rules.", "quote": "The Research Strategy must follow the rules.", "limit": None}])
+    kept, dropped = prompts.parse_requirements(reply, announcement)
+    assert [r.text for r in kept] == ["Follow the rules."] and dropped == 1
+
 def test_a_reply_that_is_not_json_yields_nothing() -> None:
     assert prompts.parse_requirements("Here are the requirements:", "text") == ([], 1)
     assert prompts.parse_requirements('{"kind": "must"}', "text") == ([], 1)
