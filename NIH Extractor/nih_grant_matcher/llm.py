@@ -56,17 +56,21 @@ def _redact(text: str, key: str | None) -> str:
 def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None, timeout: int = 600) -> dict:
     # One attempt. clients._read retries any failure three times, which would pay for a reply three times.
     host = host_of(url)
-    failed = None
+    # http.client quotes a header it refuses, and _redact cannot find a key that it quotes as bytes.
+    if key and not all(" " <= c <= "~" for c in key):
+        raise ModelError("The key holds a character that is not printable ASCII, such as a line break. Copy it again from the provider's page.")
+    failed, left = None, False
     try:
         request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1", **headers}, method="GET" if body is None else "POST")
         with _open(request, timeout=timeout) as response:
+            left = True
             raw = response.read()
     except urllib.error.HTTPError as exc:
         failed = _http_error(exc, host, key)
     except (OSError, http.client.HTTPException) as exc:
         failed = ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
     except Exception as exc:
-        failed = ModelError(_redact(f"The request to {host} failed: {exc}. It was not sent again.", key))
+        failed = ModelError(_redact(f"The request to {host} failed: {exc}." + (f" The request may have reached {host}, so it may be charged." if left else "") + " It was not sent again.", key))
     # Raised outside the except clauses, so that the error does not carry the original, which can quote the key, as its context.
     if failed is not None:
         raise failed
@@ -158,6 +162,9 @@ def _openai_reply(m: HttpModel, data: dict) -> Completion:
     message, usage = choice["message"], data.get("usage") or {}
     if message.get("refusal") or choice.get("finish_reason") == "content_filter":
         raise ModelError(f"{m.host} declined the request. {message.get('refusal') or 'Its content filter omitted the reply.'}", "refused")
+    # A reasoning model can spend the whole limit before it writes, and some servers then send no text at all.
+    if message.get("content") is None and choice.get("finish_reason") == "length":
+        return Completion("", data.get("model") or m.name, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, True)
     if not isinstance(text := message.get("content"), str):
         raise ModelError(f"The reply from {m.host} had no text.")
     return Completion(text, data.get("model") or m.name, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, choice.get("finish_reason") == "length")

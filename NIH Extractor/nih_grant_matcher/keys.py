@@ -23,7 +23,11 @@ def get(provider: Provider, data_dir: Path) -> str | None:
     if value := _checked(os.environ.get(provider.key_env), provider.key_env):
         return value
     if path := os.environ.get(provider.key_env + "_FILE"):
-        return _checked(Path(path).read_text(encoding="utf-8", errors="replace"), f"{path}, the file that {provider.key_env}_FILE names")
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise UnreadableKey(f"{provider.key_env}_FILE names {path}, which Grant Matcher cannot read: {exc.strerror or exc}.") from None
+        return _checked(text, f"{path}, the file that {provider.key_env}_FILE names")
     slot = _slot(provider, data_dir)
     if slot not in _cache:
         try:
