@@ -13,6 +13,8 @@ To start the dashboard, see the [README](../README.md#getting-started) for a loc
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
 
+**Show me around**, at the bottom of the sidebar in the Find view, points at each part of the page in turn. Press Escape to leave it.
+
 When you open the dashboard and saved results exist, the dashboard loads them. You do not have to search first.
 
 ## Run a search

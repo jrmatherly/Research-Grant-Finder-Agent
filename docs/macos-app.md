@@ -68,6 +68,8 @@ The key is encrypted at rest and locked while the login keychain is locked, and 
 
 The app carries the licence texts of the packages it bundles, in `Grant Matcher.app/Contents/Resources/licenses`, one folder per package. The build copies them from the installed packages. Streamlit's package holds none, so the build fetches Streamlit's `LICENSE` and `NOTICES` files for the installed version from its repository and checks them against `NIH Extractor/macos/streamlit-licenses.sha256`. When a new Streamlit changes either file, the build stops and names the folder to read. Update the checksums with `shasum -a 256 LICENSE NOTICES` in that folder.
 
+The tour in the Find view uses driver.js 1.14.0, under the MIT licence. Its two files and its licence are in `NIH Extractor/nih_grant_matcher/ui/vendor/`, copied unchanged from the npm tarball, and `NIH Extractor/tests/test_tour.py` pins their checksums. The app carries the licence in `licenses/driver.js`. To move to a newer driver.js, copy the three files again, update the pins, and repeat the browser check of the tour.
+
 The updater is [Sparkle](https://sparkle-project.org). The build downloads Sparkle 2.10.1 and checks it against the checksum in `build.sh`. To move to a newer Sparkle, change `sparkle_version` and `sparkle_sha256` there together, then run `NIH Extractor/macos/rehearse-update.sh`.
 
 The rehearsal updates a throwaway version 0.0.1 to 0.0.2 with a key of its own. It needs `CODESIGN_IDENTITY`, and someone to choose `Check for Updates…`, then `Install Update`, then `Install and Relaunch`. Its app is also named Grant Matcher, so it reads the real database and rotates the real `server.log`. When it ends, it deletes `Grant Matcher.app` and `Grant Matcher.dmg` from `NIH Extractor/macos/dist`.

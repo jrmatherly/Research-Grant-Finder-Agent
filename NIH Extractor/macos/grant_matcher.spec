@@ -47,8 +47,10 @@ a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[root],
     binaries=st_binaries,
-    # collect_submodules gathers code only, so the term_rarity.json that config.py reads beside itself is listed by hand.
-    datas=st_datas + copy_metadata("streamlit") + [(os.path.join(root, "nih_grant_matcher", "term_rarity.json"), "nih_grant_matcher"), (os.path.join(root, "streamlit_app.py"), ".")] + licence_files(),
+    # collect_submodules gathers code only, so the data files that config.py and ui/tour.py read beside themselves are listed by hand, each by name so that a stray file is not shipped.
+    datas=st_datas + copy_metadata("streamlit") + [(os.path.join(root, "nih_grant_matcher", "term_rarity.json"), "nih_grant_matcher"), (os.path.join(root, "streamlit_app.py"), ".")]
+    + [(os.path.join(root, "nih_grant_matcher", "ui", "vendor", f), os.path.join("nih_grant_matcher", "ui", "vendor")) for f in ("driver.js.iife.js", "driver.css", "driver.js.LICENSE")]
+    + [(os.path.join(root, "nih_grant_matcher", "ui", "vendor", "driver.js.LICENSE"), os.path.join("licenses", "driver.js"))] + licence_files(),
     hiddenimports=st_hidden + collect_submodules("nih_grant_matcher") + ["pandas"],
 )
 pyz = PYZ(a.pure)

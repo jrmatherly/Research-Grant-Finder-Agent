@@ -77,6 +77,10 @@ fi
 echo "Smoke test passed"
 # A release must not go out without the licence texts of what it bundles.
 test -s "$app/Contents/Resources/licenses/streamlit/NOTICES"
+# The tour reads these files at run time, and the app must carry driver.js's licence.
+test -s "$app/Contents/Resources/nih_grant_matcher/ui/vendor/driver.js.iife.js"
+test -s "$app/Contents/Resources/nih_grant_matcher/ui/vendor/driver.css"
+test -s "$app/Contents/Resources/licenses/driver.js/driver.js.LICENSE"
 test -x "$framework/Versions/B/Autoupdate"
 test ! -e "$framework/Versions/B/XPCServices"
 "$app/Contents/MacOS/Grant Matcher" --check-updater || { echo "The built app cannot load Sparkle, so it could never update." >&2; exit 1; }

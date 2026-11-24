@@ -367,3 +367,13 @@ def test_the_server_does_not_overwrite_what_the_app_writes_to_the_log(monkeypatc
     monkeypatch.setitem(sys.modules, "webview", webview)
     launcher.run_window()
     assert "updater did not start" in log.read_text() and "server line" in log.read_text()
+
+
+def test_the_app_carries_the_vendored_tour_files_and_their_licence() -> None:
+    spec = (LAUNCHER.parent / "grant_matcher.spec").read_text(encoding="utf-8")
+    assert 'os.path.join("nih_grant_matcher", "ui", "vendor")' in spec
+    assert 'os.path.join("licenses", "driver.js")' in spec
+    build = (LAUNCHER.parent / "build.sh").read_text(encoding="utf-8")
+    assert 'test -s "$app/Contents/Resources/nih_grant_matcher/ui/vendor/driver.js.iife.js"' in build
+    assert 'test -s "$app/Contents/Resources/nih_grant_matcher/ui/vendor/driver.css"' in build
+    assert 'test -s "$app/Contents/Resources/licenses/driver.js/driver.js.LICENSE"' in build
