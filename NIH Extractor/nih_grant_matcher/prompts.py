@@ -11,7 +11,7 @@ from .rules import GRANT_TYPES, GrantType, Limit, SectionRule, describe
 _KINDS = {"limit": "a limit on the length of one section", "must": "something the application must contain or do", "criterion": "something the reviewers will judge"}
 _SECTION_KEYS = {s.key for g in GRANT_TYPES.values() for s in g.sections}
 _UNITS = ("pages", "lines", "sentences")
-# A quote of a word or two is in almost any announcement, so it proves nothing; a short sentence has more letters than this.
+# A quote of a word or two is in almost any announcement, so it proves nothing. shortcut: a whole sentence under 20 letters and digits is dropped too. Upgrade if such a limit is missed.
 MIN_QUOTE_LETTERS = 20
 
 @dataclass(frozen=True)
