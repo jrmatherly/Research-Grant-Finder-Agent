@@ -60,7 +60,7 @@ Reply with a JSON array and nothing else. Each item is an object with these keys
 - "section": the key of the section of the application it applies to, or "" when it applies to no one section.
 - "text": the requirement in one short sentence of your own.
 - "quote": the whole sentence of the announcement it comes from, copied exactly.
-- "limit": for a limit, an object {{"amount": a number, "unit": one of {", ".join(_UNITS)}}}. Otherwise null.
+- "limit": for a limit, an object {{"amount": a number, "unit": one of {", ".join(_UNITS)}}}, and only when the quote gives that number in digits. Otherwise null.
 
 The kinds:
 {kinds}
