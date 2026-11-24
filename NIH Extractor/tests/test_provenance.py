@@ -109,3 +109,51 @@ def test_a_section_restored_to_text_from_before_a_model_says_no_model_text_remai
     statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], log, (polish,), (), (), ())
     assert "I used fake-1 (fake) to polish the Specific Aims." in statement and "No model text remains in the Specific Aims." in statement
     assert "The Project Narrative was written without a model." in statement and "Specific Aims was written without a model" not in statement
+
+def _plain(revisions, revision_id):
+    # The record as computed before any was kept: the whole chain of word diffs on every call.
+    from difflib import SequenceMatcher
+    by_id = {r.id: r for r in revisions}
+    chain = [by_id[revision_id]]
+    while chain[-1].parent_id is not None:
+        chain.append(by_id[chain[-1].parent_id])
+    words = []
+    for revision in chain[::-1]:
+        new, origin = revision.text.split(), "applicant" if revision.author == "applicant" else revision.action
+        opcodes = SequenceMatcher(a=[w for w, _ in words], b=new, autojunk=False).get_opcodes()
+        words = [pair for tag, i1, i2, j1, j2 in opcodes for pair in (words[i1:i2] if tag == "equal" else [(w, origin) for w in new[j1:j2]])]
+    return tuple(words)
+
+@__import__("pytest").mark.parametrize("held", [64, 3])
+def test_a_kept_record_equals_the_plain_chain_of_diffs(monkeypatch, held) -> None:
+    import random
+    from nih_grant_matcher import provenance
+    monkeypatch.setattr(provenance, "_HELD", held)
+    rng, vocabulary, texts = random.Random(held), "we study heart cells in old mice and rats with drug".split(), ["", "we study heart cells."]
+    for _ in range(300):
+        # Each chain numbers its revisions from 1, as a second database or a deleted application's reused ids would.
+        log = []
+        for n in range(1, rng.randint(1, 12) + 1):
+            parent = log[-1] if log else None
+            if log and rng.random() < 0.2:
+                old = rng.choice(log)
+                log.append(Revision(n, "specific-aims", old.id, "applicant", "write", old.text, None, NOW))
+                continue
+            if rng.random() < 0.25:
+                text = rng.choice(texts)
+            else:
+                words = (parent.text if parent else rng.choice(texts)).split()
+                for _ in range(rng.randint(0, 4)):
+                    at = rng.randint(0, len(words))
+                    words[at:at + rng.randint(0, 2)] = rng.choices(vocabulary, k=rng.randint(0, 3))
+                text = " ".join(words)
+            texts.append(text)
+            author = rng.choice(["applicant", "model"])
+            log.append(Revision(n, "specific-aims", parent.id if parent else None, author, "write" if author == "applicant" else rng.choice(["polish", "revise", "draft"]), text, n if author == "model" else None, NOW))
+        for revision_id in rng.sample(range(1, len(log) + 1), len(log)):
+            assert attribution(log, revision_id) == _plain(log, revision_id)
+
+def test_two_histories_that_end_in_the_same_text_keep_their_own_records() -> None:
+    mine = (_rev(1, None, "applicant", "We study cardiac cells."),)
+    polished = (_rev(1, None, "applicant", "We study heart cells."), _rev(2, 1, "model", "We study cardiac cells.", call=7))
+    assert attribution(mine, 1) == _plain(mine, 1) and attribution(polished, 2) == _plain(polished, 2) and attribution(mine, 1) != attribution(polished, 2)

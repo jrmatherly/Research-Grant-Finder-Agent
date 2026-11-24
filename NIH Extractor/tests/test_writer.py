@@ -559,3 +559,39 @@ def test_the_export_holds_the_statement_only_while_it_is_on(tmp_path) -> None:
     ws.set_disclosure(False)
     ws.export(tmp_path / "out")
     assert not statement.exists()
+
+def test_a_second_view_and_a_waiting_proposal_reuse_the_word_record(tmp_path, monkeypatch) -> None:
+    from difflib import SequenceMatcher
+    from nih_grant_matcher import provenance
+    from nih_grant_matcher.store import OpportunityStore
+    diffs = []
+    class Counted(SequenceMatcher):
+        def get_opcodes(self):
+            diffs.append(1)
+            return super().get_opcodes()
+    monkeypatch.setattr(provenance, "SequenceMatcher", Counted)
+    ws, words = start(tmp_path), [f"w{k}" for k in range(200)]
+    store, app, parent = ws.store, ws.application_id, None
+    for n in range(8):
+        words[n * 7] = f"{tmp_path.name}-{n}"
+        if n == 1:
+            call = store.add_call(app, "research-strategy", "polish", "fake", "fake-1", "s", "p", " ".join(words), parent_id=parent)
+            parent = store.add_revision(app, "research-strategy", parent, "model", "polish", " ".join(words), call.id).id
+        else:
+            parent = ws.write("research-strategy", " ".join(words), parent).id
+        ws.view()
+    # The page opens a new store and workspace on every rerun.
+    again = Workspace(OpportunityStore(tmp_path / "g.sqlite3"), app)
+    diffs.clear(); again.view()
+    assert diffs == []
+    store.add_call(app, "research-strategy", "polish", "fake", "fake-1", "s", "p", " ".join(words) + " more", parent_id=parent)
+    diffs.clear(); assert again.pending("research-strategy") is not None
+    assert len(diffs) == 1
+    diffs.clear(); again.pending("research-strategy"); again.view()
+    assert diffs == []
+    parent = again.write("research-strategy", " ".join(words) + " saved", parent).id
+    diffs.clear(); again.view()
+    assert len(diffs) == 1
+    again.restore("research-strategy", 3, parent)
+    diffs.clear(); again.view()
+    assert len(diffs) == 1
