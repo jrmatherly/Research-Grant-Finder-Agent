@@ -1249,6 +1249,49 @@ Read "Stage 1 follow-ups" first. F4 and decisions 13, 14 and 15 land in Task 9a.
 
 Branch `feat/writer-models`, cut from `main` after Stage 2 merges. When this stage merges, the applicant picks a provider, and a model polishes or revises text the applicant wrote. This is the use that NIH's reminder of 2026-05-14 calls acceptable. Every change is logged and attributed.
 
+**As built (2026-11-23).** Task 9a, Task 9 and Task 10 are done on the branch, after a refactor that split `_page` in `ui/apply_page.py` into one function for each tab and moved `escape_markdown` to `ui/markdown.py`. The code differs from the task text below in these ways, and later stages build on the code.
+
+The profile:
+
+- `from_export(text, limits=True)` applies the length limits. `save_profile` and both imports apply them. `store.profile()` reads a stored profile without them, because the build on `main` before this stage saved profiles with no limit, and such a profile must still open, rank and export. A save from the wizard is refused with the field and the limit, and an export of such a profile does not import until the field is shortened.
+- A wizard field carries `max_chars` from the constants in `profile.py`, except a field whose stored text is already over its limit, since Streamlit cuts a longer value. The aims box has no `max_chars`: Next and Save refuse a sentence over 600 characters and name it.
+- "Keep the built-in ranking" replaces the ranking fields (`keywords`, `examples`, `focus`, `examples_name`, `institutes`) and keeps the name and every background field. A move from that choice to "Rank with my own research" starts the ranking fields as a new draft does.
+- A fourth institute is stopped by `max_selections` in the wizard and by `from_export`. A repeated code is refused.
+- The 24 names in `config.INSTITUTES` were checked against NIH's list of institutes and centres on 2026-11-23. CC, CIT and CSR are on that list and issue no awards.
+
+Keys and the clients:
+
+- The Claude request sends `Authorization: Bearer <key>`, which Anthropic's pages give for direct HTTP requests (`x-api-key` is their legacy fallback). It sends `anthropic-beta: server-side-fallback-2026-07-01` with `"fallbacks": "default"`, so `Completion.model` is the model that answered.
+- The Gemini request has no `Api-Revision` header and carries `generation_config.max_output_tokens`. The `compatible` provider sends `max_tokens`, because Ollama's server ignores `max_completion_tokens` with no error.
+- A 500 is sent once. Only a 429 that is not a quota error, a 503 and a 529 are sent again. A 402 and a usage-limit error are kind `quota`.
+- `llm._open` is the `open` of an opener that follows no redirect, so a key header never reaches a second host. A 3xx is a `ModelError` that names the other host.
+- `keys.get` strips a value from any source and refuses one that is not printable ASCII, and `_send` refuses such a key before it builds a request. `keys.UnreadableKey` is the base of `KeychainError` and also covers a key file that cannot be read and a `_FILE` path that does not exist. The error is kept for the process until `forget`, `save` or `delete`, and the expander has `Try again`.
+- `/usr/bin/security -i` exits 2 for a failed `add-generic-password` line (run on 2026-11-23 with a dummy item), so `save` trusts its exit code.
+- The key line shows an ending only for a key of 12 characters or more.
+- `Test connection` and `Workspace._ask` both check `consent:<host>`. Consent is recorded by host name. Listing a provider's models contacts the provider before consent and sends none of the applicant's text.
+- Not sent: `anthropic-workspace-id`, which a Claude key that is not scoped to one workspace needs. Not checked against a live provider: any of the four back ends.
+
+The writer and the statement:
+
+- `Workspace._ask` is the one gate for a model call: a model, then consent for its host, then the request. Every reply is logged, and a cut-off, empty or refused reply is logged as `failed` and raised. `extract_requirements` and `review` use it in later stages.
+- `propose(section, "draft")` raises `NotReady` until Task 11 adds the prompt. `accept` takes a call of the purpose `draft`.
+- `restore(section, revision_id, parent)` takes the head the caller saw and raises `StaleEdit` when it moved, as `write` does. A second `accept` whose edits differ from what the first wrote raises `StaleEdit`.
+- `WorkspaceError` is a subclass of `ValueError`. The CLI and the view still catch `ValueError`.
+- `disclosure_statement(application, grant_type, revisions, calls, signoffs, facts, waiting, shares=None)`.
+- The statement's table below has two rows the first draft lacked: "No model text remains in the <section titles>." for a section with an accepted proposal and no model word left, and the sentence for a suggestion that is still waiting. Two rows gained "the". A share above zero that rounds to 0 reads "less than 1 percent", and one below 100 that rounds to 100 reads "more than 99 percent".
+- A failed call counts under "suggestions that I did not use" whether or not it left the machine. A failed call logs the model that was asked, and a successful one the model that answered.
+- The instruction of Revise is the applicant's own and is not fenced.
+- `provenance.attribution` keeps the word record of a revision in a cache of 64 records, keyed on a digest of each revision's author, action and text along its parent chain. On a 6,000-word section with 30 saves, a repeat `view()` fell from 4.7 s to 0.07 s. The first `view()` in a new process still takes about 4.7 s.
+
+Not fixed, for the owner:
+
+- Two widget labels pass through `escape_markdown`, so their accessible name holds backslashes ("127\.0\.0\.1", "Type PAR\-26\-042 to confirm").
+- OpenAI's page says newer models take a `developer` message where the code sends `system`.
+- `docs/docker.md` holds the `models` commands and the Compose secret, none of them run against the image, and lacks the `apply` commands of Stages 2 and 3.
+- The Model expander can close while no key is saved, though the caption on Sections points at it.
+- After a refused second accept, the edits typed in the other tab are not shown again.
+- The built application's own window was not opened, and no key was saved in it.
+
 ### Task 9a: The profile changes of decisions 13, 14 and 15, and the limits of F4
 
 Decisions 13 to 15 and follow-up F4 touch the profile and the scorer, and Task 9 touches only keys and the model back ends, so they are a task of their own on the same branch, before Task 9. The evidence for the sizes is in the research notes under "The institute bonus, measured again (2026-11-23)".
