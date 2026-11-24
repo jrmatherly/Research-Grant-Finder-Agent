@@ -182,3 +182,30 @@ def test_a_requirement_id_is_not_given_out_again(store) -> None:
     app, items = _app(store), [Requirement("must", f"Rule {n}.", "q", "parsed") for n in range(2)]
     first = {r.id for r in store.replace_requirements(app, "parsed", items)}
     assert not first & {r.id for r in store.replace_requirements(app, "parsed", items)}
+
+def test_a_model_revision_names_a_call_of_its_own_application_and_section(store) -> None:
+    app, other = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    call = store.add_call(app, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r")
+    for owner, section in ((other, "specific-aims"), (app, "project-narrative")):
+        with pytest.raises(ValueError):
+            store.add_revision(owner, section, None, "model", "polish", "r", call.id)
+    assert store.revisions(other) == [] and store.revisions(app) == []
+    assert store.add_revision(app, "specific-aims", None, "model", "polish", "r", call.id).call_id == call.id
+
+def test_a_model_revision_and_the_applicants_edit_on_it_are_written_together(store) -> None:
+    app = _app(store)
+    mine = store.add_revision(app, "specific-aims", None, "applicant", "write", "a")
+    calls = [store.add_call(app, "specific-aims", "polish", "fake", "fake-1", "s", "p", "b", parent_id=mine.id) for _ in range(2)]
+    edited = store.add_revision(app, "specific-aims", mine.id, "model", "polish", "b", calls[0].id, only_on_head=True, then="b, mine")
+    model = next(r for r in store.revisions(app) if r.call_id == calls[0].id)
+    assert (edited.author, edited.parent_id, edited.text, edited.created_at) == ("applicant", model.id, "b, mine", model.created_at)
+    assert store.add_revision(app, "specific-aims", mine.id, "model", "polish", "b", calls[1].id, only_on_head=True, then="c") is None
+    assert [r.text for r in store.revisions(app)] == ["a", "b", "b, mine"]
+
+def test_deleting_an_application_removes_its_discarded_proposals(store) -> None:
+    app, keep = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
+    gone, kept = store.add_call(app, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r"), store.add_call(keep, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r")
+    for call in (gone, kept):
+        store.set_setting(f"discarded:{call.id}", "2026-11-23T00:00:00")
+    store.delete_application(app)
+    assert store.setting(f"discarded:{gone.id}") is None and store.setting(f"discarded:{kept.id}") is not None

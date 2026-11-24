@@ -370,3 +370,21 @@ def test_the_export_holds_the_rules_the_decisions_the_log_and_the_text(tmp_path)
     assert "- Specific Aims. At most 1 page." in requirements and "- Research Strategy: at most 4 pages. (confirmed). The announcement says" in requirements
     assert f"- Revision {revision.id}. Specific Aims. applicant write, parent none, at " in (out / "provenance-log.md").read_text(encoding="utf-8")
     assert (out / "DRAFT-specific-aims.md").read_text(encoding="utf-8") == "# Specific Aims\n\nAim 1 maps heart cells.\n"
+
+def test_a_restore_after_a_save_from_another_tab_is_refused(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.store import OpportunityStore
+    ws = start(tmp_path)
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    second = ws.write("specific-aims", "Aim 1, changed.", parent=first.id)
+    other = Workspace(OpportunityStore(ws.store.db_path), ws.application_id)
+    read = ws.store.revisions
+    def read_then_other_tab_saves(app_id):
+        found = read(app_id)
+        monkeypatch.setattr(ws.store, "revisions", read)
+        other.write("specific-aims", "Tab two.", parent=second.id)
+        return found
+    monkeypatch.setattr(ws.store, "revisions", read_then_other_tab_saves)
+    with pytest.raises(StaleEdit) as stale:
+        ws.restore("specific-aims", first.id)
+    assert stale.value.head.text == "Tab two." and [r.text for r in ws.view().log] == ["Aim 1.", "Aim 1, changed.", "Tab two."]
+    other.store.close()

@@ -198,7 +198,11 @@ class Workspace:
         if old is None:
             raise ValueError(f"The {section} section has no revision {revision_id}.")
         current = head(revisions, section)
-        return current if current is not None and current.id == old.id else self.store.add_revision(self.application_id, section, old.id, "applicant", "write", old.text)
+        if current is not None and current.id == old.id:
+            return current
+        if (restored := self.store.add_revision(self.application_id, section, old.id, "applicant", "write", old.text, only_on_head=True, head=current.id)) is None:
+            raise StaleEdit(head(self.store.revisions(self.application_id), section))
+        return restored
 
     def sign(self, section: str, signer: str, revision_id: int, acknowledge: bool = False) -> Signoff:
         view = self.view()

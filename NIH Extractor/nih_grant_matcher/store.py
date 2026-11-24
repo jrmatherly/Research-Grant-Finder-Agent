@@ -125,6 +125,7 @@ class OpportunityStore:
         # The delete triggers let a row go only while this setting names its application.
         with self._write("applications"):
             self.conn.execute("INSERT INTO settings VALUES ('deleting', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(app_id),))
+            self.conn.execute("DELETE FROM settings WHERE key IN (SELECT 'discarded:' || id FROM model_calls WHERE application_id = ?)", (app_id,))
             for table in ("signoffs", "revisions", "requirements", "facts", "model_calls"):
                 self.conn.execute(f"DELETE FROM {table} WHERE application_id = ?", (app_id,))
             self.conn.execute("DELETE FROM applications WHERE id = ?", (app_id,))
@@ -167,13 +168,20 @@ class OpportunityStore:
             raise ValueError(f"Revision {revision_id} is not a revision of application {app_id} in the section {section}.")
     def revisions(self, app_id: int) -> list[Revision]:
         return [Revision(row["id"], row["section"], row["parent_id"], row["author"], row["action"], row["text"], row["call_id"], datetime.fromisoformat(row["created_at"])) for row in self._rows("revisions", "SELECT * FROM revisions WHERE application_id = ? ORDER BY id", (app_id,))]
-    def add_revision(self, app_id: int, section: str, parent_id: int | None, author: str, action: str, text: str, call_id: int | None = None, only_on_head: bool = False) -> Revision | None:
-        # With only_on_head, the insert itself checks that the parent is still the newest revision, so a save from another tab in between writes nothing and this returns None.
+    def add_revision(self, app_id: int, section: str, parent_id: int | None, author: str, action: str, text: str, call_id: int | None = None, only_on_head: bool = False, then: str | None = None, head: int | None = None) -> Revision | None:
+        # With only_on_head, the insert itself checks that the parent, or head when given, is still the newest revision, so a save from another tab in between writes nothing and this returns None.
+        # With then, the applicant's text goes on top of this revision in the same transaction, and the newer of the two is returned.
+        at = _now()
         with self._write("revisions"):
             if parent_id is not None:
                 self._own_revision(parent_id, app_id, section)
+            # A call that does not exist is left to the foreign key.
+            if call_id is not None and (call := self.conn.execute("SELECT application_id, section FROM model_calls WHERE id = ?", (call_id,)).fetchone()) is not None and tuple(call) != (app_id, section):
+                raise ValueError(f"Call {call_id} is not a call of application {app_id} in the section {section}.")
             guard = " WHERE (SELECT MAX(id) FROM revisions WHERE application_id = ? AND section = ?) IS ?" if only_on_head else ""
-            cursor = self.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, call_id, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?" + guard, (app_id, section, parent_id, author, action, text, call_id, _now(), *((app_id, section, parent_id) if only_on_head else ())))
+            cursor = self.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, call_id, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?" + guard, (app_id, section, parent_id, author, action, text, call_id, at, *((app_id, section, parent_id if head is None else head) if only_on_head else ())))
+            if cursor.rowcount and then is not None:
+                cursor = self.conn.execute("INSERT INTO revisions (application_id, section, parent_id, author, action, text, created_at) VALUES (?, ?, ?, 'applicant', 'write', ?, ?)", (app_id, section, cursor.lastrowid, then, at))
         return next(r for r in self.revisions(app_id) if r.id == cursor.lastrowid) if cursor.rowcount else None
     def signoffs(self, app_id: int) -> list[Signoff]:
         return [Signoff(row["section"], row["revision_id"], row["signer"], row["attestation"], tuple(json.loads(row["findings_json"])), row["tool_version"], datetime.fromisoformat(row["signed_at"])) for row in self._rows("signoffs", "SELECT * FROM signoffs WHERE application_id = ? ORDER BY id", (app_id,))]
