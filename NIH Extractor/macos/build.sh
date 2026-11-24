@@ -2,6 +2,8 @@
 # Builds macos/dist/Grant Matcher.app and Grant Matcher.dmg. Signs when CODESIGN_IDENTITY is set. Notarizes when NOTARY_PROFILE (a keychain profile) or APPLE_API_KEY_P8 with APPLE_API_KEY_ID and APPLE_API_ISSUER_ID (an App Store Connect key) is also set.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# The app carries the CA file path of the Python that builds it. uv's own Python reads the file every Mac has, and another Python may read one that only the build machine has.
+export UV_MANAGED_PYTHON=1
 
 app="macos/dist/Grant Matcher.app"
 dmg="macos/dist/Grant Matcher.dmg"
@@ -78,6 +80,7 @@ test -s "$app/Contents/Resources/licenses/streamlit/NOTICES"
 test -x "$framework/Versions/B/Autoupdate"
 test ! -e "$framework/Versions/B/XPCServices"
 "$app/Contents/MacOS/Grant Matcher" --check-updater || { echo "The built app cannot load Sparkle, so it could never update." >&2; exit 1; }
+"$app/Contents/MacOS/Grant Matcher" --check-tls || { echo "The built app reads its CA certificates from a file that a user's Mac may not have, so it could open no HTTPS connection there." >&2; exit 1; }
 [ "$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist")" = "$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")" ] || { echo "CFBundleVersion differs from CFBundleShortVersionString" >&2; exit 1; }
 # Sparkle orders "0.2.0-rc1" as equal to "0.2.0" and "0.2.0rc1" as older, so only plain numbers are allowed.
 plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "CFBundleVersion is not one to three numbers" >&2; exit 1; }
