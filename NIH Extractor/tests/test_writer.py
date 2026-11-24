@@ -1,4 +1,4 @@
-import json
+import json, sqlite3
 from pathlib import Path
 import pytest
 from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
@@ -6,7 +6,7 @@ from nih_grant_matcher import __version__
 from nih_grant_matcher.clients import ApiError
 from nih_grant_matcher.llm import ModelError
 from nih_grant_matcher.profile import Profile, Reference
-from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace, WorkspaceError
+from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace, WorkspaceError, read_summary
 
 FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100
 GRANTS_PAGE = "<p>Section IV. Application and Submission Information</p><p>The Research Strategy is limited to 4 pages, as in (NOT-OD-26-001).</p>" + "<p>Follow the guide.</p>" * 80
@@ -834,3 +834,44 @@ def test_the_no_section_iv_notice_holds_only_while_no_requirement_is_listed(tmp_
     assert ws.view().no_section_iv
     ws.extract_requirements()
     assert not ws.view().no_section_iv
+
+def test_a_draft_accepted_over_the_applicants_text_is_all_the_models(tmp_path) -> None:
+    mine = "Specific Aims\nHeart failure is a leading cause of death. The goal of the project is to study the role of the heart in the disease."
+    drafted = "Specific Aims\nHeart failure is a major problem. The goal of the project is to test drug X in the mouse model of heart failure."
+    ws = start(tmp_path, model=FakeModel(drafted), facts={"aim": "Test drug X in the mouse model of heart failure.", "hypothesis": "Drug X lowers pressure."})
+    ws.write("specific-aims", mine, None)
+    proposal = ws.propose("specific-aims", "draft")
+    assert "mostly-drafted" in {f.code for f in proposal.findings}
+    ws.accept(proposal.call_id)
+    s = ws.view().section("specific-aims")
+    assert s.attribution.written_share == 1.0 and "mostly-drafted" in {f.code for f in s.findings}
+
+@pytest.mark.parametrize("reply", ["I'm sorry, I can't help with that.", READ_REPLIES[1][:-5]])
+def test_a_reply_that_holds_no_list_fails_the_read_and_keeps_every_row(tmp_path, reply) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES, READ_I, reply))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(found[0].id, True)
+    with pytest.raises(ModelError, match="The reply for Section IV was not a list of requirements, so nothing was read. Nothing was changed"):
+        ws.extract_requirements()
+    assert [(r.text, r.confirmed) for r in ws.store.requirements(ws.application_id) if r.origin == "model"] == [(r.text, True if r.id == found[0].id else None) for r in found]
+    assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["extract"] * 5
+
+def test_an_empty_list_from_each_section_leaves_only_the_decided_rows_and_says_so(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES, "[]", "[]", "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(found[0].id, True)
+    again, dropped = ws.extract_requirements()
+    assert [(r.text, r.confirmed) for r in again] == [("Describe data sharing.", True)] and dropped == 0
+    assert read_summary(again) == "The model read 0 requirements from the announcement that you have not decided. Your decision on 1 requirement read earlier still stands."
+
+def test_a_failed_save_after_the_replies_says_the_text_was_sent_and_saves_nothing(tmp_path, monkeypatch) -> None:
+    ws = start(tmp_path, model=FakeModel(*READ_REPLIES))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    def locked(*args, **kwargs): raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(ws.store, "replace_requirements", locked)
+    with pytest.raises(ModelError, match=r"sent to example\.test.*\(database is locked\)\. Nothing was saved, and asking again sends the text again\."):
+        ws.extract_requirements()
+    monkeypatch.undo()
+    assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["extract"] * 3 and not [r for r in ws.store.requirements(ws.application_id) if r.origin == "model"]

@@ -321,7 +321,7 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         for r in found:
             print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}" + (f"  at most {describe(r.limit)}" if r.limit else ""))
         if dropped:
-            print(f"Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply. {DROPPED}")
+            print(f"Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the model's replies. {DROPPED}")
     elif args.action in ("polish", "revise", "draft"):
         proposal = ws.propose(args.section, args.action, getattr(args, "instruction", ""))
         print(f"Proposal {proposal.call_id} for {args.section}. Nothing has changed yet.\n\n{proposal.text}\n")

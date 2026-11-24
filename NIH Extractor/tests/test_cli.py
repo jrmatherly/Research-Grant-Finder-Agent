@@ -538,7 +538,7 @@ def test_apply_extract_lists_what_the_model_read_and_draft_proposes_a_section(tm
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
     out = capsys.readouterr().out
-    assert "The model read 1 new requirement" in out and "not yet decided  State one hypothesis." in out and "dropped 1 item" in out and "a limit whose number is not in its quote" in out
+    assert "The model read 1 requirement from the announcement that you have not decided." in out and "not yet decided  State one hypothesis." in out and "dropped 1 item of the model's replies" in out and "a limit whose number does not stand on its own" in out
     assert cli.main(["--db", db, "apply", "draft", "1", "specific-aims"]) == 1
     assert "needs aim, hypothesis" in capsys.readouterr().err and len(model.seen) == 2
     cli.main(["--db", db, "apply", "add", "1", "--kind", "aim", "--text", "Test drug X."])
@@ -567,12 +567,12 @@ def test_apply_extract_shows_each_limit_and_counts_only_what_this_read_added(tmp
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
     out = capsys.readouterr().out
-    assert "The model read 2 new requirements" in out and "not yet decided  Keep it short.  at most 6 pages" in out
+    assert "The model read 2 requirements from the announcement that you have not decided." in out and "not yet decided  Keep it short.  at most 6 pages" in out
     store = OpportunityStore(db)
     store.decide_requirement(next(r.id for r in store.requirements(1) if r.text == "Keep it short."), True)
     store.close()
     assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
     out = capsys.readouterr().out
-    assert "The model read 1 new requirement from" in out and "Your decision on 1 requirement read earlier still stands." in out
+    assert "The model read 1 requirement from the announcement that you have not decided." in out and "Your decision on 1 requirement read earlier still stands." in out
     assert cli.main(["--db", db, "apply", "requirements", "1"]) == 0
     assert "confirmed  Keep it short.  at most 6 pages" in capsys.readouterr().out

@@ -81,3 +81,24 @@ def test_a_reply_too_large_or_too_deep_to_read_is_dropped_and_never_raises() -> 
 def test_a_limit_of_one_is_one_page_in_the_prompts() -> None:
     assert "its limit is 1 page." in prompts.polish("x", RULE["specific-aims"]).system
     assert "Its limit is 1 page." in prompts.draft(RULE["specific-aims"], Limit(1, "pages"), (), (), BUILTIN_PROFILE).system
+
+def test_a_list_after_a_preface_before_a_note_or_inside_an_object_is_read() -> None:
+    items = [{"kind": "must", "section": "", "text": "Describe data sharing.", "quote": "Applicants must describe data sharing.", "limit": None}]
+    for reply in ("Here are the requirements:\n" + json.dumps(items), "```json\n" + json.dumps(items) + "\n```\nLet me know if you need more.", json.dumps({"requirements": items})):
+        kept, dropped = prompts.parse_requirements(reply, "Section IV.\nApplicants must describe data sharing.")
+        assert [r.text for r in kept] == ["Describe data sharing."] and dropped == 0, reply
+
+def test_a_limit_that_names_no_section_is_dropped_and_counted() -> None:
+    text = "The Research Strategy is limited to 15 pages."
+    assert prompts.parse_requirements(json.dumps([{"kind": "limit", "section": "", "text": "At most 15 pages.", "quote": text, "limit": {"amount": 15, "unit": "pages"}}]), text) == ([], 1)
+
+def test_an_item_that_utf8_cannot_hold_is_dropped_and_counted() -> None:
+    text = "Reviewers will judge the rigor of the approach."
+    reply = '[{"kind": "criterion", "section": "", "text": "Rigor \\ud800.", "quote": "%s", "limit": null}, {"kind": "criterion", "section": "", "text": "Rigor.", "quote": "Reviewers will judge the \\ud800 rigor of the approach.", "limit": null}]' % text
+    assert prompts.parse_requirements(reply, text) == ([], 2)
+
+def test_a_limit_whose_number_is_not_a_number_of_its_own_in_the_announcement_is_dropped() -> None:
+    text = "The Research Strategy is limited to 15 pages."
+    limit = lambda quote, amount: {"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}
+    kept, dropped = prompts.parse_requirements(json.dumps([limit("The Research Strategy is limited to 1.5 pages.", 1.5), limit(text, 15)]), text)
+    assert [r.limit for r in kept] == [Limit(15, "pages")] and dropped == 1
