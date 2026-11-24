@@ -1842,6 +1842,40 @@ Changed in Stage 4: `grounding` takes an applicant's revision only when no model
 
 Branch `feat/writer-review`, cut from `main` after Stage 4 merges.
 
+**As built (2026-11-23).** Tasks 12 and 13 are done on the branch, which was cut from Stage 4's branch and moved onto `main` after pull request 15 merged. The code differs from the task text below in these ways.
+
+The reviewer:
+
+- `Workspace.review(section)` goes through `_ask` with the purpose `review`. A section with no saved text raises `NotReady` and sends nothing. The reviewer sees the section's text, the grant type's factors, the `criterion` requirements confirmed for that section or for no section, and the prose rules with no pattern. It sees no input, no profile text, no earlier review and no writer prompt.
+- `parse_review` reads the reply's outermost braces, or the first object with a `scores` key when other text holds a brace. It raises `ModelError` for a reply with no such object, a missing score, or a score that is not a whole number from 1 to 9 (3.0 is taken as 3). It drops and counts a point that is not an object, names an unknown factor or kind, has no text, quotes fewer than 20 letters and digits, quotes text that is not in the section, or cannot be stored. A point's text and a rating are cut to 1,000 characters.
+- For an `appropriate` factor the bare word shows as "Appropriate." and any other answer is shown as "The model wrote: ...", with no verdict of the tool's in front.
+- The call is logged before the reply is read. A reply that cannot be read leaves a `review` call in the log and no row in `reviews`, and the error says so.
+- `Review` carries `dropped` and `created_at`. `SectionView.review` is the newest review of the section's head revision. A review of an older revision stays in the `reviews` table and in the exported log, and is not shown in the dashboard.
+- Every score line carries "the model's estimate, not NIH's", in the dashboard, in `apply review ID SECTION` and in the exported log.
+
+The reference check:
+
+- Step 1's reading is recorded under Task 13. No address is sent to either service. The request carries the identifier, the tool's `User-Agent`, and `tool=nih-grant-matcher` for NCBI.
+- `ReferenceClient.lookup` gives `""` only when the index says it has no such record: for PubMed an `error` inside the record or a top-level error that starts `Invalid uid`, and for Crossref a 404. Every other failure raises `ApiError`. A record with an empty title is stored as untitled, not as missing. A lookup times out after 10 seconds.
+- `verify_references(client=None)` looks up every live reference, by its PMID, or by its DOI when it has no PMID, one at a time with a pause of 0.4 seconds. A PMID loses its leading zeros first. It goes on past a failed lookup and records nothing for it, stops when two in a row fail, and raises one error that names each reference that failed. The result goes in the fact's `detail` only.
+- A DOI that Crossref lacks reads "Crossref holds no record", with the note that other agencies register some DOIs. An arXiv DOI and a Zenodo DOI both got a 404 from Crossref on 2026-11-23.
+- `unverified-reference` is a warning for a cited reference with no result or with "no record". It does not block a sign-off, and the sign-off records it.
+- The exported log lists each review with its scores and gives each reference's check result. `apply verify ID` runs the check from the command line.
+
+Changed in code of earlier stages:
+
+- The number of a model-read limit must not be part of an identifier or a range: "NOT-EY-24-006" does not give 24, and "pages 3-6" gives neither 3 nor 6.
+- The section's text box is kept when the Section selector moves away and back. Before, the box came back empty and Save recorded an empty revision. The same defect was on `main`.
+
+Not fixed, for the owner:
+
+- The announcement text loses opening parentheses and glues headings to words in places ("GoalThe", "data ana lysis"). That is Stage 2's extraction, and it is the text a model reads and an applicant confirms.
+- A read-only database that holds every table is not known to be read-only until a write fails, so a review or a lookup is sent first and the error then says what was sent.
+- The exported log writes a model's rating and an index's title as plain Markdown, as it writes other text. It names no model call other than a review.
+- Every press of the check looks every reference up again. A failed or cut-off review counts in the AI-use statement under suggestions that were not used.
+- A reply whose first object nests a whole review under another key is read from the nested one.
+- Nothing was checked against a live model provider. The browser check used a local stand-in model and four real lookups against PubMed and Crossref.
+
 ### Task 12: A reviewer that sees only the draft
 
 **Files:**
