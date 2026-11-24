@@ -55,3 +55,37 @@ def test_a_long_chain_of_applicant_saves_is_read_quickly() -> None:
     began = time.perf_counter()
     found = attribution(log, 30)
     assert time.perf_counter() - began < 2 and len(found) == 6000 and {origin for _, origin in found} == {"applicant"}
+
+def test_the_statement_has_a_sentence_for_each_thing_the_log_holds() -> None:
+    from nih_grant_matcher.models import Application, Fact, ModelCall
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    def call(id, section, purpose, model="fake-1", parent=None):
+        return ModelCall(id, section, purpose, "fake", model, "s", "p", "r", 1, 1, NOW, parent)
+    app = Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW)
+    log = (*LOG, Revision(4, "project-narrative", None, "applicant", "write", "One.", None, NOW), Revision(5, "project-summary", None, "applicant", "write", "Two.", None, NOW), Revision(6, "research-strategy", None, "model", "revise", "Three words here.", 9, NOW))
+    calls = (call(7, "specific-aims", "polish", parent=1), call(8, "", "extract"), call(9, "research-strategy", "revise", "other-2"), call(10, "", "review"), call(11, "specific-aims", "failed", parent=3), call(12, "specific-aims", "polish", parent=1))
+    signed = (Signoff("project-narrative", 4, "A. Applicant", "a", (), "0.3.0", NOW), Signoff("specific-aims", 2, "A. Applicant", "a", (), "0.3.0", NOW))
+    statement = disclosure_statement(app, GRANT_TYPES["NIH:R21"], log, calls, signed, (Fact(1, "hypothesis", "h"), Fact(2, "reference", "r"), Fact(3, "aim", "a")), ())
+    assert statement.startswith("AI use in this application, from the record that Grant Matcher ") and statement.endswith("This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere.")
+    for sentence in ("I entered the aims, hypotheses and references of this application myself.", "I used fake-1 (fake) to polish the Specific Aims.", "I used other-2 (fake) to revise the Research Strategy.",
+                     "I edited Specific Aims after I accepted model text.", "By the tool's word-level record, 0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and 29 percent from a model's polish of my own text.",
+                     "100 percent of the Research Strategy text came from a model's draft or revision", "The Project Summary/Abstract and Project Narrative were written without a model.",
+                     "I also sent text to fake-1 to read the funding announcement's requirements, review drafts against NIH's review criteria and produce suggestions that I did not use (2).", "I read and signed off Project Narrative."):
+        assert sentence in statement, sentence
+    assert "No AI model" not in statement and "signed off Specific Aims" not in statement
+
+def test_a_statement_with_no_model_call_says_so_and_ends() -> None:
+    from nih_grant_matcher.models import Application, Fact
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], LOG[:1], (), (), (Fact(1, "aim", "a"),), ())
+    assert statement.split(". ", 1)[1] == "No AI model was used on this application in Grant Matcher. This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere."
+
+def test_a_proposal_still_waiting_is_not_counted() -> None:
+    from nih_grant_matcher.models import Application, ModelCall
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    waiting = ModelCall(8, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1)
+    statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], LOG[:1], (waiting,), (), (), (8,))
+    assert "No AI model" not in statement and "I also sent" not in statement and "The Specific Aims was written without a model." in statement

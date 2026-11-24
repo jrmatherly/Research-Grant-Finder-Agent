@@ -1,6 +1,7 @@
 from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Callable
 import streamlit as st
@@ -107,6 +108,33 @@ def _add_fact(ws: Workspace) -> str:
     st.session_state["apply_fact_text"] = st.session_state["apply_fact_label"] = ""
     return f"Added input {fact.id} under {fact.kind}."
 
+def _propose(ws: Workspace, section: str, action: str, instruction: str = "") -> str:
+    ws.model = connect(ws.store)
+    ws.propose(section, action, instruction)
+    return "The model's proposal is below the section. Nothing has changed yet."
+
+def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
+    try:
+        revision = ws.accept(call_id, edited)
+    except StaleEdit:
+        raise NotReady("The section changed after the model read it, so this proposal no longer fits. Ask the model again.") from None
+    return f"Accepted the proposal as revision {revision.id}."
+
+def _discard(ws: Workspace, call_id: int) -> str:
+    ws.discard(call_id)
+    return "Discarded the proposal. It stays in the log."
+
+def _word_diff(old: str, new: str) -> str:
+    a, b, parts = old.split(), new.split(), []
+    for tag, i1, i2, j1, j2 in SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            parts.append(escape_markdown(" ".join(a[i1:i2])))
+        if tag in ("delete", "replace"):
+            parts.append(f"~~{escape_markdown(' '.join(a[i1:i2]))}~~")
+        if tag in ("insert", "replace"):
+            parts.append(f"**{escape_markdown(' '.join(b[j1:j2]))}**")
+    return " ".join(parts)
+
 def owned_by(app_id: int, key: str) -> bool:
     # The parts are split at underscores, so id 1 does not match id 11, and a section key holds no underscore.
     return key.startswith("apply_") and not key.endswith("_button") and str(app_id) in key.split("_")[2:]
@@ -153,7 +181,12 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     path = str(store.db_path)
     st.caption(f"Your text, your inputs and every model call for this application are stored in {f'`{path}`' if '`' not in path else escape_markdown(path)}. Anyone who can read that file can read them.")
     _model_settings(store, db_path)
-    ws = Workspace(store, app_id)
+    try:
+        model = connect(store)
+    except (keys.UnreadableKey, OSError):
+        # The Model expander above already shows why the key cannot be read.
+        model = None
+    ws = Workspace(store, app_id, model)
     view = ws.view()
     with st.container():
         for notice in view.notices:
@@ -167,7 +200,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     with inputs_tab:
         _inputs_tab(view, db_path, app_id)
     with sections_tab:
-        _sections_tab(view, store, db_path, app_id)
+        _sections_tab(view, ws, db_path, app_id)
     with log_tab:
         _log_tab(view, db_path, app_id)
 
@@ -299,7 +332,7 @@ def _inputs_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
         st.text_area("Text", key="apply_fact_text")
         st.form_submit_button("Add input", key="apply_add_fact_button", on_click=_on, args=(db_path, app_id, _add_fact))
 
-def _sections_tab(view: ApplicationView, store: OpportunityStore, db_path: str, app_id: int) -> None:
+def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: int) -> None:
     keys = [s.rule.key for s in view.sections]
     if st.session_state.get("apply_section") not in keys:
         st.session_state["apply_section"] = keys[0]
@@ -325,11 +358,36 @@ def _sections_tab(view: ApplicationView, store: OpportunityStore, db_path: str, 
         st.text_area(s.rule.title, key=text_key, height=360)
         st.form_submit_button("Save", key="apply_save_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _save(w, key, title)))
         if "apply_signer" not in st.session_state:
-            st.session_state["apply_signer"] = _investigator(store)
+            st.session_state["apply_signer"] = _investigator(ws.store)
         st.text_input("Your name", key="apply_signer")
         if any(f.code == "mostly-drafted" for f in s.findings):
             st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}")
         st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title), "sign"))
+    if ws.model is not None and s.rule.model != "none":
+        st.caption(f"Polish and Revise send the saved revision to {escape_markdown(ws.model.host)}. Nothing changes until you accept what comes back.")
+        instruction_key = f"apply_instruction_{app_id}_{key}"
+        st.text_input("What to change", key=instruction_key, help="Revise needs this. For example: Make the second aim shorter.")
+        polish, revise = st.columns(2)
+        polish.button("Polish", key="apply_polish_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "polish")))
+        revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
+    # A proposal waits in the log, so a reload shows it again.
+    if (proposal := ws.pending(key)) is not None:
+        st.markdown(f"**A model's {proposal.action}, proposal {proposal.call_id}**")
+        current, proposed = st.columns(2)
+        current.caption(f"Revision {s.revision_id}")
+        current.text(s.text)
+        proposed.caption("Struck words go and bold words come in.")
+        proposed.markdown(_word_diff(s.text, proposal.text))
+        for f in proposal.findings:
+            (st.error if f.severity == "error" else st.warning)(escape_markdown(f.message) + (f"\n\n_{escape_markdown(f.excerpt)}_" if f.excerpt else ""))
+        edit_key = f"apply_edit_{app_id}_{key}_{proposal.call_id}"
+        if edit_key not in st.session_state:
+            st.session_state[edit_key] = proposal.text
+        st.text_area("Your edits to the proposal", key=edit_key, help="Change the proposal here, then choose Accept with my edits. Your changed words count as yours.")
+        accept, mine, discard = st.columns(3)
+        accept.button("Accept", key="apply_accept_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _accept(w, call_id, None)))
+        mine.button("Accept with my edits", key="apply_accept_edited_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id, edit_key=edit_key: _accept(w, call_id, st.session_state.get(edit_key))))
+        discard.button("Discard", key="apply_discard_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _discard(w, call_id)))
     words = s.attribution
     st.caption(f"You wrote {round(100 * words.applicant_words / (words.applicant_words + words.model_words or 1))}% of the words. A model drafted or revised {round(100 * words.written_share)}%, and a model polished {round(100 * words.polished_share)}%.")
     for f in s.findings:
@@ -349,6 +407,14 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
         line, restore = st.columns([6, 1])
         line.markdown(f"Revision {r.id}. {titles.get(r.section, r.section)}. " + ("You wrote it" if r.author == "applicant" else f"A model's {r.action}") + f" on {r.created_at:%Y-%m-%d at %H:%M} UTC. {len(r.text.split())} words.")
         restore.button("Restore", key=f"apply_restore_{r.id}_button", disabled=r.id in heads, on_click=_on, args=(db_path, app_id, lambda w, section=r.section, rid=r.id: _restore(w, section, rid)))
+    st.subheader("AI-use statement")
+    st.caption("Grant Matcher builds this statement from the log, one sentence for each thing the log holds, with no model. NIH names no field for it, so the export writes it to ai-use-statement.md for you to place.")
+    disclosure_key = f"apply_disclosure_{app_id}"
+    if disclosure_key not in st.session_state:
+        st.session_state[disclosure_key] = view.application.disclosure_on
+    st.toggle("Include the statement in the export", key=disclosure_key, on_change=_on, args=(db_path, app_id, lambda w, disclosure_key=disclosure_key: w.set_disclosure(st.session_state[disclosure_key])))
+    if view.disclosure:
+        st.markdown(escape_markdown(view.disclosure))
     st.subheader("Export")
     export_key = f"apply_export_{app_id}"
     if export_key not in st.session_state:

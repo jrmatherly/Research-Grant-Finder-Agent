@@ -1,10 +1,11 @@
 from pathlib import Path
 import pytest
-from helpers import Grants, Guide, start
+from helpers import FakeModel, Grants, Guide, start
 from nih_grant_matcher import __version__
 from nih_grant_matcher.clients import ApiError
+from nih_grant_matcher.llm import ModelError
 from nih_grant_matcher.profile import Profile, Reference
-from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace
+from nih_grant_matcher.writer import NotReady, StaleEdit, Workspace, WorkspaceError
 
 FOUR_PAGES = "Section IV. Application and Submission Information\nThe Research Strategy is limited to 4 pages.\nSection V. Review\nx" + " More text." * 100
 GRANTS_PAGE = "<p>Section IV. Application and Submission Information</p><p>The Research Strategy is limited to 4 pages, as in (NOT-OD-26-001).</p>" + "<p>Follow the guide.</p>" * 80
@@ -388,3 +389,154 @@ def test_a_restore_after_a_save_from_another_tab_is_refused(tmp_path, monkeypatc
         ws.restore("specific-aims", first.id)
     assert stale.value.head.text == "Tab two." and [r.text for r in ws.view().log] == ["Aim 1.", "Aim 1, changed.", "Tab two."]
     other.store.close()
+
+def test_a_proposal_changes_nothing_until_it_is_accepted(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    mine = ws.write("specific-aims", "We study heart cells.", parent=None)
+    proposal = ws.propose("specific-aims", "polish")
+    assert ws.view().section("specific-aims").text == "We study heart cells." and proposal.parent_id == mine.id
+    accepted = ws.accept(proposal.call_id)
+    assert (accepted.author, accepted.action, accepted.call_id) == ("model", "polish", proposal.call_id)
+    assert ws.accept(proposal.call_id).id == accepted.id
+    assert ws.view().section("specific-aims").attribution.model_words == 2
+
+def test_accepting_with_my_edits_credits_my_words_to_me(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    ws.accept(ws.propose("specific-aims", "polish").call_id, edited="We study cardiac cells.")
+    assert ws.view().section("specific-aims").attribution.model_words == 1
+    assert [r.author for r in ws.view().log] == ["applicant", "model", "applicant"]
+
+def test_a_truncated_reply_is_not_offered(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study", truncated=True))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(ModelError, match="cut off"):
+        ws.propose("specific-aims", "polish")
+    assert len(ws.store.calls(ws.application_id)) == 1 and len(ws.view().log) == 1
+
+def test_a_refusal_is_reported_and_logged(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(error=ModelError("declined", kind="refused")))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(ModelError):
+        ws.propose("specific-aims", "polish")
+    assert ws.store.calls(ws.application_id)[0].response == ""
+
+def test_the_statement_says_only_what_the_log_shows(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    ws.write("project-narrative", "This helps patients.", parent=None)
+    before = ws.view().disclosure
+    assert "No AI model was used" in before and "polish" not in before and "I entered" not in before
+    ws.add_fact("aim", "Test the drug.")
+    proposal = ws.propose("specific-aims", "polish")
+    assert "did not use" not in ws.view().disclosure and "polish the" not in ws.view().disclosure
+    ws.accept(proposal.call_id)
+    statement = ws.view().disclosure
+    assert "I used fake-1 (fake) to polish the Specific Aims." in statement and "0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and 40 percent from a model's polish" in statement
+    assert "I entered the aims of this application myself." in statement and "The Project Narrative was written without a model." in statement
+    assert "No AI model was used" not in statement and "signed off" not in statement and "I edited" not in statement
+    ws.set_disclosure(False)
+    assert ws.view().disclosure == ""
+
+def test_the_statement_counts_a_suggestion_that_was_not_used(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    ws.discard(ws.propose("specific-aims", "polish").call_id)
+    assert ws.pending("specific-aims") is None
+    assert "produce suggestions that I did not use (1)" in ws.view().disclosure and "to polish the" not in ws.view().disclosure
+
+def test_only_a_proposal_can_be_accepted_and_only_on_the_text_it_read(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells.", "We study cardiac cells."))
+    mine = ws.write("specific-aims", "We study heart cells.", parent=None)
+    stale = ws.propose("specific-aims", "polish")
+    ws.write("specific-aims", "We study heart cells in mice.", parent=mine.id)
+    with pytest.raises(StaleEdit):
+        ws.accept(stale.call_id)
+    other = ws.store.add_call(ws.application_id, section="specific-aims", purpose="review", provider="fake", model="fake-1", system="s", prompt="p", response="{}", input_tokens=1, output_tokens=1)
+    with pytest.raises(ValueError):
+        ws.accept(other.id)
+
+def test_no_text_is_sent_without_consent_for_the_host(tmp_path) -> None:
+    model = FakeModel("We study cardiac muscle cells.")
+    ws = start(tmp_path, model=model, consent=False)
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(NotReady, match="Agree to send text to example.test first"):
+        ws.propose("specific-aims", "polish")
+    assert model.seen == [] and ws.store.calls(ws.application_id) == []
+
+def test_a_proposal_needs_a_model_saved_text_and_for_a_revise_an_instruction(tmp_path) -> None:
+    model = FakeModel("We study cardiac muscle cells.")
+    ws = start(tmp_path, model=model)
+    with pytest.raises(NotReady, match="no text"):
+        ws.propose("specific-aims", "polish")
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(NotReady, match="not available yet"):
+        ws.propose("specific-aims", "draft")
+    with pytest.raises(NotReady, match="what to change"):
+        ws.propose("specific-aims", "revise", "  ")
+    with pytest.raises(NotReady, match="Choose a model"):
+        Workspace(ws.store, ws.application_id).propose("specific-aims", "polish")
+    assert model.seen == []
+
+def test_a_model_may_only_edit_the_introduction(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Reply."), resubmission=True)
+    ws.write("introduction", "We answer the reviewers.", parent=None)
+    with pytest.raises(NotReady, match="Introduction to Application"):
+        ws.propose("introduction", "draft")
+    assert ws.propose("introduction", "polish").text == "Reply."
+
+def test_a_revision_counts_as_written_and_a_polish_as_polished(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("Mice show this effect clearly."))
+    ws.write("project-narrative", "We study heart cells.", parent=None)
+    proposal = ws.propose("project-narrative", "revise", "Say what the mice show.")
+    assert "Say what the mice show." in ws.model.seen[0].user and proposal.action == "revise"
+    accepted = ws.accept(proposal.call_id)
+    s = ws.view().section("project-narrative")
+    assert accepted.action == "revise" and (s.attribution.written_words, s.attribution.polished_words) == (5, 0)
+    assert "mostly-drafted" in {f.code for f in s.findings}
+
+def test_a_proposal_is_checked_against_what_the_applicant_supplied(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We test 40 mice in 12 weeks.", "We test 40 mice in 12 weeks."))
+    ws.write("specific-aims", "We test mice.", parent=None)
+    first = ws.propose("specific-aims", "polish")
+    assert [f.excerpt for f in first.findings if f.code == "number-not-in-inputs"] == ["40", "12"]
+    ws.add_fact("method", "We test 40 mice over 12 weeks.")
+    assert not [f for f in ws.pending("specific-aims").findings if f.code == "number-not-in-inputs"]
+
+def test_a_pending_proposal_is_the_newest_that_can_still_be_accepted(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac cells.", "We study cardiac muscle cells."))
+    mine = ws.write("specific-aims", "We study heart cells.", parent=None)
+    older, newer = ws.propose("specific-aims", "polish"), ws.propose("specific-aims", "polish")
+    assert ws.pending("specific-aims") == newer and ws.pending("project-narrative") is None
+    ws.discard(newer.call_id)
+    assert ws.pending("specific-aims") == older
+    with pytest.raises(WorkspaceError, match="discarded"):
+        ws.accept(newer.call_id)
+    ws.write("specific-aims", "We study heart cells in mice.", parent=mine.id)
+    assert ws.pending("specific-aims") is None and "produce suggestions that I did not use (2)" in ws.view().disclosure
+
+def test_a_second_accept_with_edits_returns_the_first_result(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    call_id = ws.propose("specific-aims", "polish").call_id
+    first = ws.accept(call_id, edited="We study cardiac cells.")
+    assert ws.accept(call_id, edited="Something else.") == first and first.author == "applicant"
+    with pytest.raises(WorkspaceError, match="accepted"):
+        ws.discard(call_id)
+    assert "I edited Specific Aims after I accepted model text." in ws.view().disclosure
+
+def test_a_workspace_mistake_is_a_workspace_error(tmp_path) -> None:
+    ws = start(tmp_path)
+    assert issubclass(WorkspaceError, ValueError)
+    for mistake in (lambda: ws.write("budget", "x", parent=None), lambda: ws.accept(999), lambda: ws.discard(999), lambda: ws.add_fact("aims", "x")):
+        with pytest.raises(WorkspaceError):
+            mistake()
+
+def test_the_export_holds_the_statement_only_while_it_is_on(tmp_path) -> None:
+    ws = start(tmp_path)
+    ws.write("project-narrative", "One. Two.", parent=None)
+    statement = ws.export(tmp_path / "out") / "ai-use-statement.md"
+    assert statement.read_text(encoding="utf-8") == ws.view().disclosure + "\n"
+    ws.set_disclosure(False)
+    ws.export(tmp_path / "out")
+    assert not statement.exists()

@@ -11,7 +11,7 @@ from ..store import OpportunityStore
 from ..workflow import config_for
 from .markdown import escape_markdown
 
-STEPS = ("You", "Your research", "Your terms", "Preview", "Your background")
+STEPS = ("You", "Your research", "Your terms", "Preview", "What the writer reuses")
 CAREER_STAGES = ("early-stage investigator", "new investigator", "established")
 RANKINGS = ("Rank with my own research", "Keep the built-in ranking")
 BLANK = Profile(keywords={}, examples=(), focus="profile", examples_name="your example sentences")
@@ -186,7 +186,7 @@ def profile_page(db_path: str) -> None:
     st.divider()
     st.subheader("Export and import")
     st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json", disabled=unreadable)
-    st.caption("The button downloads the profile in use, which is the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text and references.")
+    st.caption("The button downloads the profile in use, which is the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text and references. It holds no API key.")
     pasted = st.text_area("Import a profile", key="profile_import_text", placeholder="Paste the contents of an exported profile file.")
     incoming = None
     if pasted.strip():

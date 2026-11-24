@@ -440,3 +440,36 @@ def test_models_says_in_one_line_that_a_key_cannot_be_read(where, says, tmp_path
 def test_models_refuses_a_base_url_that_is_not_an_address(tmp_path, capsys) -> None:
     assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "compatible", "--base-url", "localhost:11434"]) == 1
     assert "is not a server address" in capsys.readouterr().err and not (tmp_path / "g.sqlite3").exists()
+
+
+def test_apply_polishes_accepts_discards_and_turns_the_statement_off(tmp_path, monkeypatch, capsys) -> None:
+    from helpers import FakeModel
+    from nih_grant_matcher.store import OpportunityStore
+    db, text = _apply_db(tmp_path), tmp_path / "aims.txt"
+    model = FakeModel("We study cardiac muscle cells.", "We study cardiac cells.")
+    monkeypatch.setattr(cli, "connect", lambda store: model)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    text.write_text("We study heart cells.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(text)])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "polish", "1", "specific-aims"]) == 1
+    assert "Agree to send text to example.test first" in capsys.readouterr().err and model.seen == []
+    store = OpportunityStore(db)
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    store.close()
+    assert cli.main(["--db", db, "apply", "polish", "1", "specific-aims"]) == 0
+    out = capsys.readouterr().out
+    assert "We study cardiac muscle cells." in out and "apply accept 1 1" in out and "apply discard 1 1" in out
+    assert cli.main(["--db", db, "apply", "revise", "1", "specific-aims", "--instruction", "Shorter."]) == 0
+    assert cli.main(["--db", db, "apply", "discard", "1", "2"]) == 0
+    assert cli.main(["--db", db, "apply", "accept", "1", "1"]) == 0
+    assert "revision 2" in capsys.readouterr().out
+    assert cli.main(["--db", db, "apply", "accept", "1", "2"]) == 1
+    assert "discarded" in capsys.readouterr().err
+    assert cli.main(["--db", db, "apply", "disclosure", "1", "--on"]) == 0
+    assert "I used fake-1 (fake) to polish the Specific Aims." in capsys.readouterr().out
+    assert cli.main(["--db", db, "apply", "disclosure", "1", "--off"]) == 0
+    assert cli.main(["--db", db, "apply", "export", "1", "--out", str(tmp_path / "out")]) == 0
+    assert not (tmp_path / "out" / "ai-use-statement.md").exists()
+    with pytest.raises(SystemExit):
+        cli.main(["--db", db, "apply", "disclosure", "1"])
