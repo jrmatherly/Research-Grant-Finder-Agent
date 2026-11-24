@@ -18,6 +18,7 @@ from nih_grant_matcher.ui.find_page import picked_option
 from nih_grant_matcher.ui.markdown import escape_markdown
 from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
 from nih_grant_matcher.ui.settings_page import settings_page
+from nih_grant_matcher.ui.tour import tour_button
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
@@ -131,6 +132,9 @@ with st.sidebar:
         excel_path = st.text_input("Excel output", DEFAULT_EXCEL, key="find_excel", persist_state="session")
         export_clicked = st.button("Export Current View", width="stretch")
 
+        st.divider()
+        tour_button()
+
 
 if "scored_items" not in st.session_state:
     st.session_state["scored_items"] = []
@@ -195,7 +199,7 @@ items = get_scored_items_from_session()
 frame = make_dataframe(items)
 
 if frame.empty:
-    st.info("Run a search or load saved results to populate the dashboard.")
+    st.info("Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar.")
     st.stop()
 
 # Every class is offered whatever the rows hold, so a kept choice of all classes still shows a class that a new ranking brings.

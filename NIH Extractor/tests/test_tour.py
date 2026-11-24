@@ -1,0 +1,44 @@
+import hashlib
+from pathlib import Path
+from streamlit.testing.v1 import AppTest
+from nih_grant_matcher.ui import tour
+
+APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
+PINS = {"driver.js.iife.js": "9ef0eb2b57694145f881c225e61c988df73c03da36f3b2b176de744c17cf1e0d", "driver.css": "9b47907a54c7629054ff09e5fbb7bcd139d672f69efd39df47862f337a3f9a9e", "driver.js.LICENSE": "ec3ce3a08736fefd6a03a6d5b52b0705e6919fe06de9d7bd3fb63dcfb492d76d"}
+
+def test_the_vendored_files_are_those_of_driver_js_1_14_0() -> None:
+    assert {name: hashlib.sha256((tour.VENDOR / name).read_bytes()).hexdigest() for name in PINS} == PINS
+
+def test_streamlit_reads_the_script_and_the_styles_as_content_not_as_paths() -> None:
+    # Streamlit takes a one-line string that holds a slash for a file path, and the vendored files are one line each.
+    from streamlit.components.v2.component_path_utils import ComponentPathUtils
+    assert ComponentPathUtils.looks_like_inline_content(tour.script())
+    assert ComponentPathUtils.looks_like_inline_content(tour.styles())
+
+def test_the_styles_put_the_overlay_above_the_sidebar() -> None:
+    assert ".driver-overlay{z-index:1000000!important}" in tour.styles()
+
+def test_every_step_points_at_a_key_the_find_view_draws() -> None:
+    text = APP.read_text(encoding="utf-8")
+    keys = [key for key, _, _ in tour.TOUR_STEPS if key]
+    assert keys == ["view", "find_run", "find_classes", "find_table", "find_tabs"]
+    assert all(f'key="{key}"' in text for key in keys)
+    assert tour.TOUR_STEPS[-1][0] == ""
+
+def test_the_script_skips_a_step_whose_control_is_not_on_the_page() -> None:
+    assert "getClientRects().length" in tour.script()
+
+def test_show_me_around_starts_the_tour_once_for_each_press(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert "tour_nonce" not in app.session_state
+    app.sidebar.button(key="tour_start").click().run(timeout=30)
+    assert not app.exception
+    assert app.session_state["tour_nonce"] == 1
+    app.sidebar.button(key="tour_start").click().run(timeout=30)
+    assert app.session_state["tour_nonce"] == 2
+
+def test_the_empty_find_view_points_to_the_tour(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert [i.value for i in app.info] == ["Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar."]

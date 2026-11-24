@@ -247,7 +247,7 @@ Add `--help` to a command to see its options. To use another database, put `--db
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "Run a search or load saved results to populate the dashboard." | The database is empty or is not at the **Database** path. | Select **Run Search**. |
+| "Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar." | The database is empty or is not at the **Database** path. | Select **Run Search**. |
 | A red "Search failed" message with a web address | The named service did not answer, or it sent a reply that the tool cannot read. | Check the internet connection and search again. |
 | A message that names `SSL_CERT_FILE`, in the macOS app at version 0.1.1, 0.2.0 or 0.3.0 | Those versions look for their trusted certificates in a file that macOS does not ship. No proxy is involved. | In 0.2.0 or 0.3.0, choose `Check for Updates…` in the `Grant Matcher` menu, and install version 0.3.1 or later. Install over 0.1.1 by hand, as [the macOS app page](macos-app.md#download) says. |
 | A message that says Python found no CA certificates | The file that the message names does not exist, so the tool trusts no server. No proxy is involved. | If you set `SSL_CERT_FILE`, correct its path or remove it. Otherwise install the tool again. |
