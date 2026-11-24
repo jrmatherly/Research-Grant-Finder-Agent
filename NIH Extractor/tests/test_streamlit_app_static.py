@@ -26,8 +26,7 @@ def test_streamlit_score_bins_use_string_labels() -> None:
 def test_streamlit_app_reads_500_rows_by_default_and_warns_at_the_limit() -> None:
     app_text = Path("streamlit_app.py").read_text(encoding="utf-8")
 
-    assert 'limit = st.slider("Rows per source", min_value=25, max_value=1000, step=25, key="find_rows")' in app_text
-    assert '"find_rows": 500' in app_text
+    assert 'limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25, key="find_rows", persist_state="session")' in app_text
     assert "if summary.capped:" in app_text
 
 

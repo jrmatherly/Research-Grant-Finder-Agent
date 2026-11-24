@@ -107,34 +107,26 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
     return filtered
 
 
-# Streamlit drops the state of a widget it does not draw, so the Find settings are kept under keys that outlive a visit to Profile.
-for find_key, find_default in {"find_source": "nih-guide", "find_keyword": "", "find_rows": 500, "find_min_score": 0.0, "find_max_saved": 500, "find_excel": DEFAULT_EXCEL}.items():
-    st.session_state[find_key] = st.session_state.get(find_key, find_default)
-# The Apply widgets are kept the same way, but only in a run that does not draw them, because a value set in a run that draws its widget is sent to the browser over text typed in a form and not yet saved.
-# Streamlit refuses a value set for a button, so every Apply button key ends in _button.
-if st.session_state.get("view") != "Apply":
-    for apply_key in [key for key in st.session_state if key == "application_id" or (str(key).startswith("apply_") and not str(key).endswith("_button"))]:
-        st.session_state[apply_key] = st.session_state[apply_key]
-
+# A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget persists.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile"], key="view")
     db_path = st.text_input("Database", value=DEFAULT_DB)
     if view == "Find":
         st.header("Run Search")
-        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source")
-        keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword")
-        limit = st.slider("Rows per source", min_value=25, max_value=1000, step=25, key="find_rows")
+        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session")
+        keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword", persist_state="session")
+        limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25, key="find_rows", persist_state="session")
         run_clicked = st.button("Run Search", type="primary", width="stretch")
 
         st.divider()
         st.header("Display")
-        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score")
-        max_saved = st.slider("Saved rows to load", 50, 1000, step=50, key="find_max_saved")
+        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session")
+        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session")
         load_clicked = st.button("Load Saved Results", width="stretch")
 
         st.divider()
         st.header("Export")
-        excel_path = st.text_input("Excel output", key="find_excel")
+        excel_path = st.text_input("Excel output", DEFAULT_EXCEL, key="find_excel", persist_state="session")
         export_clicked = st.button("Export Current View", width="stretch")
 
 
@@ -201,16 +193,17 @@ if frame.empty:
     st.info("Run a search or load saved results to populate the dashboard.")
     st.stop()
 
-all_classes = sorted(frame["Classification"].dropna().unique().tolist())
+# Every class is offered whatever the rows hold, so a kept choice of all classes still shows a class that a new ranking brings.
+all_classes = ["High", "Medium", "Watchlist"]
 all_institutes = sorted(frame["NIH Institute"].dropna().unique().tolist())
 
 filter_col1, filter_col2, filter_col3 = st.columns([1.1, 1.3, 1.6])
 with filter_col1:
-    selected_classes = st.multiselect("Classification", all_classes, default=all_classes)
+    selected_classes = st.multiselect("Classification", all_classes, default=all_classes, key="find_classes", persist_state="session")
 with filter_col2:
-    selected_institutes = st.multiselect("NIH institute", all_institutes)
+    selected_institutes = st.multiselect("NIH institute", all_institutes, key="find_institutes", persist_state="session")
 with filter_col3:
-    term_filter = st.text_input("Filter within results", placeholder="PRIMED-AI, EHR, NINDS...")
+    term_filter = st.text_input("Filter within results", placeholder="PRIMED-AI, EHR, NINDS...", key="find_filter", persist_state="session")
 
 filtered = apply_filters(frame, min_score=min_score, classifications=selected_classes, institutes=selected_institutes, term_query=term_filter)
 
@@ -263,7 +256,7 @@ with tab_visuals:
 
 with tab_detail:
     options = filtered["Opportunity Number"].fillna("") + " | " + filtered["Title"].fillna("")
-    selected = st.selectbox("Opportunity", options.tolist()) if not filtered.empty else None
+    selected = st.selectbox("Opportunity", options.tolist(), key="find_opportunity", persist_state="session") if not filtered.empty else None
     if selected:
         row = filtered.iloc[options.tolist().index(selected)]
         st.subheader(row["Title"])
@@ -284,8 +277,8 @@ with tab_detail:
         opportunity = next(item.opportunity for item in items if item.opportunity.source_id == row["Source ID"])
         covered = grant_types_for(opportunity)
         if covered:
-            grant_type = st.selectbox("Grant type", [f"{g.funder}:{g.code}" for g in covered], format_func=lambda key: f"{GRANT_TYPES[key].code} {GRANT_TYPES[key].title}")
-            resubmission = st.checkbox("This is a resubmission")
+            grant_type = st.selectbox("Grant type", [f"{g.funder}:{g.code}" for g in covered], format_func=lambda key: f"{GRANT_TYPES[key].code} {GRANT_TYPES[key].title}", key="find_grant_type", persist_state="session")
+            resubmission = st.checkbox("This is a resubmission", key="find_resubmission", persist_state="session")
             st.button("Start application", key="start_application", type="primary", on_click=start_application, args=(db_path, opportunity, grant_type, resubmission))
             show_notices()
         else:
