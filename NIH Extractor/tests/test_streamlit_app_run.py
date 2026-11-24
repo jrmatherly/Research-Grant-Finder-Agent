@@ -514,6 +514,8 @@ def _page_text(app):
 def test_an_announcement_with_no_section_iv_is_named_on_each_tab(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: ("A notice with no headings at all. " * 40, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
@@ -545,11 +547,14 @@ def test_checking_the_references_says_what_leaves_and_shows_each_title_as_text(t
 def test_each_apply_button_does_its_one_thing(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     path = _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
     assert not app.exception and any("Saved the announcement from the NIH Guide" in s.value for s in app.success)
+    assert any("Fetched from the NIH Guide's search service on" in c.value and "drops some brackets and spaces" in c.value for c in app.caption)
     assert "Research Strategy: at most 4 pages." in _page_text(app) and "Not yet decided." in _page_text(app)
     app.button(key="apply_confirm_1_button").click().run(timeout=30)
     assert not app.exception and "Confirmed." in _page_text(app) and app.button(key="apply_confirm_1_button").disabled
@@ -737,6 +742,8 @@ def test_a_fetch_that_both_sources_fail_says_the_standing_rules_apply(tmp_path, 
     def down(self, number):
         raise ApiError("timed out")
     monkeypatch.setattr(NihGuideClient, "doctext", down)
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", down)
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)
@@ -771,6 +778,8 @@ def test_a_fetch_from_grants_gov_replaces_a_saved_guide_copy_and_names_a_dropped
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     _r21_database(tmp_path, start=True)
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "360675"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     app = _apply_view(tmp_path, monkeypatch)
     app.button(key="apply_fetch_button").click().run(timeout=30)
@@ -1348,6 +1357,8 @@ def test_the_model_reads_the_announcement_and_says_what_it_dropped(tmp_path, mon
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     _with_model(_r21_database(tmp_path, start=True))
     app = _apply_view(tmp_path, monkeypatch)

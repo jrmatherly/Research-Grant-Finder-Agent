@@ -367,6 +367,8 @@ def test_a_grants_gov_text_replaces_a_saved_guide_copy_and_the_guide_text_does_n
     ws.decide(ws.view().requirements[0].id, True)
     with pytest.raises(ApiError, match="Grants.gov has no full announcement attached. Grant Matcher kept the copy it saved from Grants.gov on"):
         ws.fetch_announcement(Guide(FOUR_PAGES.replace("4 pages", "5 pages")), Grants(""))
+    with pytest.raises(ApiError, match="Grants.gov has only a link to the announcement. Grant Matcher kept the copy it saved from Grants.gov on"):
+        ws.fetch_announcement(Guide("", page=f"<title>PAR-1</title><p>{FOUR_PAGES.replace('4 pages', '5 pages')}</p>"), Grants("<meta http-equiv='refresh' content='0; URL=x'>"))
     assert ws.view().announcement == official and [(r.text, r.confirmed) for r in ws.view().requirements] == [("Research Strategy: at most 4 pages.", True)]
 
 def test_a_guide_text_saved_while_grants_gov_is_down_says_it_may_not_be_the_official_one(tmp_path) -> None:

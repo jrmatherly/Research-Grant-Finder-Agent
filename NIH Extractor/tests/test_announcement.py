@@ -16,6 +16,12 @@ FILLER = "<p>" + "Applicants must follow the How to Apply - Application Guide. "
 # The Grants.gov attachment of PA-25-253 on 2026-11-23, which only redirects to the NIH Guide.
 LINK_ONLY = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="refresh" content="0; URL='http://grants.nih.gov/grants/guide/pa-files/PA-25-253.html'" /><title>PA-25-253</title></head><body></body></html>"""
 
+# Passages of PAR-25-357 on 2026-11-23, from the notice's page in the NIH Guide and from the Guide search service's doctext.
+PAGE = (Path(__file__).parent / "fixtures" / "announcement_par_25_357_page.html").read_text(encoding="utf-8")
+DOCTEXT = (Path(__file__).parent / "fixtures" / "announcement_par_25_357_doctext.txt").read_text(encoding="utf-8")
+PAR_25_357 = Opportunity(source_id="nih-guide:1", opportunity_number="PAR-25-357", title="t", agency_code="NEI", agency_name="NIH NEI", status="active", raw={"guide_item": {"ggid": "357979"}})
+FAITHFUL = ("Notice of Funding Opportunity (NOFO) is", "Vision for the Future. Objectives and Scope A typical", "existing data (data sets or databases) and", "for data analysis, manuscript(s)", "1. Criteria Only the review criteria")
+
 def _announcement(text: str) -> Announcement:
     return Announcement("PAR-27-090", text, "nih-guide", "u", "0" * 64, datetime(2026, 11, 23))
 
@@ -94,9 +100,10 @@ def test_a_record_with_no_grants_gov_id_says_grants_gov_was_not_asked() -> None:
     unlinked = Opportunity(source_id="nih-guide:9", opportunity_number="PAR-27-090", title="t", agency_code="NCI", agency_name="NIH NCI", status="active")
     class Down:
         def doctext(self, number): raise clients.ApiError("timed out")
+        def page(self, number): raise clients.ApiError("timed out")
     with pytest.raises(clients.ApiError) as failed:
         fetch_announcement(unlinked, Down(), Grants(FILLER))
-    assert str(failed.value) == "No announcement text for PAR-27-090. The request to the NIH Guide failed (timed out). Grants.gov was not asked, because the record has no Grants.gov id."
+    assert str(failed.value) == "No announcement text for PAR-27-090. The request to the NIH Guide failed (timed out). The request for the notice's page in the NIH Guide failed (timed out). Grants.gov was not asked, because the record has no Grants.gov id."
 
 def test_the_guide_text_is_saved_without_html_entities() -> None:
     assert html.unescape(TEXT) == TEXT
@@ -118,7 +125,24 @@ def test_a_guide_answer_too_short_to_be_an_announcement_is_no_text() -> None:
     # The Guide answered for PAR-27-032 on 2026-11-23 with 529 characters of a PDF's bytes.
     with pytest.raises(clients.ApiError) as failed:
         fetch_announcement(OPP, Guide("%PDF-1.4 " + "x" * 520), Grants(""))
-    assert str(failed.value) == "No announcement text for PAR-27-090. The NIH Guide answered with only 529 characters, too few to be the announcement. Grants.gov has no full announcement attached."
+    assert str(failed.value) == "No announcement text for PAR-27-090. The NIH Guide answered with only 529 characters, too few to be the announcement. The request for the notice's page in the NIH Guide failed (HTTP Error 404: Not Found). Grants.gov has no full announcement attached."
+
+def test_the_notice_page_is_read_when_grants_gov_only_links_to_it() -> None:
+    guide = Guide(DOCTEXT, page=PAGE)
+    found = fetch_announcement(PAR_25_357, guide, Grants(LINK_ONLY))
+    assert found.origin == "nih-guide-page" and found.url == "https://grants.nih.gov/grants/guide/pa-files/PAR-25-357.html" and guide.pages == ["PAR-25-357"]
+    assert all(passage in found.text for passage in FAITHFUL) and "NEI’s mission" in found.text and found.grants_says == "Grants.gov has only a link to the announcement."
+
+@pytest.mark.parametrize("page", [None, "<title>Page not found</title>" + FILLER], ids=["404", "another page"])
+def test_the_search_text_is_saved_when_the_notice_page_is_not_there(page) -> None:
+    found = fetch_announcement(PAR_25_357, Guide(DOCTEXT, page=page), Grants(""))
+    assert found.origin == "nih-guide" and found.text == html.unescape(DOCTEXT).replace("\xa0", " ")
+    # The search service drops the opening brackets, the breaks after headings and a space inside a word.
+    assert not any(passage in found.text for passage in FAITHFUL) and all(quoted_in(passage, found.text) for passage in FAITHFUL)
+
+def test_a_grants_gov_announcement_is_used_without_asking_for_the_notice_page() -> None:
+    guide = Guide(DOCTEXT, page=PAGE)
+    assert fetch_announcement(PAR_25_357, guide, Grants("<p>Section IV. Application and Submission Information</p>" + FILLER)).origin == "grants.gov" and guide.pages == []
 
 def test_a_record_with_a_bare_grants_gov_id_asks_grants_gov_for_it() -> None:
     grants = Grants(FILLER)

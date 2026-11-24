@@ -1866,10 +1866,10 @@ Changed in code of earlier stages:
 
 - The number of a model-read limit must not be part of an identifier or a range: "NOT-EY-24-006" does not give 24, and "pages 3-6" gives neither 3 nor 6.
 - The section's text box is kept when the Section selector moves away and back. Before, the box came back empty and Save recorded an empty revision. The same defect was on `main`.
+- The announcement text no longer loses opening brackets, glues a heading to the next word, or splits a word ("NOFO)", "GoalThe", "data ana lysis" in PAR-25-357). NIH's Guide search service serves its `doctext` that way, and Grant Matcher saved it as it came. When Grants.gov has no full announcement, `fetch_announcement` now reads the notice's own page in the Guide (`NihGuideClient.page`), saved with the origin `nih-guide-page`, and falls back to the search text only when that page is missing or fails. A notice from fiscal 2026 on has no page and gets its text from Grants.gov. A copy saved from the search text keeps the origin `nih-guide`, and the dashboard says under its source that the text drops brackets and spaces. `quoted_in` still compares letters and digits, so a decision made on such a copy carries over to the page's text.
 
 Not fixed, for the owner:
 
-- The announcement text loses opening parentheses and glues headings to words in places ("GoalThe", "data ana lysis"). That is Stage 2's extraction, and it is the text a model reads and an applicant confirms.
 - A read-only database that holds every table is not known to be read-only until a write fails, so a review or a lookup is sent first and the error then says what was sent.
 - The exported log writes a model's rating and an index's title as plain Markdown, as it writes other text. It names no model call other than a review.
 - Every press of the check looks every reference up again. A failed or cut-off review counts in the AI-use statement under suggestions that were not used.

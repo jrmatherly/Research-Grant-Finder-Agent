@@ -1,6 +1,7 @@
 import http.client, io, json, re, subprocess, urllib.error, urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
+from nih_grant_matcher.clients import ApiError
 from nih_grant_matcher.llm import PROVIDERS, HttpModel, ModelError
 from nih_grant_matcher.models import Completion, Opportunity
 from nih_grant_matcher.rules import GRANT_TYPES
@@ -12,10 +13,19 @@ R21 = GRANT_TYPES["NIH:R21"]
 RULE = {section.key: section for section in R21.sections}
 
 class Guide:
-    def __init__(self, text: str, ggid: str = "360675") -> None: self.text, self.ggid, self.asked = text, ggid, []
+    # With no page, the notice's page answers as the Guide does for a notice from fiscal 2026 on, with a 404.
+    def __init__(self, text: str, ggid: str = "360675", page: str | None = None) -> None: self.text, self.ggid, self.html, self.asked, self.pages = text, ggid, page, [], []
     def doctext(self, docnum: str) -> tuple[str, str]:
         self.asked.append(docnum)
         return self.text, self.ggid
+    def page(self, docnum: str) -> str:
+        self.pages.append(docnum)
+        if self.html is None:
+            raise ApiError("HTTP Error 404: Not Found")
+        return self.html
+
+def no_page(self, docnum: str) -> str:
+    raise ApiError("HTTP Error 404: Not Found")
 
 class Grants:
     def __init__(self, html: str) -> None: self.html, self.asked = html, []
