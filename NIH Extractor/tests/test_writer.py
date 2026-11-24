@@ -595,3 +595,12 @@ def test_a_second_view_and_a_waiting_proposal_reuse_the_word_record(tmp_path, mo
     again.restore("research-strategy", 3, parent)
     diffs.clear(); again.view()
     assert len(diffs) == 1
+
+def test_a_model_share_that_rounds_to_zero_reads_less_than_1_percent_at_sign_off(tmp_path) -> None:
+    ws, words = start(tmp_path), [f"w{k}" for k in range(300)]
+    mine = ws.write("specific-aims", " ".join(words) + ".", None)
+    words[0] = "polished"
+    call = ws.store.add_call(ws.application_id, "specific-aims", "polish", "fake", "fake-1", "s", "p", " ".join(words) + ".", parent_id=mine.id)
+    polished = ws.store.add_revision(ws.application_id, "specific-aims", mine.id, "model", "polish", " ".join(words) + ".", call.id)
+    signed = ws.sign("specific-aims", "A. Applicant", polished.id)
+    assert "0 percent of its words came from a model's draft or revision that I accepted, and less than 1 percent from a model's polish" in signed.attestation

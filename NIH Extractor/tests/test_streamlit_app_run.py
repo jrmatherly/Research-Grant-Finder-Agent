@@ -1014,3 +1014,47 @@ def test_leaving_the_built_in_ranking_starts_a_new_ranking_and_keeps_the_name(tm
     _ranking(app).set_value("Rank with my own research")
     _press(app, "Next")
     assert app.text_area[1].value == "\n".join(aims)
+
+
+def test_a_model_share_that_rounds_to_zero_reads_less_than_1_percent_under_the_section(tmp_path, monkeypatch) -> None:
+    path, words = _r21_database(tmp_path, start=True), [f"w{k}" for k in range(300)]
+    store = OpportunityStore(path)
+    try:
+        mine = store.add_revision(1, "specific-aims", None, "applicant", "write", " ".join(words))
+        words[0] = "polished"
+        call = store.add_call(1, "specific-aims", "polish", "fake", "fake-1", "s", "p", " ".join(words), parent_id=mine.id)
+        store.add_revision(1, "specific-aims", mine.id, "model", "polish", " ".join(words), call.id)
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and "You wrote more than 99 percent of the words. A model drafted or revised 0 percent, and a model polished less than 1 percent." in [c.value for c in app.caption]
+
+
+def test_a_refused_restore_says_nothing_was_restored(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    for text in ("Aim 1.", "Aim 2."):
+        app.text_area(key="apply_text_1_specific-aims").set_value(text)
+        app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 2, "applicant", "write", "Tab two.")
+    finally:
+        store.close()
+    app.button(key="apply_restore_1_button").click().run(timeout=30)
+    warnings = " ".join(w.value for w in app.warning)
+    assert not app.exception and "changed in another tab, so nothing was restored" in warnings and "not saved" not in warnings
+
+
+def test_next_from_the_aims_step_names_a_sentence_over_the_limit(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.profile import MAX_SENTENCE
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    _press(app, "Next")
+    long = "Measure " + "very " * 150 + "long fission."
+    app.text_area[1].set_value(f"Map cardiac energetics. {long} Test mitophagy.")
+    _press(app, "Next")
+    assert not app.exception and app.session_state["profile_step"] == 1
+    assert any(f'"{long[:60]}' in e.value and f"{MAX_SENTENCE} characters" in e.value for e in app.error)
