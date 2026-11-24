@@ -127,6 +127,27 @@ def test_a_dropped_connection_says_a_charge_is_possible_and_is_not_retried(post)
         model("claude").complete("s", "u")
     assert post.calls == 1
 
+@pytest.mark.parametrize("exc", [TimeoutError("timed out"), urllib.error.URLError(TimeoutError("timed out"))])
+def test_a_test_that_times_out_says_so_and_does_not_blame_the_key(exc, post) -> None:
+    post.fail_with(exc)
+    with pytest.raises(ModelError) as failed:
+        model("gemini").complete("s", "u", probe=True)
+    assert "No answer came within 60 seconds" in str(failed.value) and "says nothing about your key" in str(failed.value)
+
+def test_a_refusal_when_no_key_was_sent_says_none_is_saved(post) -> None:
+    post.fail(401, {"error": {"message": "Missing bearer authentication in header"}})
+    with pytest.raises(ModelError) as failed:
+        model("compatible", key=None, base_url="http://localhost:11434/v1").complete("s", "u", probe=True)
+    assert "none is saved" in str(failed.value) and "mistyped" not in str(failed.value)
+
+def test_a_probe_waits_a_minute_at_most_and_a_draft_ten(post, monkeypatch) -> None:
+    waits = []
+    monkeypatch.setattr(llm, "_open", lambda request, timeout=None: waits.append(timeout) or post(request))
+    for probe in (True, False):
+        post.reply(fixture("gemini-ok"))
+        model("gemini").complete("s", "u", probe=probe)
+    assert waits == [60, 600]
+
 # OpenAI rejects max_tokens on its reasoning models, and a server behind the compatible provider can be one of them.
 @pytest.mark.parametrize("name, sent, then", [("openai", "max_completion_tokens", "max_tokens"), ("compatible", "max_tokens", "max_completion_tokens")])
 def test_a_server_that_wants_the_other_token_limit_gets_it_on_the_second_request(name, sent, then, post) -> None:
@@ -404,6 +425,9 @@ def test_a_failure_before_the_request_leaves_does_not_say_it_may_have_reached_th
     (429, {"error": {"code": "quota_exceeded", "message": "You have exceeded your daily quota."}}, "quota, credit or spending limit"),
     (429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-4-argon"}}, "quota, credit or spending limit"),
     (503, {"error": {"code": "service_unavailable", "message": "gemini-4-hydrogen is currently experiencing high demand."}}, "says nothing about your key"),
+    (502, {"error": {"code": 502, "status": "UNAVAILABLE", "message": "Bad gateway."}}, "says nothing about your key"),
+    (504, {"error": {"code": 504, "status": "DEADLINE_EXCEEDED", "message": "Deadline expired before operation could complete."}}, "says nothing about your key"),
+    (429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0."}}, "quota, credit or spending limit"),
     (404, {"error": {"code": "model_not_found", "message": "The specified model was not found."}}, "did not find this model")])
 def test_a_failed_test_says_what_it_means_for_the_key(status, error, says, post) -> None:
     post.fail(status, error)

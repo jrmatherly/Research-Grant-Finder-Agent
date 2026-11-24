@@ -1838,7 +1838,7 @@ def test_the_database_box_is_under_settings_and_every_view_reads_it(tmp_path, mo
     assert not [t for t in app.sidebar.text_input if t.label == "Database"]
     assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
     assert app.selectbox(key="find_opportunity").value == "PA-1 | Machine learning for imaging"
-    # Decision 1: no view names the default database, and Settings never draws the line, since the box is on the page.
+    # No view names the default database, and Settings never draws the line, since the box is on the page.
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
@@ -1850,6 +1850,17 @@ def test_the_database_box_is_under_settings_and_every_view_reads_it(tmp_path, mo
     # The rows of the first database must not stay on the page once another is open.
     assert app.selectbox(key="find_opportunity").value == "PA-1 | Mitochondria in cardiac muscle"
     assert "Database: `data/second.sqlite3`. Change it under Settings." in [c.value for c in app.sidebar.caption]
+
+
+def test_the_database_box_keeps_its_path_while_another_view_is_shown(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    app.text_input(key="db_path").set_value("data/second.sqlite3").run(timeout=30)
+    for view in ("Find", "Settings"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    box = app.text_input(key="db_path")
+    assert not app.exception and (box.proto.set_value, box.value) == (True, "data/second.sqlite3")
 
 
 def test_the_model_boxes_follow_the_database_that_is_open(tmp_path, monkeypatch) -> None:

@@ -48,6 +48,12 @@ def test_no_appcast_without_release_notes(tmp_path) -> None:
     assert result.returncode != 0 and result.stdout == "" and "notes.md" in result.stderr
 
 
+def test_the_notes_are_read_from_the_file_of_the_version_unless_another_is_named(tmp_path) -> None:
+    # The release workflow names no file, so this path is the one the pyproject test must look in.
+    result = _run(tmp_path, env={"RELEASE_NOTES": ""})
+    assert result.returncode != 0 and result.stdout == "" and str(SCRIPT.parent / "release-notes" / "1.2.3.md") in result.stderr
+
+
 def test_download_base_can_be_replaced(tmp_path) -> None:
     result = _run(tmp_path, env={"APPCAST_DOWNLOAD_BASE": "http://127.0.0.1:8811"})
     assert ET.fromstring(result.stdout).find("channel/item/enclosure").get("url") == "http://127.0.0.1:8811/Grant-Matcher-1.2.3-arm64.dmg"

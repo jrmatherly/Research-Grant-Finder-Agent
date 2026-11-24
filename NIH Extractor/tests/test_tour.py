@@ -74,12 +74,15 @@ def test_the_tour_keys_do_not_reach_macos_which_would_play_the_alert_sound() -> 
     assert script.index(".drive();") < script.index("window.addEventListener('keydown', quiet)")
     assert "onDestroyed: () => window.removeEventListener('keydown', quiet)" in script
 
+def test_escape_and_the_arrow_keys_are_the_keys_kept_from_macos() -> None:
+    assert "const quiet = e => { if (e.key === 'Escape' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault(); };" in tour.GLUE
+
 def test_the_popover_takes_the_colours_of_the_app() -> None:
     assert ".driver-popover{background-color:var(--gm-tour-bg,#fff);color:var(--gm-tour-fg,#2d2d2d)" in tour.styles()
     assert "setProperty('--gm-tour-bg', c.backgroundColor)" in tour.script()
 
 def test_a_click_outside_the_popover_still_closes_the_tour() -> None:
-    # The owner chose to keep driver.js's default. The vendored file names the option too, so the glue is what is searched.
+    # A click outside closes the tour by driver.js's default. The vendored file names the option too, so the glue is what is searched.
     assert "overlayClickBehavior" not in tour.GLUE and "overlayClickBehavior:`close`" in tour.script()
 
 def test_the_run_search_step_names_the_section_that_holds_source() -> None:
