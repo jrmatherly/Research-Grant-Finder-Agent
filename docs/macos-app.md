@@ -38,7 +38,7 @@ To sign with your Developer ID certificate, set `CODESIGN_IDENTITY` to its name.
 CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" "NIH Extractor/macos/build.sh"
 ```
 
-The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. It checks the app's signature and the update settings in its `Info.plist`. It also fails when the app would read its CA certificates from a file that is not part of macOS, because such an app can open no secure connection on another Mac. With `CODESIGN_IDENTITY` set, it also signs the disk image.
+The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. It checks the app's signature and the update settings in its `Info.plist`. It also fails when the app would read its CA certificates from a file that is not part of macOS, because such an app can open no secure connection on another Mac, and when the Mac that builds has no certificates in that file. With `CODESIGN_IDENTITY` set, it also signs the disk image.
 
 The results are in `NIH Extractor/macos/dist`:
 

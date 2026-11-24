@@ -259,9 +259,11 @@ def test_check_updater_flag_fails_when_sparkle_cannot_load(monkeypatch, tmp_path
         launcher.main()
 
 
-def _check_tls(monkeypatch, cafile: str) -> int:
+def _check_tls(monkeypatch, cafile: str, holds: bool = True) -> int:
     launcher = _load(monkeypatch)
     monkeypatch.setattr(launcher.ssl, "get_default_verify_paths", lambda: types.SimpleNamespace(openssl_cafile=cafile))
+    # The file is macOS's own, and Linux CI has none at these paths.
+    monkeypatch.setattr(launcher, "holds_certificates", lambda path: holds)
     monkeypatch.setattr(launcher, "run_window", lambda: pytest.fail("the check must not open a window"))
     monkeypatch.setattr(sys, "argv", ["Grant Matcher", "--check-tls"])
     return launcher.main()
@@ -277,6 +279,19 @@ def test_check_tls_flag_fails_for_a_ca_file_inside_the_python_that_built_the_app
     cafile = "/Library/Frameworks/Python.framework/Versions/3.13/etc/openssl/cert.pem"
     assert _check_tls(monkeypatch, cafile) == 1
     assert cafile in capsys.readouterr().err
+
+
+def test_check_tls_flag_fails_when_the_mac_that_builds_has_no_certificates_in_that_file(monkeypatch, capsys) -> None:
+    # The check rests on macOS shipping the file, so each build tries that on the Mac it runs on.
+    assert _check_tls(monkeypatch, "/private/etc/ssl/cert.pem", holds=False) == 1
+    assert "/private/etc/ssl/cert.pem" in capsys.readouterr().err
+
+
+def test_a_ca_file_holds_certificates_only_when_it_is_there_and_not_empty(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    (tmp_path / "empty.pem").write_text("")
+    (tmp_path / "cert.pem").write_text("-----BEGIN CERTIFICATE-----")
+    assert [launcher.holds_certificates(str(tmp_path / name)) for name in ("missing.pem", "empty.pem", "cert.pem")] == [False, False, True]
 
 
 def test_the_build_script_pins_its_python_before_uv_runs_and_runs_the_certificate_check() -> None:
