@@ -11,7 +11,7 @@ from .clients import ApiError
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
-from .provenance import PROPOSALS, attribution, disclosure_statement, head, section_state, share
+from .provenance import PROPOSALS, attribution, disclosure_statement, head, percent, section_state, share
 from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, grant_types_for
 from .store import OpportunityStore
 
@@ -75,9 +75,6 @@ class ApplicationView:
 
 def describe(limit: Limit) -> str:
     return f"{limit.amount:g} {limit.unit[:-1] if limit.amount == 1 else limit.unit}"
-
-def _percent(value: float) -> int:
-    return round(value * 100)
 
 def _profile(store: OpportunityStore) -> Profile:
     # The dashboard already says that the saved profile cannot be read, and an application can still be started and checked without it.
@@ -248,7 +245,7 @@ class Workspace:
         if (drafted := tuple(f for f in s.findings if f.code == "mostly-drafted")) and not acknowledge:
             raise NotReady("A model drafted or revised most of this section. Confirm that you have rewritten what you needed to and that it states your own ideas.", drafted)
         digest = hashlib.sha256(s.text.encode("utf-8")).hexdigest()
-        attestation = f"I have read this section. It states my own ideas, and I take responsibility for every statement and reference in it. By Grant Matcher's record, {_percent(s.attribution.written_share)} percent of its words came from a model's draft or revision that I accepted, and {_percent(s.attribution.polished_share)} percent from a model's polish of my text. Revision {revision_id}, sha256 {digest}."
+        attestation = f"I have read this section. It states my own ideas, and I take responsibility for every statement and reference in it. By Grant Matcher's record, {percent(s.attribution.written_share)} of its words came from a model's draft or revision that I accepted, and {percent(s.attribution.polished_share)} from a model's polish of my text. Revision {revision_id}, sha256 {digest}."
         return self.store.add_signoff(self.application_id, section, revision_id, signer.strip(), attestation, list(dict.fromkeys(f.code for f in s.findings if f.severity == "warning")), __version__)
 
     def _waiting(self, calls: list[ModelCall], revisions: list[Revision]) -> list[ModelCall]:

@@ -10,6 +10,7 @@ from ..announcement import SECTION_TITLES
 from ..clients import ApiError
 from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models
 from ..models import Finding, Opportunity
+from ..provenance import percent
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
 from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe
@@ -348,7 +349,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
     if s.gaps:
         st.info(f"This section still needs {', '.join(s.gaps)}. Add them under Your inputs.")
     if (stale := st.session_state.get("apply_stale")) and stale[:2] == (app_id, key):
-        st.warning("This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off." if stale[2] == "sign" else "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision.")
+        st.warning({"sign": "This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off.", "restore": "This section changed in another tab, so nothing was restored. The page now shows the current text."}.get(stale[2], "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision."))
         newest, yours = st.columns(2)
         newest.caption(f"Revision {s.revision_id}")
         newest.text(s.text)
@@ -390,7 +391,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         mine.button("Accept with my edits", key="apply_accept_edited_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id, edit_key=edit_key: _accept(w, call_id, st.session_state.get(edit_key))))
         discard.button("Discard", key="apply_discard_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _discard(w, call_id)))
     words = s.attribution
-    st.caption(f"You wrote {round(100 * words.applicant_words / (words.applicant_words + words.model_words or 1))}% of the words. A model drafted or revised {round(100 * words.written_share)}%, and a model polished {round(100 * words.polished_share)}%.")
+    st.caption(f"You wrote {percent(words.applicant_words / (words.applicant_words + words.model_words or 1))} of the words. A model drafted or revised {percent(words.written_share)}, and a model polished {percent(words.polished_share)}.")
     for f in s.findings:
         (st.error if f.severity == "error" else st.warning)(escape_markdown(f.message) + (f"\n\n_{escape_markdown(f.excerpt)}_" if f.excerpt else ""))
     if s.revision_id is not None and not s.findings:
@@ -407,7 +408,7 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     for r in reversed(view.log):
         line, restore = st.columns([6, 1])
         line.markdown(f"Revision {r.id}. {titles.get(r.section, r.section)}. " + ("You wrote it" if r.author == "applicant" else f"A model's {ACTION_NOUNS.get(r.action, r.action)}") + f" on {r.created_at:%Y-%m-%d at %H:%M} UTC. {len(r.text.split())} words.")
-        restore.button("Restore", key=f"apply_restore_{r.id}_button", disabled=r.id in heads.values(), on_click=_on, args=(db_path, app_id, lambda w, section=r.section, rid=r.id, parent=heads.get(r.section): _restore(w, section, rid, parent)))
+        restore.button("Restore", key=f"apply_restore_{r.id}_button", disabled=r.id in heads.values(), on_click=_on, args=(db_path, app_id, lambda w, section=r.section, rid=r.id, parent=heads.get(r.section): _restore(w, section, rid, parent), "restore"))
     st.subheader("AI-use statement")
     st.caption("Grant Matcher builds this statement from the log, one sentence for each thing the log holds, with no model. NIH names no field for it, so the export writes it to ai-use-statement.md for you to place.")
     disclosure_key = f"apply_disclosure_{app_id}"

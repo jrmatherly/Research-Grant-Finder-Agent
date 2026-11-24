@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from ..config import INSTITUTE_BONUS, INSTITUTES
-from ..profile import BUILTIN_PROFILE, MAX_CITATION, MAX_INSTITUTES, MAX_KEYWORD, TEXT_LIMITS, Profile, ProfileError, Reference, from_export, ranks_like_builtin, suggest_terms, to_export
+from ..profile import BUILTIN_PROFILE, MAX_CITATION, MAX_INSTITUTES, MAX_KEYWORD, MAX_SENTENCE, TEXT_LIMITS, Profile, ProfileError, Reference, from_export, ranks_like_builtin, suggest_terms, to_export
 from ..scoring import MLRelevanceScorer
 from ..store import OpportunityStore
 from ..workflow import config_for
@@ -132,6 +132,9 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         examples = tuple(part.strip() for part in re.split(r"\n|(?<=[.?!])\s+", aims) if part.strip())
         if (forward or save) and not 3 <= len(examples) <= 6:
             st.error(f"Write three to six sentences. You wrote {len(examples)}.")
+            return
+        if (forward or save) and (long := next((e for e in examples if len(e) > MAX_SENTENCE), None)):
+            st.error(f"A sentence holds at most {MAX_SENTENCE} characters. The one that begins \"{escape_markdown(long[:60])}\" holds {len(long):,}.")
             return
         if forward and ((summary.strip(), examples) != (draft.research_summary, draft.examples) or not draft.keywords):
             scorer = MLRelevanceScorer()
