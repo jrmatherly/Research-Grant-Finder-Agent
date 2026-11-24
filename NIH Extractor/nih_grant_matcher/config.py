@@ -8,6 +8,8 @@ NIH_REPORTER_SEARCH_URL = "https://api.reporter.nih.gov/v2/projects/search"
 NIH_GUIDE_API_URL = "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod"
 NIH_GUIDE_DOCTEXT_URL = "https://search.grants.nih.gov/guide/api/data"
 GRANTSGOV_ATTACHMENT_URL = "https://apply07.grants.gov/grantsws/rest/opportunity/att/download"
+PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+CROSSREF_WORKS_URL = "https://api.crossref.org/works"
 
 DEFAULT_KEYWORDS = {
     "machine learning": 18, "artificial intelligence": 18, "deep learning": 18,

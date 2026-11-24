@@ -3,10 +3,12 @@ import http.client, json, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from .config import GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_GUIDE_DOCTEXT_URL, NIH_REPORTER_SEARCH_URL
+from .config import CROSSREF_WORKS_URL, GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_GUIDE_DOCTEXT_URL, NIH_REPORTER_SEARCH_URL, PUBMED_SUMMARY_URL
 
 class ApiError(RuntimeError):
     pass
+
+UNTITLED = "(the record has no title)"
 
 def _certificate_failed(exc: BaseException) -> bool:
     # urllib wraps a failure on connect in URLError and leaves a later one bare.
@@ -179,3 +181,48 @@ class NihReporterClient:
         if not isinstance(results, list):
             raise ApiError("Unexpected NIH RePORTER response: results is not a list")
         return results
+
+@dataclass
+class ReferenceClient:
+    pubmed_url: str = PUBMED_SUMMARY_URL
+    crossref_url: str = CROSSREF_WORKS_URL
+    # NCBI allows three requests a second without a key, and the lookups share one pace across both services.
+    pause_seconds: float = 0.4
+    def lookup(self, pmid: str = "", doi: str = "") -> str:
+        if not (pmid or doi):
+            raise ValueError("A lookup needs a PMID or a DOI.")
+        time.sleep(self.pause_seconds)
+        try:
+            title = self._pubmed(pmid) if pmid else self._crossref(doi)
+        except ApiError as exc:
+            raise ApiError(f"Checking {f'PMID {pmid} with PubMed' if pmid else f'DOI {doi} with Crossref'} failed: {exc}") from exc
+        # The title is text from the network, printed in a terminal too, so a control character goes and it is cut to a line.
+        return "" if title is None else " ".join("".join(c if c.isprintable() else " " for c in title).split())[:300] or UNTITLED
+    def _pubmed(self, pmid: str) -> str | None:
+        query = urllib.parse.urlencode({"db": "pubmed", "id": pmid, "retmode": "json", "tool": "nih-grant-matcher"})
+        parsed = _read_json(urllib.request.Request(f"{self.pubmed_url}?{query}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 30)
+        # NCBI answers an id it does not hold with 200 and an error, and a rate limit with an error too, so only the id's own errors mean no record.
+        if "error" in parsed:
+            if str(parsed["error"]).startswith("Invalid uid"):
+                return None
+            raise ApiError(f"PubMed answered with an error: {parsed['error']}")
+        record = (parsed.get("result") or {}).get(pmid) if isinstance(parsed.get("result"), dict) else None
+        if isinstance(record, dict) and "error" in record:
+            return None
+        if not isinstance(record, dict) or not isinstance(record.get("title"), str):
+            raise ApiError("PubMed's reply holds no record or title for this PMID")
+        return record["title"]
+    def _crossref(self, doi: str) -> str | None:
+        # The DOI goes into the URL path, so a ? or # in it cannot start a query or a fragment.
+        request = urllib.request.Request(f"{self.crossref_url}/{urllib.parse.quote(doi, safe='/')}", headers={"User-Agent": "nih-grant-matcher/0.1"})
+        try:
+            parsed = _read_json(request, 30)
+        except ApiError as exc:
+            # Crossref answers a DOI it does not hold with a 404, which _read keeps as the cause.
+            if isinstance(exc.__cause__, urllib.error.HTTPError) and exc.__cause__.code == 404:
+                return None
+            raise
+        title = parsed["message"].get("title") if isinstance(parsed.get("message"), dict) else None
+        if not isinstance(title, list) or not all(isinstance(t, str) for t in title):
+            raise ApiError("Crossref's reply holds no title list for this DOI")
+        return " ".join(title)

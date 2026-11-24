@@ -13,7 +13,7 @@ from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe, dropped_points, read_summary, score_line
+from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe, dropped_points, lookup_line, read_summary, score_line
 from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
@@ -113,6 +113,10 @@ def _add_fact(ws: Workspace) -> str:
     fact = ws.add_fact(st.session_state.get("apply_fact_kind", "other"), st.session_state.get("apply_fact_text", ""), st.session_state.get("apply_fact_label", ""))
     st.session_state["apply_fact_text"] = st.session_state["apply_fact_label"] = ""
     return f"Added input {fact.id} under {fact.kind}."
+
+def _verify(ws: Workspace) -> str:
+    checked = ws.verify_references()
+    return f"Checked {checked} reference{'' if checked == 1 else 's'} with PubMed or Crossref. The result is under each reference."
 
 def _propose(ws: Workspace, section: str, action: str, instruction: str = "") -> str:
     ws.model = connect(ws.store)
@@ -350,7 +354,12 @@ def _inputs_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
         for f in facts:
             text, retire = st.columns([6, 1])
             text.markdown(escape_markdown((f"[@{f.label}] " if f.label else "") + f.text))
+            if kind == "reference":
+                text.caption(escape_markdown(lookup_line(f)))
             retire.button("Retire", key=f"apply_retire_{f.id}_button", on_click=_on, args=(db_path, app_id, lambda w, fid=f.id: w.retire_fact(fid)))
+        if kind == "reference" and facts:
+            st.caption("A model can invent a reference. This check sends the PMID of each reference to NCBI (PubMed), or its DOI to Crossref when it has no PMID. Nothing else leaves this computer, and no model is involved. Compare the title each index holds with the reference you typed.")
+            st.button("Check that each reference exists", key="apply_verify_button", on_click=_on, args=(db_path, app_id, _verify))
     with st.form("apply_fact_form"):
         st.selectbox("Kind", FACT_KINDS, key="apply_fact_kind")
         st.text_input("Key", key="apply_fact_label", help="For a reference, the key that a section cites as [@key]. Letters, digits and hyphens.")

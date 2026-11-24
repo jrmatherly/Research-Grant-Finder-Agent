@@ -1904,9 +1904,33 @@ git commit -m "feat: review a section against NIH's review factors"
   - `Workspace.verify_references(self, client: ReferenceClient | None = None) -> int`. It records in each reference fact's `detail` the title found, or that none was, and returns the count checked.
   - A new finding in `check_section`: `unverified-reference`, a warning, for a cited reference fact with no lookup result or with an empty one.
 
-- [ ] **Step 1: Read the two services' documentation, and write down what was read**
+- [x] **Step 1: Read the two services' documentation, and write down what was read**
 
 The lookup needs a PMID service and a DOI service. The candidates are NCBI E-utilities (`esummary`) and Crossref (`works/<doi>`). Neither was read for this plan. Read each one's current documentation for the endpoint, the reply shape, the rate limit, and whether it asks for a contact address in the request. Record all four in this file under this step, with the URL and the date. If a service asks for an email address, ask the owner what to send. Do not send the owner's address unasked.
+
+The two reference services, as read and as observed on 2026-11-23.
+
+Label on each line: READ (a documentation page) or RAN (one request to the public endpoint, User-Agent `nih-grant-matcher/0.1`, no key, no email).
+
+#### NCBI E-utilities, `esummary` (a PMID)
+
+- READ https://www.ncbi.nlm.nih.gov/books/NBK25497/ ("A General Introduction to the E-utilities", Last Update: November 17, 2022), in a browser. The page for the parameters, NBK25499, was not read.
+- Endpoint. RAN: `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=<pmid>&retmode=json`. READ: requests go to URLs that begin `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/`.
+- Reply shape. RAN, PMID 33611339: HTTP 200, `{"header": ..., "result": {"uids": ["33611339"], "33611339": {"uid": "33611339", "title": "The role of m6A modification in the biological functions and diseases.", ...}}}`. RAN, PMID 999999999 (no such record): HTTP 200, `result["999999999"] == {"uid": "999999999", "error": "cannot get document summary"}`. RAN, id `abc`: HTTP 200, a top-level `"error": "Invalid uid abc at position= 0"` and `result == {"uids": []}`. So a missing record is a 200 with an `error` inside it, never a 404.
+- Rate limit. READ: "NCBI recommends that users post no more than three URL requests per second". Without an API key a site posting more than 3 requests per second "will receive an error message"; with a key, 10 per second. The example error is `{"error":"API rate limit exceeded","count":"11"}`. The HTTP status of that error is not on the page.
+- Contact. READ: `tool` and `email` are parameters a developer may send and is "encouraged" to. `email` is "a complete and valid e-mail address of the software developer and not that of a third-party end user". Sending them is not enough to lift a block: the values have to be registered with NCBI by e-mail. Neither is required for a request.
+
+#### Crossref REST API, `works/<doi>` (a DOI)
+
+- READ https://www.crossref.org/documentation/retrieve-metadata/rest-api/ (Last updated 2020-April-08) and https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/ (Last updated 2025-October-16), through a fetch agent.
+- Endpoint. READ: base `https://api.crossref.org/`, `/works/{doi}`, replies in JSON. RAN: `https://api.crossref.org/works/10.1038/s41586-021-03819-2`.
+- Reply shape. RAN, that DOI: HTTP 200, `application/json`, `{"status": ..., "message-type": ..., "message-version": ..., "message": {"title": ["Highly accurate protein structure prediction with AlphaFold"], ...}}`. The title is a LIST of strings. RAN, `10.9999/does.not.exist.12345`: HTTP 404, `text/plain`, body `Resource not found.` (not JSON).
+- Rate limit. READ: public pool, a single-DOI lookup, 5 requests per second with a concurrency of 1; polite pool 10 per second with a concurrency of 3. Over the limit is a 429, and a blocked client gets a 403. RAN: the reply headers were `x-rate-limit-limit: 5`, `x-rate-limit-interval: 1s`, `x-api-pool: public-single`.
+- Contact. READ: "We recommend the polite option so that we can contact you if there is an issue", by an email address in the `mailto` parameter. Not required: without it the client is in the public pool.
+
+#### Controller's ruling
+
+Neither service requires an address, so none is sent and the owner is not asked: no `email`, no `mailto`. The request carries the tool's name only (the existing `User-Agent`, and `tool=nih-grant-matcher` for NCBI). Lookups run one at a time with a pause that keeps both services under 3 requests per second. The owner can give a developer contact address later, which would be one setting.
 
 - [ ] **Step 2: Write the failing tests, write the code, run every test, commit**
 

@@ -211,3 +211,55 @@ def test_doctext_takes_the_hit_for_the_number_when_another_document_ranks_first(
     hits = [{"_source": {"docnum": "NOT-OD-27-001", "doctext": "A notice that cites PAR-27-090.", "ggid": "1"}}, {"_source": {"docnum": "PAR-27-090", "doctext": "Body", "ggid": "360675"}}]
     monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: json.dumps({"data": {"hits": {"hits": hits}}}).encode())
     assert clients.NihGuideClient().doctext("PAR-27-090") == ("Body", "360675")
+
+
+def _replies(monkeypatch, *outcomes) -> list:
+    import io, json
+    return _fail_then(monkeypatch, [o if isinstance(o, Exception) else io.BytesIO(json.dumps(o).encode()) for o in outcomes])
+
+
+def test_a_pmid_gives_the_title_pubmed_holds_and_sends_no_address(monkeypatch) -> None:
+    calls = _replies(monkeypatch, {"result": {"uids": ["33611339"], "33611339": {"uid": "33611339", "title": "The role of m6A\n\x1b modification. "}}})
+    assert clients.ReferenceClient().lookup(pmid="33611339", doi="10.1/ignored") == "The role of m6A modification."
+    url = calls[0].full_url
+    assert url.startswith("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?") and "db=pubmed" in url and "id=33611339" in url and "tool=nih-grant-matcher" in url
+    assert "email" not in url and "mailto" not in url and calls[0].get_header("User-agent") == "nih-grant-matcher/0.1"
+
+
+@pytest.mark.parametrize("reply", [{"result": {"uids": ["999999999"], "999999999": {"uid": "999999999", "error": "cannot get document summary"}}}, {"error": "Invalid uid 999999999 at position= 0", "result": {"uids": []}}], ids=["no-record", "invalid-uid"])
+def test_a_pmid_pubmed_does_not_hold_gives_an_empty_title(monkeypatch, reply) -> None:
+    _replies(monkeypatch, reply)
+    assert clients.ReferenceClient().lookup(pmid="999999999") == ""
+
+
+def test_a_doi_gives_the_joined_crossref_title_and_cannot_add_a_query(monkeypatch) -> None:
+    calls = _replies(monkeypatch, {"status": "ok", "message": {"title": ["Highly accurate", "protein structure prediction"]}})
+    assert clients.ReferenceClient().lookup(doi="10.1038/s41586?x=1") == "Highly accurate protein structure prediction"
+    assert calls[0].full_url == "https://api.crossref.org/works/10.1038/s41586%3Fx%3D1" and "mailto" not in calls[0].full_url
+
+
+def test_a_doi_crossref_does_not_hold_gives_an_empty_title(monkeypatch) -> None:
+    calls = _replies(monkeypatch, _http_error(404))
+    assert clients.ReferenceClient().lookup(doi="10.9999/does.not.exist") == ""
+    assert len(calls) == 1
+
+
+def test_a_record_with_no_title_is_not_reported_as_missing(monkeypatch) -> None:
+    _replies(monkeypatch, {"message": {"title": []}})
+    assert clients.ReferenceClient().lookup(doi="10.1/x") == clients.UNTITLED
+
+
+@pytest.mark.parametrize("outcomes", [[_http_error(429)] * 3, [_http_error(503)] * 3, [{"error": "API rate limit exceeded", "count": "11"}], [{"result": {"uids": []}}]], ids=["429", "503", "rate-limit", "shape"])
+def test_a_reply_that_is_not_an_answer_is_an_api_error_naming_the_service(monkeypatch, outcomes) -> None:
+    _replies(monkeypatch, *outcomes)
+    with pytest.raises(clients.ApiError, match="PubMed"):
+        clients.ReferenceClient().lookup(pmid="1")
+
+
+def test_lookups_pause_under_three_requests_a_second(monkeypatch) -> None:
+    _replies(monkeypatch, {"message": {"title": ["A"]}}, {"message": {"title": ["B"]}})
+    slept = []
+    monkeypatch.setattr(clients.time, "sleep", slept.append)
+    client = clients.ReferenceClient()
+    client.lookup(doi="10.1/a"), client.lookup(doi="10.1/b")
+    assert len(slept) == 2 and min(slept) >= 1 / 3

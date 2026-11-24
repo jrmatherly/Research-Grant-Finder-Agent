@@ -489,6 +489,24 @@ def test_an_announcement_with_no_section_iv_is_named_on_each_tab(tmp_path, monke
     assert sum(said in info.value for info in app.info) == 2 and not any("found no added requirement" in info.value for info in app.info)
 
 
+def test_checking_the_references_says_what_leaves_and_shows_each_title_as_text(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.clients import ReferenceClient
+    from nih_grant_matcher.writer import Workspace
+    asked = []
+    monkeypatch.setattr(ReferenceClient, "lookup", lambda self, pmid="", doi="": asked.append(pmid) or "**Heart** [cells](http://x.test)")
+    store = OpportunityStore(_r21_database(tmp_path, start=True))
+    try:
+        Workspace(store, 1).add_fact("reference", "Smith J. 2021. PMID: 123", label="smith2021")
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    assert any("NCBI (PubMed)" in c.value and "Nothing else leaves" in c.value for c in app.caption) and any("Not checked yet" in c.value for c in app.caption)
+    app.button(key="apply_verify_button").click().run(timeout=30)
+    assert not app.exception and asked == ["123"] and any("Checked 1 reference" in s.value for s in app.success)
+    from nih_grant_matcher.ui.markdown import escape_markdown
+    assert any(escape_markdown("PubMed holds PMID 123 as: **Heart** [cells](http://x.test)") in c.value for c in app.caption)
+
+
 def test_each_apply_button_does_its_one_thing(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (SECTION_IV, "1"))
