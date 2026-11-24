@@ -95,10 +95,10 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `apply list` | Lists the applications. |
 | `apply fetch 1` | Fetches the full announcement of application 1. |
 | `apply requirements 1` | Prints the standing rules and what the announcement adds. |
-| `apply extract 1` | Asks the model you chose to read the fetched announcement and list what it asks for. Nothing counts until you confirm it in the dashboard. |
+| `apply extract 1` | Asks the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it in the dashboard. |
 | `apply add 1 --kind aim --text "Map heart cells."` | Adds an input. `--file data/aim.txt` reads the text from a UTF-8 file. For `--kind reference`, add `--label smith2021`, and cite the reference in a section as `[@smith2021]`. |
 | `apply write 1 project-narrative --file data/narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. Put the file under `data/`, so that the container can read it. A file outside the mounted folders fails with "No such file or directory". |
-| `apply verify 1` | Checks that each reference you listed exists, and prints what the index holds for it. It sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, and none of your text. |
+| `apply verify 1` | Checks that each reference you listed with a PMID or a DOI exists, and prints what the index holds for it. It sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, and none of your text. It exits with 1 when a lookup fails. |
 | `apply draft 1 project-narrative` | Asks the model to draft the section from your inputs, and prints the proposal with its number. Nothing changes until you accept it. When an input is missing, it names the input and exits with 1. |
 | `apply polish 1 project-narrative` | Asks the model to polish the newest revision of the section, and prints the proposal with its number. |
 | `apply revise 1 project-narrative --instruction "Shorten it."` | Asks the model to revise the newest revision as you instruct, and prints the proposal with its number. |
