@@ -380,6 +380,41 @@ def test_a_rerun_does_not_send_a_value_over_what_the_applicant_is_typing(tmp_pat
     assert not app.text_input(key="apply_fact_label").proto.set_value and not app.selectbox(key="apply_section").proto.set_value
 
 
+# The browser draws a box again at its default unless the run sends a value, and a Save then writes the empty box.
+def test_a_section_shown_again_sends_its_text_and_the_proposal_edits_to_the_browser(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        mine = store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells.")
+        call = store.add_call(1, "specific-aims", "polish", "fake", "fake-1", "s", "p", "We study cardiac muscle cells.", parent_id=mine.id)
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    for section in ("project-summary", "specific-aims"):
+        app.selectbox(key="apply_section").set_value(section).run(timeout=30)
+    assert not app.exception
+    boxes = [app.text_area(key=key).proto for key in ("apply_text_1_specific-aims", f"apply_edit_1_specific-aims_{call.id}")]
+    assert [(box.set_value, box.value) for box in boxes] == [(True, "We study heart cells."), (True, "We study cardiac muscle cells.")]
+
+
+def test_the_apply_view_shown_again_sends_its_values_to_the_browser(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "project-summary", None, "applicant", "write", "A summary.")
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("project-summary").run(timeout=30)
+    app.text_input(key="apply_export_1").set_value("elsewhere").run(timeout=30)
+    app.text_input(key="apply_delete_1").set_value("PAR").run(timeout=30)
+    for view in ("Find", "Apply"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    assert not app.exception
+    widgets = [app.selectbox(key="apply_section"), app.text_area(key="apply_text_1_project-summary"), app.text_input(key="apply_export_1"), app.text_input(key="apply_delete_1")]
+    assert [(w.proto.set_value, w.value) for w in widgets] == [(True, "project-summary"), (True, "A summary."), (True, "elsewhere"), (True, "PAR")]
+
+
 def test_find_and_apply_values_survive_a_view_switch(tmp_path, monkeypatch) -> None:
     _r21_database(tmp_path, start=True)
     app = _apply_view(tmp_path, monkeypatch)

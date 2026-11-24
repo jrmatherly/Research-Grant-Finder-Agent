@@ -206,7 +206,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     if st.session_state.get("application_id") not in ids:
         st.session_state["application_id"] = ids[-1]
     labels = {a.id: f"{a.opportunity_number} as {a.grant_type.split(':')[-1]}{', a resubmission' if a.resubmission else ''}. {a.title}" for a in apps}
-    app_id = st.selectbox("Application", ids, format_func=labels.__getitem__, key="application_id")
+    app_id = st.selectbox("Application", ids, format_func=labels.__getitem__, key="application_id", persist_state="session")
     path = str(store.db_path)
     st.caption(f"Your text, your inputs and every model call for this application are stored in {f'`{path}`' if '`' not in path else escape_markdown(path)}. Anyone who can read that file can read them.")
     _model_settings(store, db_path)
@@ -239,14 +239,14 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
         if "apply_llm_provider" not in st.session_state:
             st.session_state["apply_llm_provider"] = picked[0].name if picked else None
-        st.selectbox("Provider", list(PROVIDERS), format_func=PROVIDER_LABELS.__getitem__, placeholder="Choose a provider", key="apply_llm_provider", on_change=_act, args=(db_path, _choose_provider))
+        st.selectbox("Provider", list(PROVIDERS), format_func=PROVIDER_LABELS.__getitem__, placeholder="Choose a provider", key="apply_llm_provider", persist_state="session", on_change=_act, args=(db_path, _choose_provider))
         if picked is None:
             return
         provider, name, base_url = picked
         if provider.name == "compatible":
             if "apply_llm_base_url" not in st.session_state:
                 st.session_state["apply_llm_base_url"] = base_url
-            st.text_input("Base URL", key="apply_llm_base_url", help="The address of the server's OpenAI API, such as http://localhost:11434/v1 for Ollama.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.base_url", checked_base_url(st.session_state["apply_llm_base_url"]))))
+            st.text_input("Base URL", key="apply_llm_base_url", persist_state="session", help="The address of the server's OpenAI API, such as http://localhost:11434/v1 for Ollama.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.base_url", checked_base_url(st.session_state["apply_llm_base_url"]))))
         try:
             key = keys.get(provider, store.db_path.parent)
         except (keys.UnreadableKey, OSError) as exc:
@@ -267,7 +267,7 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
         listed = st.session_state.get("apply_llm_models", {}).get(provider.name, [])
         if "apply_llm_model" not in st.session_state:
             st.session_state["apply_llm_model"] = name or None
-        st.selectbox("Model", list(dict.fromkeys([*([name] if name else []), *listed])), placeholder="List the provider's models to choose one", key="apply_llm_model", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.model", st.session_state["apply_llm_model"] or "")))
+        st.selectbox("Model", list(dict.fromkeys([*([name] if name else []), *listed])), placeholder="List the provider's models to choose one", key="apply_llm_model", persist_state="session", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.model", st.session_state["apply_llm_model"] or "")))
         st.button("List the provider's models", key="apply_llm_list_button", on_click=_act, args=(db_path, _list_models))
         host = host_of(base_url)
         st.caption(f"Your text goes to {escape_markdown(host)}.")
@@ -369,16 +369,16 @@ def _inputs_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
             st.caption("A model can invent a reference. This check sends the PMID of each reference to NCBI (PubMed), or its DOI to Crossref when it has no PMID. Nothing else leaves this computer, and no model is involved. Compare the title each index holds with the reference you typed.")
             st.button("Check that each reference exists", key="apply_verify_button", on_click=_on, args=(db_path, app_id, _verify))
     with st.form("apply_fact_form"):
-        st.selectbox("Kind", FACT_KINDS, key="apply_fact_kind")
-        st.text_input("Key", key="apply_fact_label", help="For a reference, the key that a section cites as [@key]. Letters, digits and hyphens.")
-        st.text_area("Text", key="apply_fact_text")
+        st.selectbox("Kind", FACT_KINDS, key="apply_fact_kind", persist_state="session")
+        st.text_input("Key", key="apply_fact_label", persist_state="session", help="For a reference, the key that a section cites as [@key]. Letters, digits and hyphens.")
+        st.text_area("Text", key="apply_fact_text", persist_state="session")
         st.form_submit_button("Add input", key="apply_add_fact_button", on_click=_on, args=(db_path, app_id, _add_fact))
 
 def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: int) -> None:
     keys = [s.rule.key for s in view.sections]
     if st.session_state.get("apply_section") not in keys:
         st.session_state["apply_section"] = keys[0]
-    key = st.selectbox("Section", keys, format_func=lambda k: view.section(k).rule.title, key="apply_section")
+    key = st.selectbox("Section", keys, format_func=lambda k: view.section(k).rule.title, key="apply_section", persist_state="session")
     s = view.section(key)
     text_key, base_key = _keys(app_id, key)
     shown = next((r for r in view.log if r.id == st.session_state.get(base_key)), None)
@@ -397,13 +397,14 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         yours.text(st.session_state[text_key])
         st.button("Load the newest revision", key="apply_load_newest_button", on_click=_load_newest, args=(text_key, base_key, s.text, s.revision_id))
     with st.form("apply_section_form"):
-        st.text_area(s.rule.title, key=text_key, height=360)
+        # A widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Apply widget persists.
+        st.text_area(s.rule.title, key=text_key, height=360, persist_state="session")
         st.form_submit_button("Save", key="apply_save_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _save(w, key, title)))
         if "apply_signer" not in st.session_state:
             st.session_state["apply_signer"] = _investigator(ws.store)
-        st.text_input("Your name", key="apply_signer")
+        st.text_input("Your name", key="apply_signer", persist_state="session")
         if any(f.code == "mostly-drafted" for f in s.findings):
-            st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}")
+            st.checkbox(ACKNOWLEDGE, key=f"apply_acknowledge_{app_id}_{key}", persist_state="session")
         st.form_submit_button("Sign off", key="apply_sign_button", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _sign(w, key, title), "sign"))
     # Review reads only the saved text, so every section offers it, and the section's rule says which of the others a model may do.
     edits = ["Polish", "Revise"] if s.rule.model != "none" else []
@@ -414,7 +415,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         st.caption(f"{_and(actions)} need{'' if len(actions) > 1 else 's'} a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     if ws.model is not None and s.rule.model != "none":
         instruction_key = f"apply_instruction_{app_id}_{key}"
-        st.text_input("What to change", key=instruction_key, help="Revise needs this. For example: Make the second aim shorter.")
+        st.text_input("What to change", key=instruction_key, persist_state="session", help="Revise needs this. For example: Make the second aim shorter.")
         polish, revise = st.columns(2)
         polish.button("Polish", key="apply_polish_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "polish")))
         revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
@@ -435,7 +436,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         edit_key = f"apply_edit_{app_id}_{key}_{proposal.call_id}"
         if edit_key not in st.session_state:
             st.session_state[edit_key] = proposal.text
-        st.text_area("Your edits to the proposal", key=edit_key, help="Change the proposal here, then choose Accept with my edits. Your changed words count as yours.")
+        st.text_area("Your edits to the proposal", key=edit_key, persist_state="session", help="Change the proposal here, then choose Accept with my edits. Your changed words count as yours.")
         accept, mine, discard = st.columns(3)
         accept.button("Accept", key="apply_accept_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _accept(w, call_id, None)))
         mine.button("Accept with my edits", key="apply_accept_edited_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id, edit_key=edit_key: _accept(w, call_id, st.session_state.get(edit_key))))
@@ -476,19 +477,19 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     disclosure_key = f"apply_disclosure_{app_id}"
     if disclosure_key not in st.session_state:
         st.session_state[disclosure_key] = view.application.disclosure_on
-    st.toggle("Include the statement in the export", key=disclosure_key, on_change=_on, args=(db_path, app_id, lambda w, disclosure_key=disclosure_key: w.set_disclosure(st.session_state[disclosure_key])))
+    st.toggle("Include the statement in the export", key=disclosure_key, persist_state="session", on_change=_on, args=(db_path, app_id, lambda w, disclosure_key=disclosure_key: w.set_disclosure(st.session_state[disclosure_key])))
     if view.disclosure:
         st.markdown(escape_markdown(view.disclosure))
     st.subheader("Export")
     export_key = f"apply_export_{app_id}"
     if export_key not in st.session_state:
         st.session_state[export_key] = f"outputs/application-{app_id}"
-    st.text_input("Export folder", key=export_key, help="One Markdown file per section, the requirements, the provenance log and, while it is on, the AI-use statement. A section that is not signed off starts with DRAFT-.")
+    st.text_input("Export folder", key=export_key, persist_state="session", help="One Markdown file per section, the requirements, the provenance log and, while it is on, the AI-use statement. A section that is not signed off starts with DRAFT-.")
     st.button("Export", key="apply_export_button", on_click=_on, args=(db_path, app_id, lambda w, export_key=export_key: f"Wrote the application to {escape_markdown(str(w.export(Path(st.session_state[export_key]))))}."))
     st.subheader("Delete this application")
     number = view.application.opportunity_number
     st.caption("Delete removes this application with its text, its inputs, its sign-offs and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
-    typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}")
+    typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}", persist_state="session")
     st.button("Delete this application", key="apply_delete_button", disabled=typed.strip() != number, on_click=_on, args=(db_path, app_id, lambda w, number=number: _delete(w, number)))
 
 def _missing(store: OpportunityStore) -> str:
