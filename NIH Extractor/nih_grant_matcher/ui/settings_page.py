@@ -14,7 +14,7 @@ def settings_page(db_path: str) -> None:
         # Opening the store creates the database and its folder, so a model can be set up before the first search.
         store = OpportunityStore(db_path)
         path = str(store.db_path)
-        st.caption(f"These settings are saved in {f'`{path}`' if '`' not in path else escape_markdown(path)}, the file named under Database in the sidebar.")
+        st.caption(f"These settings, except the API key, are saved in {f'`{path}`' if '`' not in path else escape_markdown(path)}, the file named under Database in the sidebar.")
         model_settings(store, db_path, expanded=True)
     except (sqlite3.Error, OSError) as exc:
         st.error(database_error(db_path, exc))

@@ -11,7 +11,7 @@ def test_the_vendored_files_are_those_of_driver_js_1_14_0() -> None:
     assert {name: hashlib.sha256((tour.VENDOR / name).read_bytes()).hexdigest() for name in PINS} == PINS
 
 def test_streamlit_reads_the_script_and_the_styles_as_content_not_as_paths() -> None:
-    # Streamlit takes a one-line string that holds a slash for a file path, and the vendored files are one line each.
+    # Streamlit takes a one-line string that holds a slash for a file path, and the vendored stylesheet is one line.
     from streamlit.components.v2.component_path_utils import ComponentPathUtils
     assert ComponentPathUtils.looks_like_inline_content(tour.script())
     assert ComponentPathUtils.looks_like_inline_content(tour.styles())
@@ -49,3 +49,17 @@ def test_the_empty_find_view_points_to_the_tour(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert [i.value for i in app.info] == ["Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar."]
+
+def test_the_tour_waits_for_a_press_and_is_sent_its_words(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    sent = lambda: json.loads(app.get("bidi_component")[0].proto.json)
+    assert sent()["nonce"] == ""
+    assert [(s["key"], s["title"], s["text"]) for s in sent()["steps"]] == list(tour.TOUR_STEPS)
+    app.sidebar.button(key="tour_start").click().run(timeout=30)
+    first = sent()["nonce"]
+    # A rerun that is not a press sends the same nonce, so the script does not start the tour again.
+    app.sidebar.slider(key="find_min_score").set_value(5.0).run(timeout=30)
+    assert sent()["nonce"] == first
+    app.sidebar.button(key="tour_start").click().run(timeout=30)
+    assert sent()["nonce"] == f"{app.session_state['tour_session']}:2" != first

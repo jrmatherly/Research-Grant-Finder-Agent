@@ -7,9 +7,9 @@ VENDOR = Path(__file__).parent / "vendor"
 
 TOUR_STEPS: tuple[tuple[str, str, str], ...] = (
     ("view", "Four views", "Find ranks NIH opportunities. Apply holds the applications you write. Profile sets what the ranking looks for. Settings sets up a model to help you write."),
-    ("find_run", "Run a search", "Choose a source, add a keyword if you want one, and select Run Search. Leave the keyword empty to see everything that is open."),
+    ("find_run", "Run a search", "Run Search fetches and ranks the opportunities of the source chosen above it. A keyword narrows the search, and an empty keyword fetches everything that is open."),
     ("find_classes", "Narrow the results", "Classification, and the two filters beside it, hide rows that are already loaded. They do not search again."),
-    ("find_table", "The results", "The highest score is first. Select a row to choose it for the Details tab."),
+    ("find_table", "The results", "The highest score is first. The row you select is the one the Details tab shows."),
     ("find_tabs", "Details", "Details shows why one opportunity matched, and Start application begins an application for it."),
     ("", "That is the tour", "Select Show me around in the sidebar to see it again."),
 )
@@ -21,6 +21,7 @@ export default function(component) {
   window.__grantMatcherTour = data.nonce;
   const shown = step => { if (!step.key) return true; const e = document.querySelector('.st-key-' + step.key); return !!e && e.getClientRects().length > 0; };
   const steps = data.steps.filter(shown).map(s => ({ element: s.key ? '.st-key-' + s.key : undefined, popover: { title: s.title, description: s.text } }));
+  if (!steps.some(s => s.element)) console.error('Grant Matcher tour: no control matched .st-key-<key>.');
   lib.driver({ showProgress: true, disableActiveInteraction: true, steps }).drive();
 }
 """
@@ -41,7 +42,6 @@ def _start() -> None:
 
 def tour_button() -> None:
     st.button("Show me around", key="tour_start", on_click=_start, width="stretch")
-    # The script starts the tour only for a nonce it has not seen, so a rerun does not restart it.
-    # The count starts again in a new session, and a tab that outlives its server keeps the last press it saw, so each session has its own name.
+    # The script ignores the nonce it started last, so a rerun does not restart the tour, and the session's name keeps a new server's count from matching the one an old tab saw.
     session, presses = st.session_state.setdefault("tour_session", secrets.token_hex(4)), st.session_state.get("tour_nonce", 0)
     _tour(data={"nonce": f"{session}:{presses}" if presses else "", "steps": [{"key": k, "title": t, "text": x} for k, t, x in TOUR_STEPS]}, key="tour")

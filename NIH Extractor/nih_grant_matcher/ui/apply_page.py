@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import sqlite3
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -184,11 +185,11 @@ def apply_page(db_path: str) -> None:
     with st.container():
         show_notices()
     # Opening a store creates the file, so a path with no database yet has no application either.
-    if not Path(db_path).exists():
-        st.info(HOW_TO_START)
-        return
     store = None
     try:
+        if not os.path.exists(db_path):
+            st.info(HOW_TO_START)
+            return
         store = OpportunityStore(db_path)
         _page(store, db_path)
     except (sqlite3.Error, OSError) as exc:
@@ -200,7 +201,7 @@ def apply_page(db_path: str) -> None:
             store.close()
 
 def database_error(db_path: str, exc: Exception) -> str:
-    return escape_markdown(f"Could not read the database at {db_path}: {exc}. Check the Database path in the sidebar.")
+    return escape_markdown(f"Could not open the database at {db_path}: {exc}. Check the Database path in the sidebar, and that no other program has the file open.")
 
 def _page(store: OpportunityStore, db_path: str) -> None:
     apps = store.applications()
@@ -244,7 +245,7 @@ def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None 
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
         # The boxes below are seeded once, so another database starts them again from its own record.
         if st.session_state.get("apply_llm_db", db_path) != db_path:
-            for key in ("apply_llm_model", "apply_llm_base_url", "apply_llm_workspace"):
+            for key in ("apply_llm_model", "apply_llm_base_url", "apply_llm_workspace", "apply_llm_models"):
                 st.session_state.pop(key, None)
         st.session_state["apply_llm_db"] = db_path
         # The provider comes from the record on every run, so a choice that was not saved does not stay shown.

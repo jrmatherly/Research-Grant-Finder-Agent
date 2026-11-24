@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import re, sqlite3
 from dataclasses import replace
 from pathlib import Path
@@ -18,7 +19,7 @@ BLANK = Profile(keywords={}, examples=(), focus="profile", examples_name="your e
 
 def saved_profile(db_path: str) -> Profile | None:
     # Opening a store creates the file, and the Find view loads any file it finds, so read only one that exists.
-    if not Path(db_path).exists():
+    if not os.path.exists(db_path):
         return None
     store = OpportunityStore(db_path)
     try:
@@ -70,7 +71,7 @@ def read_terms(terms: pd.DataFrame) -> tuple[dict[str, int], list[str], list[tup
     return keywords, dropped, [(a, b, keywords[a.lower()]) for a, b in pairs]
 
 def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
-    if not Path(db_path).exists():
+    if not os.path.exists(db_path):
         return None
     store = OpportunityStore(db_path)
     try:
