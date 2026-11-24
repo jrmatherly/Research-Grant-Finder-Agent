@@ -1,4 +1,5 @@
 import sqlite3, pytest
+from dataclasses import replace
 from nih_grant_matcher.store import OpportunityStore
 
 @pytest.fixture
@@ -222,8 +223,8 @@ def test_a_review_is_append_only_and_names_a_review_call_of_the_revision_it_read
     with pytest.raises(ValueError, match="not a review"):
         store.add_review(app, revision.id, polish.id, review)
     call = store.add_call(app, "specific-aims", "review", "fake", "fake-1", "s", "p", "r", parent_id=revision.id)
-    store.add_review(app, revision.id, call.id, review)
-    assert store.reviews(app) == [review]
+    saved = store.add_review(app, revision.id, call.id, review)
+    assert store.reviews(app) == [saved] and saved.created_at is not None and replace(saved, created_at=None) == review
     for statement in ("UPDATE reviews SET review_json = '{}'", "DELETE FROM reviews"):
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             store.conn.execute(statement)

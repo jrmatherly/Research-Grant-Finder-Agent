@@ -139,6 +139,8 @@ class Review:
     model: str
     # The points of the reply that Grant Matcher dropped, so the applicant knows the model said more.
     dropped: int = 0
+    # Set by the store when it saves the review.
+    created_at: datetime | None = None
 
 @dataclass(frozen=True)
 class Attribution:

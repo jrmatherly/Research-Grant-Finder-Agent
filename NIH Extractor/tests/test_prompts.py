@@ -107,10 +107,16 @@ def test_a_limit_whose_number_is_not_a_number_of_its_own_in_the_announcement_is_
     kept, dropped = prompts.parse_requirements(json.dumps([limit("The Research Strategy is limited to 1.5 pages.", 1.5), limit(text, 15)]), text)
     assert [r.limit for r in kept] == [Limit(15, "pages")] and dropped == 1
 
-@pytest.mark.parametrize("quote, amount", [("The Research Strategy is limited to 12 pages.", 2), ("The Research Strategy is limited to 0.5 pages.", 5), ("The Research Strategy is limited to 12.5 pages.", 12), ("The Research Strategy is limited to 1,000 lines.", 1)])
+@pytest.mark.parametrize("quote, amount", [("The Research Strategy is limited to 12 pages.", 2), ("The Research Strategy is limited to 0.5 pages.", 5), ("The Research Strategy is limited to 12.5 pages.", 12), ("The Research Strategy is limited to 1,000 lines.", 1),
+    ("Follow the page limits for this notice, see NOT-EY-24-006).", 24), ("Follow the page limits for this notice, see NOT-EY-24-006).", 6), ("The Research Strategy is limited to 3-6 pages.", 3), ("The Research Strategy is limited to 3-6 pages.", 6), ("The Research Strategy follows the limits of PAR-26-042.", 26), ("The Research Strategy follows the limits of PAR-26-042.", 42)])
 def test_a_limit_whose_number_is_part_of_another_number_is_dropped(quote, amount) -> None:
     reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}])
     assert prompts.parse_requirements(reply, quote) == ([], 1)
+
+@pytest.mark.parametrize("quote", ["The Research Strategy is a 6-page document at most.", "The Research Strategy is limited to six (6) pages."])
+def test_a_limit_whose_number_stands_beside_a_hyphen_or_bracket_is_kept(quote) -> None:
+    reply = json.dumps([{"kind": "limit", "section": "research-strategy", "text": "A limit.", "quote": quote, "limit": {"amount": 6, "unit": "pages"}}])
+    assert [r.limit for r in prompts.parse_requirements(reply, quote)[0]] == [Limit(6, "pages")]
 
 def test_a_review_point_must_quote_the_draft() -> None:
     reply = json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "appropriate"}, "points": [{"factor": "rigor", "kind": "weakness", "text": "No power analysis.", "quote": "We will enroll patients."}, {"factor": "rigor", "kind": "weakness", "text": "Invented.", "quote": "not in the draft"}]})

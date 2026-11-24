@@ -7,7 +7,7 @@ from typing import Any, Literal
 from . import __version__, prompts
 from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
 from .checks import check_section, identifiers, not_in_crossref
-from .clients import ApiError, ReferenceClient
+from .clients import ApiError, ReferenceClient, one_line
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Review, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
@@ -375,7 +375,7 @@ class Workspace:
         current = head(self.store.revisions(self.application_id), section)
         live = [f for f in self.store.facts(self.application_id) if f.retired_at is None and f.kind in rule.needs + rule.uses]
         if action == "draft" and (gaps := [k for k in rule.needs if k not in {f.kind for f in live}]):
-            raise NotReady(f"The {rule.title} needs {', '.join(gaps)} before a model can draft it. Add them under Your inputs, or with apply add.")
+            raise NotReady(f"The {rule.title} needs {', '.join(gaps)} before a model can draft it. Add {'it' if len(gaps) == 1 else 'them'} under Your inputs, or with apply add.")
         if action != "draft" and (current is None or not current.text.strip()):
             raise NotReady(f"The {rule.title} has no text to {action} yet. Write it and save it first.")
         if action == "revise" and not instruction.strip():
@@ -403,7 +403,7 @@ class Workspace:
         except ModelError as exc:
             raise ModelError(f"{exc} Grant Matcher could not read the review and saved nothing, and the call is in the log.") from None
         try:
-            self.store.add_review(self.application_id, current.id, call.id, review)
+            review = self.store.add_review(self.application_id, current.id, call.id, review)
         except sqlite3.Error as exc:
             raise ModelError(f"Your text was sent to {self.model.host} and the call is in the log, but Grant Matcher could not save the review ({exc}).") from None
         return review
@@ -485,7 +485,9 @@ class Workspace:
         log += [f"- Revision {r.id}. {titles.get(r.section, r.section)}. {r.author} {r.action}, parent {r.parent_id or 'none'}, at {r.created_at.isoformat(timespec='seconds')} UTC. {len(r.text.split())} words." for r in view.log] or ["- None."]
         a = view.announcement
         log += ["", "## Announcement", "", f"- From {ORIGINS[a.origin]} at {a.url}, fetched on {a.fetched_at:%Y-%m-%d}. SHA-256 {a.sha256}." if a else "- Not fetched."]
-        log += ["", "## Inputs", ""] + ([f"- Input {f.id}. {f.kind}{f', key {f.label}' if f.label else ''}. " + (f"Retired on {f.retired_at:%Y-%m-%d}." if f.retired_at else "In use.") for f in self.store.facts(self.application_id)] or ["- None."])
+        log += ["", "## Inputs", ""] + ([f"- Input {f.id}. {f.kind}{f', key {f.label}' if f.label else ''}. " + (f"Retired on {f.retired_at:%Y-%m-%d}." if f.retired_at else "In use.") + (f" {lookup_line(f)}" if f.kind == "reference" else "") for f in self.store.facts(self.application_id)] or ["- None."])
+        sections = {r.id: r.section for r in view.log}
+        log += ["", "## Reviews", ""] + ([f"- {titles.get(sections.get(r.revision_id), r.revision_id)}, revision {r.revision_id}, reviewed by {r.model} at {r.created_at.isoformat(timespec='seconds')} UTC. Scores, {ESTIMATE}: " + "; ".join(f"{f.title}, {'not scored' if (score := r.scores.get(f.key)) is None else one_line(str(score)).rstrip('.')}" for f in view.grant_type.factors) + "." for r in self.store.reviews(self.application_id)] or ["- None."])
         log += ["", "## Sign-offs", ""]
         log += [f"- {titles.get(s.section, s.section)}, revision {s.revision_id}, signed by {s.signer} at {s.signed_at.isoformat(timespec='seconds')} UTC with Grant Matcher {s.tool_version}. {'The warnings that stood were ' + ', '.join(s.findings) + '.' if s.findings else 'No warning stood.'} {s.attestation}" for s in signoffs] or ["- None."]
         (out_dir / "provenance-log.md").write_text("\n".join(log) + "\n", encoding="utf-8")
