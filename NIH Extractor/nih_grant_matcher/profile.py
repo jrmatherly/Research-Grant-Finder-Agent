@@ -56,7 +56,8 @@ def to_export(profile: Profile) -> str:
     # No sort_keys: a keyword's place in the dictionary is its place in matched_terms.
     return json.dumps({"format": EXPORT_FORMAT, "profile": {name: data[name] for name in sorted(data)}})
 
-def from_export(text: str) -> Profile:
+# The limits are checked on a save and an import. A stored profile is read without them, since version 0.2.0 saved text of any length.
+def from_export(text: str, limits: bool = True) -> Profile:
     try:
         data = json.loads(text)
     except ValueError as exc:
@@ -72,7 +73,7 @@ def from_export(text: str) -> Profile:
     for name in TEXT_FIELDS:
         if not isinstance(raw.get(name, ""), str):
             raise ProfileError(f"{name}: expected text")
-        if name in TEXT_LIMITS and len(raw.get(name, "")) > TEXT_LIMITS[name]:
+        if limits and name in TEXT_LIMITS and len(raw.get(name, "")) > TEXT_LIMITS[name]:
             raise ProfileError(f"{name}: at most {TEXT_LIMITS[name]:,} characters")
     for name in ("focus", "examples_name"):
         if name in raw and not LABEL_RE.fullmatch(raw[name]):
@@ -83,25 +84,25 @@ def from_export(text: str) -> Profile:
     for term, weight in keywords.items():
         if not term.strip() or term != term.strip().lower() or type(weight) is not int or not 1 <= weight <= 30:
             raise ProfileError(f"keywords: {term!r} needs a lower-case name with no outer spaces and a weight from 1 to 30")
-        if len(term) > MAX_KEYWORD or len(term.splitlines()) > 1:
+        if limits and (len(term) > MAX_KEYWORD or len(term.splitlines()) > 1):
             raise ProfileError(f"keywords: a term holds at most {MAX_KEYWORD} characters on one line")
     examples = raw.get("examples")
     if not isinstance(examples, (list, tuple)) or not 1 <= len(examples) <= 20 or not all(isinstance(example, str) for example in examples):
         raise ProfileError("examples: expected 1 to 20 sentences")
-    if any(len(example) > MAX_SENTENCE for example in examples):
+    if limits and any(len(example) > MAX_SENTENCE for example in examples):
         raise ProfileError(f"examples: a sentence holds at most {MAX_SENTENCE} characters")
     references = raw.get("prior_work", ())
     reference_fields = {item.name for item in fields(Reference)}
     if not isinstance(references, (list, tuple)) or not all(isinstance(ref, dict) and {"key", "citation"} <= set(ref) <= reference_fields and all(isinstance(value, str) for value in ref.values()) for ref in references):
         raise ProfileError("prior_work: expected references with a key and a citation")
-    if len(references) > MAX_REFERENCES:
+    if limits and len(references) > MAX_REFERENCES:
         raise ProfileError(f"prior_work: at most {MAX_REFERENCES} references")
     for ref in references:
         if not REFERENCE_KEY_RE.fullmatch(ref["key"]):
             raise ProfileError(f"prior_work: the key {ref['key']!r} may hold only letters, digits and hyphens")
         if not ref["citation"].strip():
             raise ProfileError(f"prior_work: the key {ref['key']!r} needs a citation")
-        if len(ref["citation"]) > MAX_CITATION:
+        if limits and len(ref["citation"]) > MAX_CITATION:
             raise ProfileError(f"prior_work: the citation of {ref['key']!r} holds more than {MAX_CITATION:,} characters")
     # A later stage cites a reference by its key, so a key names one reference.
     keys = [ref["key"] for ref in references]

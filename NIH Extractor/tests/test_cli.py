@@ -493,3 +493,17 @@ def test_accepting_a_stale_proposal_asks_for_a_new_one(tmp_path, monkeypatch, ca
     assert cli.main(["--db", db, "apply", "accept", "1", "1"]) == 1
     err = capsys.readouterr().err
     assert "The section changed after the model read it, so this proposal no longer fits. Ask the model again." in err and "Read it before" not in err
+
+
+def test_a_profile_saved_over_a_limit_shows_and_exports_and_its_file_does_not_import(tmp_path, capsys) -> None:
+    import json
+    from helpers import save_like_main
+    db = str(tmp_path / "g.sqlite3")
+    save_like_main(db)
+    assert cli.main(["--db", db, "profile", "show"]) == 0
+    assert json.loads(capsys.readouterr().out)["resources"] == "r" * 7200
+    out = tmp_path / "out.json"
+    assert cli.main(["--db", db, "profile", "export", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["profile"]["resources"] == "r" * 7200
+    assert cli.main(["--db", str(tmp_path / "new.sqlite3"), "profile", "import", str(out)]) == 1
+    assert "resources: at most 6,000 characters" in capsys.readouterr().err

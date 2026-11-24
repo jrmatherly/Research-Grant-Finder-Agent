@@ -85,16 +85,20 @@ def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
     rows.sort(key=lambda row: -row["Change"])
     return pd.DataFrame([row for row in rows if row["Change"] > 0][:10] + [row for row in reversed(rows) if row["Change"] < 0][:10][::-1]) if rows else None
 
+# Streamlit cuts a value longer than max_chars without a word, so text that version 0.2.0 saved over a limit is shown whole and the save names the field.
+def _limit(name: str, draft: Profile) -> int | None:
+    return TEXT_LIMITS[name] if len(getattr(draft, name)) <= TEXT_LIMITS[name] else None
+
 def _step(n: int, db_path: str, draft: Profile) -> None:
     st.subheader(f"{n + 1}. {STEPS[n]}")
     with st.form(f"profile_step_{n}"):
         if n == 0:
             ranking = st.radio("Ranking", RANKINGS, index=int(st.session_state.get("profile_builtin", False)))
-            investigator = st.text_input("Name", value=draft.investigator, max_chars=TEXT_LIMITS["investigator"])
-            institution = st.text_input("Institution", value=draft.institution, max_chars=TEXT_LIMITS["institution"])
+            investigator = st.text_input("Name", value=draft.investigator, max_chars=_limit("investigator", draft))
+            institution = st.text_input("Institution", value=draft.institution, max_chars=_limit("institution", draft))
             stage = st.selectbox("Career stage", CAREER_STAGES, index=CAREER_STAGES.index(draft.career_stage) if draft.career_stage in CAREER_STAGES else None, placeholder="Choose a stage")
         elif n == 1:
-            summary = st.text_area("Research summary", value=draft.research_summary, max_chars=TEXT_LIMITS["research_summary"])
+            summary = st.text_area("Research summary", value=draft.research_summary, max_chars=_limit("research_summary", draft))
             aims = st.text_area("Aims of recent or planned work", value="\n".join(draft.examples), help="Three to six sentences, as a paragraph or one per line. Ranking compares each opportunity with each sentence.")
         elif n == 2:
             st.caption("Terms proposed from your research text. Keep, remove, re-weight or add terms. A weight runs from 1 to 30.")
@@ -111,8 +115,8 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
                 st.caption("The ten largest rises and the ten largest falls among the saved opportunities, scored with your draft beside the current profile. Nothing is saved yet.")
                 st.dataframe(preview, width="stretch", hide_index=True)
         else:
-            expertise = st.text_area("Expertise", value=draft.expertise, max_chars=TEXT_LIMITS["expertise"])
-            resources = st.text_area("Resources", value=draft.resources, max_chars=TEXT_LIMITS["resources"])
+            expertise = st.text_area("Expertise", value=draft.expertise, max_chars=_limit("expertise", draft))
+            resources = st.text_area("Resources", value=draft.resources, max_chars=_limit("resources", draft))
             st.caption("Prior work, one reference per row. A key holds only letters, digits and hyphens.")
             refs = st.data_editor(pd.DataFrame([{"Key": ref.key, "Citation": ref.citation, "PMID": ref.pmid, "DOI": ref.doi} for ref in draft.prior_work], columns=["Key", "Citation", "PMID", "DOI"], dtype=str), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Citation": st.column_config.TextColumn("Citation", max_chars=MAX_CITATION)})
         last = n == len(STEPS) - 1
