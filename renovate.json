@@ -5,7 +5,7 @@
     "helpers:pinGitHubActionDigests",
     ":semanticCommits"
   ],
-  "description": "Scope: what this repository pins. Workflow actions by commit, the Docker images by digest, uv, and the Python packages in pyproject.toml and uv.lock. Security fixes come from Dependabot security updates (a repository setting), which Renovate would raise a second time.",
+  "description": "Scope: what this repository pins. Workflow actions by commit, the Docker images by digest, uv, and the Python packages in pyproject.toml and uv.lock. Security fixes come from Dependabot security updates (a repository setting), which Renovate would raise a second time. The driver.js files in nih_grant_matcher/ui/vendor are copied by hand and are not moved.",
   "enabledManagers": [
     "github-actions",
     "dockerfile",
