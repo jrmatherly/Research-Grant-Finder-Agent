@@ -9,7 +9,7 @@ import streamlit as st
 from .. import keys
 from ..announcement import SECTION_TITLES
 from ..clients import ApiError
-from ..llm import PROVIDERS, cautions, checked_base_url, checked_workspace, chosen, connect, host_of, list_models, missing, workspace
+from ..llm import PROVIDERS, cautions, checked_base_url, checked_workspace, chosen, connect, host_of, list_models, missing, workspace, writes_text
 from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
@@ -272,6 +272,8 @@ def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None 
         where = keys.where(provider, store.db_path.parent)
         # The last four characters of a short key are most of it.
         st.caption(f"{escape_markdown(where)}, ends in ...{escape_markdown(key[-4:])}." if key and len(key) >= 12 and where.startswith("Saved") else f"{escape_markdown(where)}." if key else "No key saved." + ("" if provider.needs_key else " This provider does not need one."))
+        # The page and its address are constants, so they are drawn as a link without escaping.
+        st.caption(" ".join(s for s in (f"Create a key on the [{provider.key_page}]({provider.key_url})." if provider.key_url else "", provider.key_note) if s))
         if keys.PLATFORM == "win32":
             st.caption("On Windows the key file is protected by your user account only.")
         with st.form("apply_llm_key_form"):
@@ -314,8 +316,10 @@ def _remove_key(store: OpportunityStore) -> str:
 def _list_models(store: OpportunityStore) -> str:
     provider, _, base_url = chosen(store)
     found = list_models(provider, base_url, keys.get(provider, store.db_path.parent), workspace(store))
-    st.session_state["apply_llm_models"] = {**st.session_state.get("apply_llm_models", {}), provider.name: found}
-    return f"{escape_markdown(host_of(base_url))} lists {len(found)} model{'' if len(found) == 1 else 's'}."
+    kept = writes_text(provider, found)
+    st.session_state["apply_llm_models"] = {**st.session_state.get("apply_llm_models", {}), provider.name: kept}
+    left = len(found) - len(kept)
+    return f"{escape_markdown(host_of(base_url))} lists {len(kept)} model{'' if len(kept) == 1 else 's'} that write{'s' if len(kept) == 1 else ''} text" + (f" and {left} that do{'es' if left == 1 else ''} not, which {'is' if left == 1 else 'are'} left out." if left else ".")
 
 def _test_connection(store: OpportunityStore) -> str:
     model = connect(store)
