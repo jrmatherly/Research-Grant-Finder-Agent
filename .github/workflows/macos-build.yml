@@ -1,0 +1,56 @@
+name: "🍎 macOS build"
+
+# The release workflow builds the app only on a tag, when a failure costs a release. This builds it unsigned on a
+# pull request that changes how the app is built, so the runner's build is tried before a tag depends on it.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'NIH Extractor/macos/**'
+      - 'NIH Extractor/pyproject.toml'
+      - 'NIH Extractor/uv.lock'
+      - 'NIH Extractor/.python-version'
+      - .github/workflows/macos-build.yml
+      - .github/workflows/macos-release.yml
+  workflow_dispatch:
+
+# Nothing here signs, notarizes or publishes, so the token is read-only and the job reads no secret.
+permissions:
+  contents: read
+
+# A new push to a pull request supersedes the running build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: "🏗️ build Grant Matcher unsigned"
+    # The runner the release uses, so that this build meets what the release build meets.
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: NIH Extractor
+    steps:
+      - name: "⬇️ Checkout"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: "🐍 Set up uv"
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.13.9"
+          # No cache, as in the release build: the build must not start from files an earlier run left behind.
+          enable-cache: false
+      # No signing variable is set, so build.sh signs ad hoc and sends nothing to Apple. Its checks are the test.
+      - name: "🏗️ Build the app and run its checks"
+        run: macos/build.sh
+      # Kept so that the app the runner built can be opened and tried, which a local build cannot stand in for.
+      - name: "⬆️ Keep the unsigned disk image"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-dmg
+          path: NIH Extractor/macos/dist/Grant Matcher.dmg
+          if-no-files-found: error
+          retention-days: 3
