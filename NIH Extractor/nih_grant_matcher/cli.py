@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("number", help="The opportunity number, such as PAR-25-123.")
     start.add_argument("--type", required=True, help="The activity code, such as R21.")
     start.add_argument("--resubmission", action="store_true", help="Add the Introduction of a resubmission.")
-    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("extract", "Ask the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands."), ("verify", "Check that each reference you listed exists. Sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, and nothing else.")):
+    for name, text in (("fetch", "Fetch the full announcement and the requirements it adds."), ("extract", "Ask the model you chose to read Sections I, IV and V of the fetched announcement and list what they ask for. Nothing counts until you confirm it."), ("requirements", "Print the standing rules and the announcement's requirements."), ("check", "Print each section with its state and findings. Exit 1 while an error stands."), ("verify", "Check that each reference you listed exists. Sends each PMID to NCBI (PubMed) and each DOI without a PMID to Crossref, with this tool's name and none of your text.")):
         apply.add_parser(name, help=text).add_argument("id", type=int)
     add = apply.add_parser("add", help="Add one of your inputs, such as an aim or a reference.")
     add.add_argument("id", type=int)

@@ -592,7 +592,7 @@ def test_checking_the_references_says_what_leaves_and_shows_each_title_as_text(t
     finally:
         store.close()
     app = _apply_view(tmp_path, monkeypatch)
-    assert any("NCBI (PubMed)" in c.value and "Nothing else leaves" in c.value for c in app.caption) and any("Not checked yet" in c.value for c in app.caption)
+    assert any("NCBI (PubMed)" in c.value and "this tool's name, and none of your text" in c.value for c in app.caption) and any("Not checked yet" in c.value for c in app.caption)
     app.button(key="apply_verify_button").click().run(timeout=30)
     assert not app.exception and asked == ["123"] and any("Checked 1 reference" in s.value for s in app.success)
     from nih_grant_matcher.ui.markdown import escape_markdown
