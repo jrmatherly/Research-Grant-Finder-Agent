@@ -83,13 +83,15 @@ def error_with_unreadable_body(broken: BaseException, status: int = 502):
 
 class FakeModel:
     provider, name, host = "fake", "fake-1", "example.test"
-    def __init__(self, *replies: str, truncated: bool = False, error: ModelError | None = None) -> None:
+    def __init__(self, *replies: str | ModelError, truncated: bool = False, error: ModelError | None = None) -> None:
         self.replies, self.truncated, self.error, self.seen = list(replies), truncated, error, []
     def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion:
         self.seen.append(SimpleNamespace(system=system, user=user))
         if self.error is not None:
             raise self.error
-        return Completion(self.replies.pop(0), self.name, len((system + user).split()), 1, self.truncated)
+        if isinstance(reply := self.replies.pop(0), ModelError):
+            raise reply
+        return Completion(reply, self.name, len((system + user).split()), 1, self.truncated)
 
 class FakeSecurity:
     def __init__(self) -> None: self.items, self.argv, self.stdin, self.exit_with = {}, [], [], None
