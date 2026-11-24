@@ -1592,6 +1592,7 @@ The statement is built from the log, sentence by sentence. No model writes it. A
 | `No model text remains in the <section titles>.` | A section has text, no model word, and an accepted proposal. |
 | `I also sent text to <model> to <read the funding announcement's requirements, review drafts against NIH's review criteria, produce suggestions that I did not use (<n>)>.` | The log has calls of the purpose `extract` or `review`, or proposals that were discarded or failed. Each part appears only for what the log has. A proposal that is still waiting is not counted. |
 | `I read and signed off the <section titles>.` | A sign-off names the head revision of the section. |
+| `A suggestion from <model> for the <section titles> is waiting for my decision.` | Once per model, for the proposals that are still waiting: not accepted, not discarded, and made from the section's head. |
 | `This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere.` | Always. |
 
 The fact kinds read as `aims`, `hypotheses`, `preliminary data`, `methods`, `significance`, `innovation`, `team`, `references` and `other inputs`. A list of one section takes `was`, and a list of several takes `were`. Lists are joined with commas and a final `and`.

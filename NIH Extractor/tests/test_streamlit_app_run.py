@@ -1088,3 +1088,25 @@ def test_the_wizard_opens_a_profile_saved_over_a_limit_whole_and_refuses_to_save
         assert store.profile() == before
     finally:
         store.close()
+
+
+def test_accepting_with_edits_a_proposal_already_accepted_elsewhere_says_the_edits_were_not_saved(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.ui.markdown import escape_markdown
+    from nih_grant_matcher.writer import Workspace
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        mine = store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells.")
+        call = store.add_call(1, "specific-aims", "polish", "fake", "fake-1", "s", "p", "We study cardiac muscle cells.", parent_id=mine.id)
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    app.text_area(key=f"apply_edit_1_specific-aims_{call.id}").set_value("We study our cardiac cells.")
+    store = OpportunityStore(path)
+    try:
+        Workspace(store, 1).accept(call.id)
+    finally:
+        store.close()
+    app.button(key="apply_accept_edited_button").click().run(timeout=30)
+    assert not app.exception and any(escape_markdown(f"Proposal {call.id} was already accepted, so your edits were not saved.") in e.value for e in app.error)
+    assert not any("Accepted the proposal" in x.value for x in app.success)

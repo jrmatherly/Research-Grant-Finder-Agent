@@ -307,7 +307,11 @@ class Workspace:
         call, revisions = self._call(call_id), self.store.revisions(self.application_id)
         if (model := next((r for r in revisions if r.call_id == call_id), None)) is not None:
             # The applicant's edit was written with the model's text and carries its time.
-            return next((r for r in revisions if r.parent_id == model.id and r.author == "applicant" and r.created_at == model.created_at), model)
+            done = next((r for r in revisions if r.parent_id == model.id and r.author == "applicant" and r.created_at == model.created_at), model)
+            # Edits that differ from what the first accept wrote would otherwise be dropped with a success.
+            if edited is not None and edited != done.text:
+                raise StaleEdit(head(revisions, call.section))
+            return done
         if self.store.setting(f"discarded:{call_id}"):
             raise WorkspaceError(f"You discarded proposal {call_id}. Ask the model again for a new one.")
         current = head(revisions, call.section)
