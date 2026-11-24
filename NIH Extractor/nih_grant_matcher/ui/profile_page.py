@@ -195,7 +195,7 @@ def profile_page(db_path: str) -> None:
     st.subheader("Export and import")
     st.download_button("Export profile", to_export(saved or BUILTIN_PROFILE), file_name="grant-matcher-profile.json", mime="application/json", disabled=unreadable)
     st.caption("The button downloads the profile in use, which is the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text and references. It holds no API key.")
-    pasted = st.text_area("Import a profile", key="profile_import_text", placeholder="Paste the contents of an exported profile file.")
+    pasted = st.text_area("Import a profile", key="profile_import_text", persist_state="session", placeholder="Paste the contents of an exported profile file.")
     incoming = None
     if pasted.strip():
         try:

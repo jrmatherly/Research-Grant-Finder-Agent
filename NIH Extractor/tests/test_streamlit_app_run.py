@@ -77,6 +77,18 @@ def test_importing_a_profile_saves_it(tmp_path, monkeypatch) -> None:
         store.close()
 
 
+# Import profile acts on the kept text, so the box shown again must hold it.
+def test_the_import_box_shown_again_after_apply_sends_its_text_to_the_browser(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    app.text_area(key="profile_import_text").set_value("not a profile").run(timeout=30)
+    for view in ("Apply", "Profile"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    box = app.text_area(key="profile_import_text")
+    assert not app.exception and (box.proto.set_value, box.value) == (True, "not a profile")
+
+
 def test_saving_a_profile_reorders_the_find_view(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.profile import Profile, to_export
     def opp(n, title):
@@ -413,6 +425,29 @@ def test_the_apply_view_shown_again_sends_its_values_to_the_browser(tmp_path, mo
     assert not app.exception
     widgets = [app.selectbox(key="apply_section"), app.text_area(key="apply_text_1_project-summary"), app.text_input(key="apply_export_1"), app.text_input(key="apply_delete_1")]
     assert [(w.proto.set_value, w.value) for w in widgets] == [(True, "project-summary"), (True, "A summary."), (True, "elsewhere"), (True, "PAR")]
+
+
+# The Profile and Apply views end with st.stop, so the server keeps every Find value, and Start application acted on an opportunity the browser no longer showed.
+def test_the_find_view_shown_again_sends_its_values_to_the_browser(tmp_path, monkeypatch) -> None:
+    from helpers import opportunity
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        for number in ("PAR-1", "PAR-2"):
+            store.upsert_scored(MLRelevanceScorer().score(replace_close(opportunity(number, ("R01", "R21")))))
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    pick = lambda kind, label: next(w for w in getattr(app, kind) if w.label == label)
+    pick("selectbox", "Opportunity").set_value(pick("selectbox", "Opportunity").options[1]).run(timeout=30)
+    for kind, label, value in (("selectbox", "Grant type", "NIH:R21"), ("checkbox", "This is a resubmission", True), ("multiselect", "NIH institute", ["NHLBI"]), ("text_input", "Filter within results", "heart"), ("slider", "Minimum score shown", 5.0)):
+        pick(kind, label).set_value(value).run(timeout=30)
+    shown = [("selectbox", "Opportunity"), ("selectbox", "Grant type"), ("checkbox", "This is a resubmission"), ("multiselect", "NIH institute"), ("text_input", "Filter within results"), ("slider", "Minimum score shown")]
+    kept = [pick(kind, label).value for kind, label in shown]
+    for view in ("Profile", "Find"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    assert not app.exception and kept[1:] == ["NIH:R21", True, ["NHLBI"], "heart", 5.0] and kept[0].startswith("PAR-2")
+    assert [(pick(kind, label).proto.set_value, pick(kind, label).value) for kind, label in shown] == [(True, value) for value in kept]
 
 
 def test_find_and_apply_values_survive_a_view_switch(tmp_path, monkeypatch) -> None:
