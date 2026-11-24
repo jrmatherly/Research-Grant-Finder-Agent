@@ -1,4 +1,4 @@
-import stat
+import json, stat
 import pytest
 from helpers import FakeSecurity
 from nih_grant_matcher import keys
@@ -81,6 +81,48 @@ def test_saving_a_second_key_keeps_the_first_and_fixes_a_loose_mode(tmp_path, li
     keys.save(PROVIDERS["claude"], "sk-2", tmp_path)
     assert (keys.get(PROVIDERS["openai"], tmp_path), keys.get(PROVIDERS["claude"], tmp_path)) == ("sk-1", "sk-2")
     assert stat.S_IMODE(path.stat().st_mode) == 0o600 and [p.name for p in tmp_path.iterdir()] == ["llm-keys.json"]
+
+@pytest.mark.parametrize("source", ["variable", "file", "store"])
+def test_a_key_with_a_line_break_inside_is_refused_without_quoting_it(source, tmp_path, monkeypatch, linux) -> None:
+    bad, secret, stored = "sk-leak\r9z8y\n", tmp_path / "secret", tmp_path / "llm-keys.json"
+    if source == "variable":
+        monkeypatch.setenv("OPENAI_API_KEY", bad)
+    elif source == "file":
+        secret.write_text(bad, encoding="utf-8")
+        monkeypatch.setenv("OPENAI_API_KEY_FILE", str(secret))
+    else:
+        stored.write_text(json.dumps({"openai": bad}), encoding="utf-8")
+    with pytest.raises(keys.UnreadableKey) as failed:
+        keys.get(PROVIDERS["openai"], tmp_path)
+    names = {"variable": "OPENAI_API_KEY", "file": str(secret), "store": str(stored)}[source]
+    assert names in str(failed.value) and "sk-leak" not in str(failed.value) and "9z8y" not in str(failed.value)
+
+def test_a_key_is_stripped_from_every_source(tmp_path, monkeypatch, linux) -> None:
+    (tmp_path / "llm-keys.json").write_text(json.dumps({"openai": " sk-1\r\n"}), encoding="utf-8")
+    assert keys.get(PROVIDERS["openai"], tmp_path) == "sk-1"
+    monkeypatch.setenv("OPENAI_API_KEY", " sk-2\n")
+    assert keys.get(PROVIDERS["openai"], tmp_path) == "sk-2"
+
+@pytest.mark.parametrize("text", ["{not json", "[]", '{"openai": 7}'])
+def test_a_key_file_that_cannot_be_read_names_itself_and_is_not_replaced(text, tmp_path, linux) -> None:
+    path = tmp_path / "llm-keys.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(keys.UnreadableKey, match="cannot be read") as failed:
+        keys.get(PROVIDERS["openai"], tmp_path)
+    assert str(path) in str(failed.value)
+    with pytest.raises(keys.UnreadableKey, match="cannot be read"):
+        keys.save(PROVIDERS["claude"], "sk-2", tmp_path)
+    assert path.read_text(encoding="utf-8") == text
+
+def test_a_keychain_error_is_kept_until_a_key_is_saved(tmp_path, mac) -> None:
+    mac.exit_with = 51
+    for _ in range(3):
+        with pytest.raises(keys.KeychainError, match="declined"):
+            keys.get(PROVIDERS["claude"], tmp_path)
+    assert len(mac.argv) == 1
+    mac.exit_with = None
+    keys.save(PROVIDERS["claude"], "sk-new-1", tmp_path)
+    assert keys.get(PROVIDERS["claude"], tmp_path) == "sk-new-1"
 
 def test_no_key_reaches_the_database(tmp_path, linux) -> None:
     store = OpportunityStore(tmp_path / "g.sqlite3")

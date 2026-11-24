@@ -36,7 +36,7 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> bool
         done = action(store)
     except NotReady as exc:
         _notice("error", f"{escape_markdown(exc.reason)} {_findings(exc.findings)}".strip())
-    except (ApiError, keys.KeychainError, sqlite3.Error, ValueError, OSError) as exc:
+    except (ApiError, keys.UnreadableKey, sqlite3.Error, ValueError, OSError) as exc:
         _notice("error", escape_markdown(str(exc)))
     else:
         if done:
@@ -187,8 +187,10 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
             st.text_input("Base URL", key="apply_llm_base_url", help="The address of the server's OpenAI API, such as http://localhost:11434/v1 for Ollama.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.base_url", checked_base_url(st.session_state["apply_llm_base_url"]))))
         try:
             key = keys.get(provider, store.db_path.parent)
-        except (keys.KeychainError, OSError) as exc:
+        except (keys.UnreadableKey, OSError) as exc:
             st.error(escape_markdown(str(exc)))
+            # The error is kept so that a rerun does not ask the Keychain again, so a new attempt waits for this button.
+            st.button("Try again", key="apply_llm_retry_button", on_click=keys.forget)
             return
         where = keys.where(provider, store.db_path.parent)
         st.caption(f"{escape_markdown(where)}, ends in ...{escape_markdown(key[-4:])}." if key and where.startswith("Saved") else f"{escape_markdown(where)}." if key else "No key saved." + ("" if provider.needs_key else " This provider does not need one."))
@@ -237,6 +239,9 @@ def _test_connection(store: OpportunityStore) -> str:
     model = connect(store)
     if model is None:
         raise ValueError("Choose a model, and save a key if the provider needs one, before you test the connection.")
+    # The Base URL's callback runs first when it is edited and the button clicked at once, so the disabled button is not enough.
+    if not store.setting(f"consent:{model.host}"):
+        raise ValueError(f"Agree to send text to {model.host} first.")
     done = model.complete("Answer in one word.", "Say hello.", max_tokens=64)
     return f"{escape_markdown(done.model)} at {escape_markdown(model.host)} answered. The test used {done.input_tokens + done.output_tokens} tokens."
 

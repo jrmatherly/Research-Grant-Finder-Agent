@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
     except ProfileError as exc:
         print(exc if isinstance(exc, ReadOnlyProfile) else f"Profile not valid: {exc}", file=sys.stderr)
         return 1
-    except keys.KeychainError as exc:
+    except keys.UnreadableKey as exc:
         print(exc, file=sys.stderr)
         return 1
     except (OSError, UnicodeDecodeError) as exc:
@@ -158,7 +158,7 @@ def _models(args: argparse.Namespace) -> int:
             print(caution)
         key = keys.get(provider, store.db_path.parent)
         if provider.needs_key and not key:
-            print(f"No key. Set {provider.key_env}, or {provider.key_env}_FILE to a file that holds it, or save one in the dashboard.")
+            print(f"No key. Set {provider.key_env}, or {provider.key_env}_FILE to a file that holds it, or save one in the dashboard.", file=sys.stderr)
             return 1
         print(f"Key: {keys.where(provider, store.db_path.parent)}." if key else "No key, which this provider does not need.")
         for listed in list_models(provider, base_url, key):

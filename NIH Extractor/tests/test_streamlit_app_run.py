@@ -804,3 +804,53 @@ def test_the_model_expander_saves_a_key_asks_for_consent_and_tests_the_connectio
     finally:
         store.close()
     assert b"sk-local-4f2a" not in path.read_bytes()
+
+
+def test_a_key_file_that_cannot_be_read_is_an_error_and_the_apply_view_still_draws(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    for name in ("OPENAI_API_KEY", "OPENAI_API_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    (tmp_path / "data" / "llm-keys.json").write_text("{not json", encoding="utf-8")
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("openai").run(timeout=30)
+    assert not app.exception and any("cannot be read" in error.value for error in app.error)
+    assert app.button(key="apply_fetch_button").label == "Fetch the full announcement"
+
+
+def test_a_declined_keychain_is_asked_once_and_again_on_try_again(tmp_path, monkeypatch) -> None:
+    from helpers import FakeSecurity
+    from nih_grant_matcher import keys
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    fake = FakeSecurity()
+    fake.exit_with = 51
+    monkeypatch.setattr(keys, "PLATFORM", "darwin")
+    monkeypatch.setattr(keys, "_run", fake)
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("claude").run(timeout=30)
+    app.run(timeout=30)
+    assert len(fake.argv) == 1 and not app.exception and any("declined" in error.value for error in app.error)
+    fake.exit_with = None
+    app.button(key="apply_llm_retry_button").click().run(timeout=30)
+    assert len(fake.argv) == 2 and not app.exception and not app.error and any("No key saved." in caption.value for caption in app.caption)
+
+
+def test_test_connection_refuses_a_host_without_consent(tmp_path, monkeypatch, post) -> None:
+    from helpers import fixture
+    from nih_grant_matcher import keys
+    from nih_grant_matcher.ui import apply_page
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    store = OpportunityStore(tmp_path / "g.sqlite3")
+    # The Base URL changed in the same rerun as the click, so only the old host has consent.
+    for name, value in (("llm.provider", "compatible"), ("llm.base_url", "http://gpu.example:8000/v1"), ("llm.model", "llama9"), ("consent:localhost", "2026-11-23T00:00:00")):
+        store.set_setting(name, value)
+    post.reply(fixture("openai-ok"))
+    try:
+        with pytest.raises(ValueError, match="Agree to send text to gpu.example first"):
+            apply_page._test_connection(store)
+    finally:
+        store.close()
+    assert post.calls == 0

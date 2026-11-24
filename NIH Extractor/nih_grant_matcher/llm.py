@@ -8,7 +8,12 @@ from .models import Completion, Model
 from .store import OpportunityStore
 
 # shortcut: no streaming, so a long reply shows a spinner. Add streaming when a section takes longer than the 600 second timeout.
-_open = urllib.request.urlopen
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    # urllib copies the key header onto a redirect, to a host the applicant never agreed to and perhaps over http.
+    def redirect_request(self, *args: Any) -> None:
+        return None
+
+_open = urllib.request.build_opener(_NoRedirect).open
 _sleep = time.sleep
 ANTHROPIC_VERSION = "2026-10-21"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -45,24 +50,30 @@ def checked_base_url(base_url: str) -> str:
     return base_url
 
 def _redact(text: str, key: str | None) -> str:
-    # A provider can echo the key, or its last four characters after "...", in an error.
-    return text.replace(key, "[key]").replace(f"...{key[-4:]}", "...[key]") if key else text
+    # A provider can echo the key, or its last four characters after "...", in an error. An error can also quote it escaped, as repr does.
+    return text.replace(key, "[key]").replace(repr(key)[1:-1], "[key]").replace(f"...{key[-4:]}", "...[key]") if key else text
 
 def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None, timeout: int = 600) -> dict:
     # One attempt. clients._read retries any failure three times, which would pay for a reply three times.
-    request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1", **headers}, method="GET" if body is None else "POST")
     host = host_of(url)
+    failed = None
     try:
+        request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "nih-grant-matcher/0.1", **headers}, method="GET" if body is None else "POST")
         with _open(request, timeout=timeout) as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
-        raise _http_error(exc, host, key) from None
+        failed = _http_error(exc, host, key)
     except (OSError, http.client.HTTPException) as exc:
-        raise ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key)) from None
+        failed = ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
+    except Exception as exc:
+        failed = ModelError(_redact(f"The request to {host} failed: {exc}. It was not sent again.", key))
+    # Raised outside the except clauses, so that the error does not carry the original, which can quote the key, as its context.
+    if failed is not None:
+        raise failed
     try:
         parsed = json.loads(raw.decode("utf-8"))
     except ValueError:
-        raise ModelError(f"{host} did not return JSON. The reply starts with {raw[:80]!r}") from None
+        raise ModelError(f"{host} did not return JSON. The reply starts with {_redact(raw.decode('utf-8', 'replace'), key)[:80]!r}") from None
     if not isinstance(parsed, dict):
         raise ModelError(f"{host} returned JSON that is not an object")
     return parsed
@@ -77,12 +88,18 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     details = error.get("details") if isinstance(error.get("details"), dict) else {}
     names = " ".join(str(v) for v in (error.get("type"), error.get("code"), error.get("status"), details.get("error_code")) if v)
     status = exc.code
+    if 300 <= status < 400:
+        to = host_of(urllib.parse.urljoin(exc.url or "", (exc.headers or {}).get("location") or ""))
+        return ModelError(f"{host} answered {status}, a redirect to another address{f' at {to}' if to else ''}. Grant Matcher does not follow a redirect, so nothing was sent there. Check the server's address.", "other", status)
     kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and re.search(r"quota|credit|spend|usage_limit", names, re.I) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
     try:
-        wait = min(float((exc.headers or {}).get("retry-after") or 2), 30.0)
+        wait = float((exc.headers or {}).get("retry-after") or 2)
     except ValueError:
         wait = 2.0
-    message = str(error.get("message") or raw.strip()[:300] or exc.reason)
+    # A negative or NaN wait fails this test, and time.sleep refuses both.
+    wait = min(wait, 30.0) if wait >= 0 else 2.0
+    # Redacted before it is cut, so that a cut cannot leave part of the key.
+    message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
     return ModelError(_redact(f"{host} answered {status}: {message}", key), kind, status, wait)
 
 def _retry(send: Callable[[], dict]) -> dict:
@@ -130,7 +147,8 @@ def _anthropic_reply(m: HttpModel, data: dict) -> Completion:
         details = data.get("stop_details") or {}
         raise ModelError(f"{m.host} declined the request ({details.get('category') or 'no category'}). {details.get('explanation') or ''}".strip(), "refused")
     text = "".join(block["text"] for block in data["content"] if block.get("type") == "text")
-    return Completion(text, data.get("model") or m.name, data["usage"]["input_tokens"], data["usage"]["output_tokens"], data["stop_reason"] in ("max_tokens", "model_context_window_exceeded"))
+    usage = data.get("usage") or {}
+    return Completion(text, data.get("model") or m.name, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0, data["stop_reason"] in ("max_tokens", "model_context_window_exceeded"))
 
 def _openai_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:
     return f"{m.base_url}/chat/completions", _bearer(m._key), {"model": m.name, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}], m._limit: max_tokens}
@@ -140,7 +158,9 @@ def _openai_reply(m: HttpModel, data: dict) -> Completion:
     message, usage = choice["message"], data.get("usage") or {}
     if message.get("refusal") or choice.get("finish_reason") == "content_filter":
         raise ModelError(f"{m.host} declined the request. {message.get('refusal') or 'Its content filter omitted the reply.'}", "refused")
-    return Completion(message.get("content") or "", data.get("model") or m.name, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0), choice.get("finish_reason") == "length")
+    if not isinstance(text := message.get("content"), str):
+        raise ModelError(f"The reply from {m.host} had no text.")
+    return Completion(text, data.get("model") or m.name, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, choice.get("finish_reason") == "length")
 
 def _gemini_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:
     # Without store false, Google keeps the request and the reply for 1 to 55 days.
@@ -151,7 +171,7 @@ def _gemini_reply(m: HttpModel, data: dict) -> Completion:
         raise ModelError(f"{m.host} ended the request with the status {data['status']}.")
     text = "".join(c["text"] for step in data["steps"] if step.get("type") == "model_output" for c in step.get("content") or [] if c.get("type") == "text")
     usage = data.get("usage") or {}
-    return Completion(text, data.get("model") or m.name, usage.get("total_input_tokens", 0), usage.get("total_output_tokens", 0), data["status"] == "incomplete")
+    return Completion(text, data.get("model") or m.name, usage.get("total_input_tokens") or 0, usage.get("total_output_tokens") or 0, data["status"] == "incomplete")
 
 _WIRES = {"anthropic": (_anthropic_request, _anthropic_reply), "openai": (_openai_request, _openai_reply), "gemini": (_gemini_request, _gemini_reply)}
 
@@ -163,12 +183,12 @@ def list_models(provider: Provider, base_url: str, key: str | None) -> list[str]
         if provider.wire == "gemini":
             return [m["name"].removeprefix("models/") for m in _send(f"{base}/models?pageSize=1000", {"x-goog-api-key": key} if key else {}, None, key, 30)["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
         return [m["id"] for m in _send(f"{base}/models", _bearer(key), None, key, 30)["data"]]
-    except (KeyError, TypeError) as exc:
+    except (KeyError, TypeError, AttributeError) as exc:
         raise ModelError(f"The model list from {host_of(base_url)} was not in the form Grant Matcher reads: {exc!r}") from None
 
 def cautions(provider: Provider, base_url: str) -> list[str]:
     said = ["A free-tier Gemini key lets Google use what you send to improve its products. Use a paid key for unpublished work."] if provider.name == "gemini" else []
-    if base_url.startswith("http://") and host_of(base_url) not in LOCAL_HOSTS:
+    if urllib.parse.urlsplit(base_url).scheme == "http" and host_of(base_url) not in LOCAL_HOSTS:
         said.append(f"{base_url} starts with http://, so your text and your key travel to {host_of(base_url)} unencrypted.")
     return said
 

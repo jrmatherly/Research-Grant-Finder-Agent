@@ -10,24 +10,40 @@ SERVICE = "Grant Matcher"
 SECURITY = "/usr/bin/security"
 _run = subprocess.run
 # Streamlit runs the page again on every click, and a burst of security processes has crashed securityd.
-_cache: dict[tuple[str, str], str | None] = {}
+_cache: dict[tuple[str, str], str | None | UnreadableKey] = {}
 KEYCHAIN_ERRORS = {36: "The login keychain is locked. Unlock it and try again.", 51: "The Keychain prompt was declined, so Grant Matcher cannot read the key.", 128: "The Keychain prompt was cancelled, so Grant Matcher cannot read the key."}
 
-class KeychainError(RuntimeError):
+class UnreadableKey(RuntimeError):
+    pass
+
+class KeychainError(UnreadableKey):
     pass
 
 def get(provider: Provider, data_dir: Path) -> str | None:
-    if value := os.environ.get(provider.key_env):
+    if value := _checked(os.environ.get(provider.key_env), provider.key_env):
         return value
     if path := os.environ.get(provider.key_env + "_FILE"):
-        return Path(path).read_text(encoding="utf-8").strip()
+        return _checked(Path(path).read_text(encoding="utf-8", errors="replace"), f"{path}, the file that {provider.key_env}_FILE names")
     slot = _slot(provider, data_dir)
     if slot not in _cache:
-        _cache[slot] = _keychain_read(provider.name) if PLATFORM == "darwin" else _load(_file(data_dir)).get(provider.name)
-    return _cache[slot]
+        try:
+            _cache[slot] = _checked(_keychain_read(provider.name) if PLATFORM == "darwin" else _load(_file(data_dir)).get(provider.name), _store(data_dir))
+        except UnreadableKey as exc:
+            # Kept until forget, save or delete: another security process on every rerun can mean another prompt.
+            _cache[slot] = exc
+    if isinstance(found := _cache[slot], UnreadableKey):
+        raise found.with_traceback(None)
+    return found
+
+def _checked(value: str | None, source: str) -> str | None:
+    # http.client quotes a header with a line break, key and all, in the error it raises.
+    value = (value or "").strip()
+    if not all(" " <= c <= "~" for c in value):
+        raise UnreadableKey(f"The key in {source} holds a character that is not printable ASCII, such as a line break. Copy it again from the provider's page.")
+    return value or None
 
 def where(provider: Provider, data_dir: Path) -> str:
-    if os.environ.get(provider.key_env):
+    if os.environ.get(provider.key_env, "").strip():
         return f"Read from {provider.key_env}"
     if os.environ.get(provider.key_env + "_FILE"):
         return f"Read from the file that {provider.key_env}_FILE names"
@@ -87,7 +103,15 @@ def _file(data_dir: Path) -> Path:
     return Path(data_dir) / "llm-keys.json"
 
 def _load(path: Path) -> dict[str, str]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        saved = None
+    if not isinstance(saved, dict) or not all(isinstance(v, str) for v in saved.values()):
+        raise UnreadableKey(f"{path} cannot be read: it is not the file of keys that Grant Matcher writes. Correct it or remove it, then save the key again.")
+    return saved
 
 def _write(path: Path, saved: dict[str, str]) -> None:
     # A new file made 0600 and moved into place: a crash leaves the old file whole, and a loosened mode is reset.
