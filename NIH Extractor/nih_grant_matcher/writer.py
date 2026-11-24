@@ -276,7 +276,8 @@ class Workspace:
             return self.store.add_call(self.application_id, *call, **more)
         except sqlite3.Error as exc:
             lost = exc
-        raise ModelError(f"{said}Your text was sent to {self.model.host}, but Grant Matcher could not write the call to its log ({lost}), so the AI-use statement will not show this call.")
+        # A failed call may never have left, and its own message says whether it did.
+        raise ModelError(f"{said}{'Grant Matcher also' if said else f'Your text was sent to {self.model.host}, but Grant Matcher'} could not write the call to its log ({lost}), so the AI-use statement will not show this call.")
 
     def propose(self, section: str, action: Literal["polish", "revise", "draft"], instruction: str = "") -> Proposal:
         rule = self._rule(section)
