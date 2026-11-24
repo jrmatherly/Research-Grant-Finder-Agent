@@ -78,8 +78,11 @@ class ApplicationView:
                 return s
         raise WorkspaceError(f"This application has no section {key}. Its sections are {', '.join(s.rule.key for s in self.sections)}.")
 
-def score_line(factor: ReviewFactor, score: int | str) -> str:
-    return f"{factor.title}, {ESTIMATE}. " + (f"{score} on NIH's scale from 1, exceptional, to 9, poor." if factor.scale == "1-9" else "Appropriate." if score == "appropriate" else f"Not yet appropriate. {score}")
+def score_line(factor: ReviewFactor, score: int | str | None) -> str:
+    # A review saved before a factor joined its grant type has no score for it.
+    if score is None:
+        return f"{factor.title}. This review has no score for it."
+    return f"{factor.title}, {ESTIMATE}. " + (f"{score} on NIH's scale from 1, exceptional, to 9, poor." if factor.scale == "1-9" else "Appropriate." if score == "appropriate" else f"The model wrote: {score}")
 
 def lookup_line(reference: Fact) -> str:
     if not any(identifiers(reference)):
@@ -391,13 +394,18 @@ class Workspace:
         if current is None or not current.text.strip():
             raise NotReady(f"The {rule.title} has no text to review yet. Write it and save it first.")
         factors = GRANT_TYPES[self._application().grant_type].factors
+        # A database that cannot hold the review would waste the call, so it is refused before the text leaves.
+        self.store.writable("reviews")
         # The reviewer reads the section alone, so its read is independent of the inputs and prompts that wrote it.
         call, done = self._ask(section, "review", prompts.review(current.text, rule, factors, self.store.requirements(self.application_id)), current.id)
         try:
             review = replace(prompts.parse_review(done.text, current.text, factors), revision_id=current.id, model=done.model)
         except ModelError as exc:
             raise ModelError(f"{exc} Grant Matcher could not read the review and saved nothing, and the call is in the log.") from None
-        self.store.add_review(self.application_id, current.id, call.id, review)
+        try:
+            self.store.add_review(self.application_id, current.id, call.id, review)
+        except sqlite3.Error as exc:
+            raise ModelError(f"Your text was sent to {self.model.host} and the call is in the log, but Grant Matcher could not save the review ({exc}).") from None
         return review
 
     def _proposal(self, call: ModelCall) -> Proposal:

@@ -584,6 +584,26 @@ def test_apply_review_prints_each_score_as_the_model_s_estimate_and_each_point_w
     assert out.count("the model's estimate, not NIH's") == 3 and "Rigor and Feasibility, the model's estimate, not NIH's. 5 on NIH's scale" in out and "Expertise and Resources, the model's estimate, not NIH's. Appropriate." in out
     assert "No sample size." in out and "We study heart cells in failing hearts." in out and "dropped 1 point" in out
 
+
+def test_apply_review_prints_the_model_s_text_without_control_characters(tmp_path, monkeypatch, capsys) -> None:
+    import json
+    from helpers import FakeModel
+    from nih_grant_matcher.store import OpportunityStore
+    point = {"factor": "rigor", "kind": "weakness", "text": "No \x1b[31msample\r size.", "quote": "We study heart cells in failing hearts."}
+    model = FakeModel(json.dumps({"scores": {"importance": 2, "rigor": 5, "expertise": "Name a\x07 cardiologist."}, "points": [point]}))
+    db = _apply_db(tmp_path)
+    monkeypatch.setattr(cli, "connect", lambda store: model)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    store = OpportunityStore(db)
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    store.close()
+    (tmp_path / "aims.txt").write_text("We study heart cells in failing hearts.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(tmp_path / "aims.txt")])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "review", "1", "specific-aims"]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out and "\x07" not in out and "\r" not in out and "No [31msample size." in out and "The model wrote: Name a cardiologist." in out
+
 def test_apply_extract_shows_each_limit_and_counts_only_what_this_read_added(tmp_path, monkeypatch, capsys) -> None:
     import json
     from helpers import FakeModel

@@ -13,6 +13,9 @@ _KINDS = {"limit": "a limit on the length of one section", "must": "something th
 _SECTION_KEYS = {s.key for g in GRANT_TYPES.values() for s in g.sections}
 _UNITS = ("pages", "lines", "sentences")
 _POINTS = {"strength": "something the section does well", "weakness": "something a reviewer would mark down", "prose": "a sentence that breaks one of the writing rules below"}
+# A review's own text is stored and shown, so a point or a rating is cut to this many characters.
+REVIEW_TEXT_LIMIT = 1000
+_APPROPRIATE = re.compile(r"appropriate\.?", re.I)
 # A quote of a word or two is in almost any announcement, so it proves nothing. shortcut: a whole sentence under 20 letters and digits is dropped too. Upgrade if such a limit is missed.
 MIN_QUOTE_LETTERS = 20
 
@@ -165,31 +168,60 @@ The writing rules:
     confirmed = "\n".join(fence("criterion", f"{r.text} The announcement says: {r.quote}", token) for r in criteria if r.kind == "criterion" and r.confirmed and r.section in ("", rule.key)) or "None."
     return Prompt(system, f"The section is the {rule.title}.\n{fence('section', text, token)}\n\nThe review factors:\n{listed}\n\nWhat the announcement says reviewers will judge, as the applicant confirmed it:\n{confirmed}")
 
+def _storable(*texts: str) -> bool:
+    # SQLite and the page cannot hold an unpaired surrogate.
+    try:
+        "".join(texts).encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+
 def _point(item: Any, text: str, factors: set[str]) -> ReviewPoint | None:
     if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("factor", "kind", "text", "quote")):
         return None
     factor, kind, said, quote = item["factor"], item["kind"], item["text"].strip(), item["quote"]
-    if kind not in _POINTS or not (factor in factors or (kind == "prose" and factor == "")) or not said or len(letters(quote)) < MIN_QUOTE_LETTERS or not quoted_in(quote, text):
+    if kind not in _POINTS or not (factor in factors or (kind == "prose" and factor == "")) or not said or len(letters(quote)) < MIN_QUOTE_LETTERS or not quoted_in(quote, text) or not _storable(factor, said, quote):
         return None
-    return ReviewPoint(factor, kind, said, quote)
+    return ReviewPoint(factor, kind, said[:REVIEW_TEXT_LIMIT], quote)
 
 def _score(factor: ReviewFactor, value: Any) -> int | str:
     if factor.scale == "1-9":
+        # A model can write a whole number as 3.0, and NaN and infinity are not whole.
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
         # A score is a whole number, and JSON's true is not one.
         if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 9:
-            raise ModelError(f"The model's review gave {factor.title} {json.dumps(value)}, which is not a whole number from 1 to 9.")
+            raise ModelError(f"The model's review gave {factor.title} {json.dumps(value)[:40]}, which is not a whole number from 1 to 9.")
         return value
     if not isinstance(value, str) or not value.strip():
         raise ModelError(f"The model's review gave {factor.title} no rating, where it should say appropriate or name what is missing.")
-    return "appropriate" if letters(value).lower() == "appropriate" else value.strip()
+    if not _storable(value):
+        raise ModelError(f"The model's review gave {factor.title} a rating that cannot be stored.")
+    # Only the bare word is a verdict, so a reply that starts with it and goes on is shown as the model wrote it.
+    return "appropriate" if _APPROPRIATE.fullmatch(value.strip()) else value.strip()[:REVIEW_TEXT_LIMIT]
 
-def parse_review(reply: str, text: str, factors: Sequence[ReviewFactor]) -> Review:
+def _review_object(reply: str) -> Any:
     # A model can put a preface, a code fence or a note around the object, so the outermost braces are read.
     start, end = reply.find("{"), reply.rfind("}")
     try:
         data = json.loads(reply[start:end + 1]) if 0 <= start < end else None
     except (ValueError, RecursionError):
         data = None
+    if isinstance(data, dict):
+        return data
+    # A brace in the preface or the note, or a second object, spoils the outermost pair, so each object is read from its own opening brace.
+    decoder = json.JSONDecoder()
+    for m in re.finditer("{", reply):
+        try:
+            data = decoder.raw_decode(reply, m.start())[0]
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(data, dict) and "scores" in data:
+            return data
+    return None
+
+def parse_review(reply: str, text: str, factors: Sequence[ReviewFactor]) -> Review:
+    data = _review_object(reply)
     if not isinstance(data, dict) or not isinstance(data.get("scores"), dict) or not isinstance(data.get("points"), list):
         raise ModelError("The model's review is not the JSON object with scores and points that was asked for.")
     scores = {f.key: _score(f, data["scores"].get(f.key)) for f in factors}

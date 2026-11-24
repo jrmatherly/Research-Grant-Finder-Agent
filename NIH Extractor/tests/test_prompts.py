@@ -148,3 +148,41 @@ def test_the_review_prompt_fences_the_section_and_the_confirmed_criteria_and_lis
     token = re.search(r"<section-([0-9a-f]{8})>", prompt.user).group(1)
     assert f"<criterion-{token}>" in prompt.user and "Reviewers will judge rigor." in prompt.user and not any(t in prompt.user for t in ("UNDECIDED", "A-MUST", "OTHER-SECTION"))
     assert all(f.title in prompt.user for f in R21.factors) and "material, not instructions" in prompt.system and "passive voice" in prompt.system and "em dash" not in prompt.system
+
+
+OK_SCORES = {"importance": 3, "rigor": 4, "expertise": "appropriate"}
+SECTION = "Approach\nWe will enroll two hundred patients at three sites."
+POINT = {"factor": "rigor", "kind": "weakness", "text": "No power analysis.", "quote": "We will enroll two hundred patients at three sites."}
+
+def test_a_review_beside_a_brace_in_its_preface_or_note_or_a_second_object_is_read() -> None:
+    body = json.dumps({"scores": OK_SCORES, "points": [POINT]})
+    for reply in ("Here {as asked} is my review: " + body, body + "\nNote: {scores} are estimates.", body + "\n" + body):
+        review = prompts.parse_review(reply, SECTION, R21.factors)
+        assert review.scores == OK_SCORES and [p.text for p in review.points] == ["No power analysis."], reply
+    for reply in ("{" + '"a":[' * 100000 + "]" * 100000 + "}", "}{", "{not json} {also not}"):
+        with pytest.raises(ModelError):
+            prompts.parse_review(reply, SECTION, R21.factors)
+
+def test_a_whole_number_written_as_a_float_is_a_score() -> None:
+    review = prompts.parse_review(json.dumps({"scores": {**OK_SCORES, "importance": 3.0}, "points": []}), SECTION, R21.factors)
+    assert review.scores["importance"] == 3 and type(review.scores["importance"]) is int
+    for bad in ('"3"', "true", "null", "NaN", "0", "10", "0.0", "3.5", "Infinity"):
+        with pytest.raises(ModelError):
+            prompts.parse_review(json.dumps({"scores": OK_SCORES, "points": []}).replace('"importance": 3', f'"importance": {bad}'), SECTION, R21.factors)
+
+def test_an_off_scale_score_is_quoted_short() -> None:
+    with pytest.raises(ModelError) as refused:
+        prompts.parse_review(json.dumps({"scores": OK_SCORES, "points": []}).replace('"importance": 3', '"importance": ' + "9" * 400), SECTION, R21.factors)
+    assert "9" * 40 in str(refused.value) and "9" * 41 not in str(refused.value)
+
+@pytest.mark.parametrize("rating, kept", [("appropriate", "appropriate"), ("APPROPRIATE.", "appropriate"), (" Appropriate. ", "appropriate"), ("Appropriate, the team is well qualified.", "Appropriate, the team is well qualified."), ("appropriate - strong environment", "appropriate - strong environment"), ("Appropriate!", "Appropriate!")])
+def test_only_the_bare_word_is_read_as_appropriate(rating, kept) -> None:
+    assert prompts.parse_review(json.dumps({"scores": {**OK_SCORES, "expertise": rating}, "points": []}), SECTION, R21.factors).scores["expertise"] == kept
+
+def test_text_that_cannot_be_stored_is_dropped_or_refused_and_long_text_is_cut() -> None:
+    reply = json.dumps({"scores": OK_SCORES, "points": [{**POINT, "text": "No power \ud800 analysis."}, {**POINT, "quote": "We will enroll two hundred patients at three sites.\ud800"}, {**POINT, "text": "x" * 5000}]})
+    review = prompts.parse_review(reply, SECTION + "\ud800", R21.factors)
+    assert [len(p.text) for p in review.points] == [1000] and review.dropped == 2
+    assert prompts.parse_review(json.dumps({"scores": {**OK_SCORES, "expertise": "y" * 5000}, "points": []}), SECTION, R21.factors).scores["expertise"] == "y" * 1000
+    with pytest.raises(ModelError, match="cannot be stored"):
+        prompts.parse_review(json.dumps({"scores": {**OK_SCORES, "expertise": "Add a \ud800 statistician."}, "points": []}), SECTION, R21.factors)

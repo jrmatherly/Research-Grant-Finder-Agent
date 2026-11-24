@@ -123,9 +123,14 @@ def _propose(ws: Workspace, section: str, action: str, instruction: str = "") ->
     ws.propose(section, action, instruction)
     return "The model's proposal is below the section. Nothing has changed yet."
 
-def _review(ws: Workspace, section: str) -> str:
+def _review(ws: Workspace, section: str) -> str | None:
     ws.model = connect(ws.store)
-    return f"The model reviewed revision {ws.review(section).revision_id}. Its review is below the section."
+    review = ws.review(section)
+    # Another tab can save while the model reads, and a review is shown only beside the revision it read.
+    if review.revision_id != ws.view().section(section).revision_id:
+        _notice("warning", f"The section changed while the model was reading it, so this review is of revision {review.revision_id}, an earlier one, and is not shown. Review the section again.")
+        return None
+    return f"The model reviewed revision {review.revision_id}. Its review is below the section."
 
 def _extract(ws: Workspace) -> str:
     ws.model = connect(ws.store)
@@ -433,7 +438,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         st.markdown(f"**A model's review of revision {review.revision_id}**")
         st.caption(f"{escape_markdown(review.model)} saw only this revision and the review criteria you confirmed. NIH's reviewers score the whole application.")
         for factor in factors:
-            st.markdown(escape_markdown(score_line(factor, review.scores[factor.key])))
+            st.markdown(escape_markdown(score_line(factor, review.scores.get(factor.key))))
         titles = {f.key: f.title for f in factors}
         for point in review.points:
             st.markdown(f"**{POINT_LABELS[point.kind]}**{f' ({titles[point.factor]})' if point.factor else ''}. {escape_markdown(point.text)}")

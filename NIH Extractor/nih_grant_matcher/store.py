@@ -61,11 +61,13 @@ class OpportunityStore:
         return self.conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone() is not None
     def _rows(self, table: str, sql: str, args: Sequence[Any] = ()) -> list[sqlite3.Row]:
         return self.conn.execute(sql, args).fetchall() if self._has(table) else []
-    @contextmanager
-    def _write(self, table: str, error: type[Exception] = ReadOnlyDatabase) -> Iterator[None]:
+    def writable(self, table: str, error: type[Exception] = ReadOnlyDatabase) -> None:
         # SCHEMA creates every table on open, so a table is missing only from a read-only database that an earlier version wrote.
         if not self._has(table):
             raise error(f"{self.db_path} was written by an earlier version and is read-only, so it has no {table} table to save to. Open a copy you can write to.")
+    @contextmanager
+    def _write(self, table: str, error: type[Exception] = ReadOnlyDatabase) -> Iterator[None]:
+        self.writable(table, error)
         with self.conn:
             yield
     def profile(self) -> Profile:
