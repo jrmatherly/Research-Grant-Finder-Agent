@@ -90,6 +90,9 @@ def start_updater(framework: Path, log: Path) -> None:
     # Runs on the main thread. An app that cannot update must still open.
     try:
         UPDATER.append(sparkle_class(framework).alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None))
+        # Sparkle allows a background check right after start, but only while automatic checks are on.
+        updater = UPDATER[0].updater()
+        if updater.automaticallyChecksForUpdates(): updater.checkForUpdatesInBackground()
     except Exception:
         with log.open("a") as out:
             out.write(f"{NAME} updater did not start:\n{traceback.format_exc()}")

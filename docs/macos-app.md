@@ -8,7 +8,7 @@ Each release on the [releases page](https://github.com/jrmatherly/Research-Grant
 
 ## Updates
 
-The app checks for a new release once a day and offers to install it. `Check for Updates…` in the `Grant Matcher` menu checks at once. An update replaces the app where it is, so the app must be in a folder it can write to, such as `Applications`, and not on the disk image.
+The app checks for a new release each time it opens, and once a day while it stays open, and shows what changed before it offers to install it. `Check for Updates…` in the `Grant Matcher` menu checks at once. An update replaces the app where it is, so the app must be in a folder it can write to, such as `Applications`, and not on the disk image.
 
 Version 0.1.1 has no updater. Install the next version by hand once, as in [Download](#download).
 
