@@ -8,7 +8,7 @@ from .provenance import share
 from .prose import scan
 from .rules import Limit, PageFormat, SectionRule
 
-# A model can write the placeholder in another case or spacing than it was asked for.
+# A model can write the placeholder in another case, with a space after the bracket, or without the colon.
 _PLACEHOLDER = re.compile(r"\[\s*NEEDS INPUT[^\]]*\]", re.I)
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
 # The author is the whole surname, so McDonald is not read as Donald. shortcut: capital and small letters are told apart in Latin-1 only, so a surname that ends in a letter such as ć is not read. Upgrade if such a citation is missed.

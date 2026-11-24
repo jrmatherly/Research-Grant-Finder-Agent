@@ -206,7 +206,7 @@ class Workspace:
         if (announcement := self.store.announcement(app.opportunity_number)) is None:
             raise NotReady("Fetch the full announcement first. The model reads its requirements from the saved text.")
         if not (parts := [(n, text) for n in ("I", "IV", "V") if (text := announcement.section(n))]):
-            raise NotReady("Grant Matcher found none of Sections I, IV and V in the announcement, so there is nothing to send. Read the announcement under Announcement.")
+            raise NotReady("Grant Matcher found none of Sections I, IV and V in the announcement, so there is nothing to send.")
         found, dropped = [], 0
         for numeral, text in parts:
             call, done = self._ask("", "extract", prompts.extract(text, numeral, GRANT_TYPES[app.grant_type]), None)
@@ -328,7 +328,7 @@ class Workspace:
         current = head(self.store.revisions(self.application_id), section)
         live = [f for f in self.store.facts(self.application_id) if f.retired_at is None and f.kind in rule.needs + rule.uses]
         if action == "draft" and (gaps := [k for k in rule.needs if k not in {f.kind for f in live}]):
-            raise NotReady(f"The {rule.title} needs {', '.join(gaps)} before a model can draft it. Add them under Your inputs.")
+            raise NotReady(f"The {rule.title} needs {', '.join(gaps)} before a model can draft it. Add them under Your inputs, or with apply add.")
         if action != "draft" and (current is None or not current.text.strip()):
             raise NotReady(f"The {rule.title} has no text to {action} yet. Write it and save it first.")
         if action == "revise" and not instruction.strip():
