@@ -206,6 +206,28 @@ def _press(app, label):
     next(button for button in app.button if button.label == label).click().run(timeout=30)
 
 
+def test_a_clicked_row_is_the_one_details_shows(tmp_path, monkeypatch) -> None:
+    import json
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(1, "Machine learning for imaging")), MLRelevanceScorer().score(_opp(2, "Mitochondria in cardiac muscle"))])
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert app.selectbox(key="find_opportunity").value == "PA-1 | Machine learning for imaging"
+    assert "Select a row, then open Details to read it." in " ".join(c.value for c in app.caption)
+    table, states = app.dataframe[0], app._tree.get_widget_states
+    def clicked():
+        sent = states()
+        widget = sent.widgets.add()
+        widget.id, widget.string_value = table.proto.id, json.dumps({"selection": {"rows": [], "columns": [], "cells": [[1, "Title"]]}})
+        return sent
+    app._tree.get_widget_states = clicked
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.selectbox(key="find_opportunity").value == "PA-2 | Mitochondria in cardiac muscle"
+
 def test_a_saved_profile_with_the_builtin_keywords_reordered_is_not_the_builtin_one(tmp_path) -> None:
     from nih_grant_matcher.profile import BUILTIN_PROFILE, Profile
     from nih_grant_matcher.ui.profile_page import saved_profile
