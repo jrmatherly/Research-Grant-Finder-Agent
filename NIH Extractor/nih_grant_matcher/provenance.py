@@ -1,4 +1,6 @@
 from __future__ import annotations
+import hashlib, threading
+from collections import OrderedDict
 from difflib import SequenceMatcher
 from typing import Collection, Literal, Mapping, Sequence
 from . import __version__
@@ -6,6 +8,9 @@ from .models import Application, Attribution, Fact, ModelCall, Revision, Signoff
 from .rules import GrantType
 
 PROPOSALS = ("polish", "revise", "draft")
+# The word record of each revision asked for, kept for the process because Streamlit opens a new store on every rerun. The key hashes the author, action and text of the revision and of each ancestor, so it names a history, not an id.
+_RECORDS: OrderedDict[bytes, tuple[tuple[str, str], ...]] = OrderedDict()
+_HELD, _LOCK = 64, threading.Lock()
 _KINDS = {"aim": "aims", "hypothesis": "hypotheses", "preliminary": "preliminary data", "method": "methods", "significance": "significance", "innovation": "innovation", "team": "team", "reference": "references", "other": "other inputs"}
 
 def head(revisions: Sequence[Revision], section: str) -> Revision | None:
@@ -18,15 +23,30 @@ def attribution(revisions: Sequence[Revision], revision_id: int) -> tuple[tuple[
         if chain[-1].parent_id not in by_id:
             raise ValueError(f"Revision {chain[-1].id} names parent {chain[-1].parent_id}, which is not in the log given.")
         chain.append(by_id[chain[-1].parent_id])
-    ordered = chain[::-1]
+    ordered, keys, key = chain[::-1], [], b""
+    for r in ordered:
+        keys.append(key := hashlib.sha256(repr((key, r.author, r.action, r.text)).encode()).digest())
+    with _LOCK:
+        kept = next((i for i in range(len(keys) - 1, -1, -1) if keys[i] in _RECORDS), -1)
+        if kept >= 0:
+            _RECORDS.move_to_end(keys[kept])
+            record = _RECORDS[keys[kept]]
     # Every word of a run of applicant revisions is the applicant's, so the diffs start at the last one before a model's.
     first = next((i for i, r in enumerate(ordered) if r.author != "applicant"), len(ordered))
-    words = [(w, "applicant") for w in ordered[first - 1].text.split()] if first else []
+    if kept >= max(first - 1, 0):
+        words, first = list(record), kept + 1
+    else:
+        words = [(w, "applicant") for w in ordered[first - 1].text.split()] if first else []
     for revision in ordered[first:]:
         new, origin = revision.text.split(), "applicant" if revision.author == "applicant" else revision.action
         opcodes = SequenceMatcher(a=[w for w, _ in words], b=new, autojunk=False).get_opcodes()
         words = [pair for tag, i1, i2, j1, j2 in opcodes for pair in (words[i1:i2] if tag == "equal" else [(w, origin) for w in new[j1:j2]])]
-    return tuple(words)
+    with _LOCK:
+        _RECORDS[keys[-1]] = record = tuple(words)
+        _RECORDS.move_to_end(keys[-1])
+        while len(_RECORDS) > _HELD:
+            _RECORDS.popitem(last=False)
+    return record
 
 def share(words: Sequence[tuple[str, str]]) -> Attribution:
     origins = [origin for _, origin in words]
