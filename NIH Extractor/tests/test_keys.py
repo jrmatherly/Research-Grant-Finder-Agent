@@ -131,6 +131,16 @@ def test_no_key_reaches_the_database(tmp_path, linux) -> None:
     store.close()
     assert b"sk-secret-9" not in (tmp_path / "g.sqlite3").read_bytes()
 
+@pytest.mark.parametrize("text", ["", " \n"])
+def test_a_key_file_variable_that_names_an_empty_file_is_an_error_and_not_a_missing_key(text, tmp_path, monkeypatch, linux) -> None:
+    keys.save(PROVIDERS["claude"], "sk-saved-1", tmp_path)
+    empty = tmp_path / "secret"
+    empty.write_text(text, encoding="utf-8")
+    monkeypatch.setenv("ANTHROPIC_API_KEY_FILE", str(empty))
+    with pytest.raises(keys.UnreadableKey, match="empty") as failed:
+        keys.get(PROVIDERS["claude"], tmp_path)
+    assert "ANTHROPIC_API_KEY_FILE" in str(failed.value) and str(empty) in str(failed.value)
+
 def test_a_key_file_variable_that_names_no_file_names_the_variable_and_the_path(tmp_path, monkeypatch, linux) -> None:
     missing = tmp_path / "no-such-key"
     monkeypatch.setenv("OPENAI_API_KEY_FILE", str(missing))

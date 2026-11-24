@@ -18,6 +18,21 @@ def test_store_upserts_and_reads_scored_opportunity(tmp_path) -> None:
     assert results[0].opportunity.source_id == "abc"
     assert results[0].score == scored.score
 
+@pytest.mark.parametrize("bonus", [0.0, 4.0])
+def test_a_score_row_names_the_institute_bonus_only_when_there_is_one(bonus, tmp_path) -> None:
+    import json
+    from dataclasses import replace
+    scored = _scored("abc", "RFA-ABC", date(2026, 12, 1))
+    scored = replace(scored, breakdown=replace(scored.breakdown, institute_score=bonus))
+    store = OpportunityStore(tmp_path / "grants.sqlite3")
+    try:
+        store.upsert_scored(scored)
+        saved = json.loads(store.conn.execute("SELECT breakdown_json FROM scores").fetchone()[0])
+        read = store.top_scored(today=date(2026, 7, 6))[0].breakdown
+    finally:
+        store.close()
+    assert ("institute_score" in saved) == bool(bonus) and read == scored.breakdown
+
 def _scored(source_id: str, number: str, close_date: date):
     return MLRelevanceScorer().score(Opportunity(source_id=source_id, opportunity_number=number, title="Machine learning for health", agency_code="HHS-NIH11", agency_name="National Institutes of Health", status="posted", close_date=close_date), today=date(2026, 7, 6))
 

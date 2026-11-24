@@ -583,6 +583,16 @@ def test_a_second_accept_with_edits_returns_the_first_result(tmp_path) -> None:
         ws.discard(call_id)
     assert "I edited the Specific Aims after I accepted model text." in ws.view().disclosure
 
+def test_a_second_accept_after_the_section_changed_is_refused(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
+    mine = ws.write("specific-aims", "We study heart cells.", parent=None)
+    call_id = ws.propose("specific-aims", "polish").call_id
+    accepted = ws.accept(call_id)
+    ws.restore("specific-aims", mine.id, accepted.id)
+    with pytest.raises(WorkspaceError, match=f"accepted earlier as revision {accepted.id}, and the section has changed since"):
+        ws.accept(call_id)
+    assert ws.view().section("specific-aims").text == "We study heart cells." and len(ws.view().log) == 3
+
 def test_a_workspace_mistake_is_a_workspace_error(tmp_path) -> None:
     ws = start(tmp_path)
     assert issubclass(WorkspaceError, ValueError)
