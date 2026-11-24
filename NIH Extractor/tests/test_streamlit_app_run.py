@@ -1058,3 +1058,33 @@ def test_next_from_the_aims_step_names_a_sentence_over_the_limit(tmp_path, monke
     _press(app, "Next")
     assert not app.exception and app.session_state["profile_step"] == 1
     assert any(f'"{long[:60]}' in e.value and f"{MAX_SENTENCE} characters" in e.value for e in app.error)
+
+
+def test_the_wizard_opens_a_profile_saved_over_a_limit_whole_and_refuses_to_save_it(tmp_path, monkeypatch) -> None:
+    from helpers import save_like_main
+    from nih_grant_matcher.ui.markdown import escape_markdown
+    path = tmp_path / "data" / "grants.sqlite3"
+    save_like_main(path, investigator="A" * 250, research_summary="s" * 6500, examples=["Map cardiac energetics.", "Test mitophagy.", "Measure fission."])
+    store = OpportunityStore(path)
+    try:
+        before = store.profile()
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    assert not app.exception and not app.error and any("the profile of " + "A" * 250 in c.value for c in app.caption)
+    _press(app, "Edit my profile")
+    assert app.text_input[0].value == "A" * 250
+    _press(app, "Next")
+    assert app.text_area[0].value == "s" * 6500
+    for _ in range(3):
+        _press(app, "Next")
+    assert [t.value for t in app.text_area if t.label == "Resources"] == ["r" * 7200]
+    _press(app, "Save profile")
+    assert not app.exception and [e.value for e in app.error] == [escape_markdown("investigator: at most 200 characters")]
+    store = OpportunityStore(path)
+    try:
+        assert store.profile() == before
+    finally:
+        store.close()

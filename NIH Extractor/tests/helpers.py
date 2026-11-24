@@ -41,6 +41,17 @@ def start(tmp_path, model=None, resubmission=False, facts=None, others=0, profil
         ws.add_fact(kind, text)
     return ws
 
+OVER_LIMIT = {"keywords": {"mitochondria": 18}, "examples": ["Study mitochondrial dynamics in cardiac muscle."], "focus": "profile", "examples_name": "your example sentences", "investigator": "Ada Lovelace", "resources": "r" * 7200}
+
+def save_like_main(path, **profile) -> None:
+    # Version 0.2.0 checked no length, so its wizard and import saved text this branch's limits refuse.
+    store = OpportunityStore(path)
+    try:
+        store.conn.execute("INSERT INTO profile VALUES (1, ?, '2026-11-01T00:00:00')", (json.dumps({"format": "grant-matcher-profile/1", "profile": {**OVER_LIMIT, **profile}}),))
+        store.conn.commit()
+    finally:
+        store.close()
+
 LLM_FIXTURES = Path(__file__).parent / "fixtures" / "llm"
 
 def fixture(name: str) -> dict:

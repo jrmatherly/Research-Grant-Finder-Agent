@@ -67,7 +67,7 @@ class OpportunityStore:
             yield
     def profile(self) -> Profile:
         row = self.conn.execute("SELECT profile_json FROM profile WHERE id = 1").fetchone() if self._has("profile") else None
-        return from_export(row["profile_json"]) if row else BUILTIN_PROFILE
+        return from_export(row["profile_json"], limits=False) if row else BUILTIN_PROFILE
     def save_profile(self, profile: Profile | None) -> None:
         if profile is not None:
             text = to_export(profile)

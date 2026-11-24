@@ -175,3 +175,27 @@ def test_a_built_in_ranking_with_a_name_still_ranks_like_the_built_in() -> None:
     assert ranks_like_builtin(named) and named.matcher_config() == MatcherConfig()
     reordered = replace(BUILTIN_PROFILE, keywords=dict(reversed(BUILTIN_PROFILE.keywords.items())))
     assert not any(ranks_like_builtin(profile) for profile in (reordered, replace(BUILTIN_PROFILE, institutes=("NHLBI",)), replace(BUILTIN_PROFILE, focus="cardiology"), WET_LAB))
+
+def test_a_profile_that_version_0_2_0_saved_over_a_limit_is_read_ranks_and_is_not_saved_again(tmp_path) -> None:
+    from helpers import save_like_main
+    path, long = tmp_path / "g.sqlite3", {"keywords": {"x" * 81: 5}, "examples": ["x" * 601], "prior_work": [_reference(n, "x" * 1001) for n in range(101)]}
+    save_like_main(path, **long)
+    store = OpportunityStore(path)
+    try:
+        saved = store.profile()
+        assert (saved.resources, saved.examples, len(saved.prior_work)) == ("r" * 7200, ("x" * 601,), 101)
+        assert config_for(store).keywords == {"x" * 81: 5}
+        with pytest.raises(ProfileError, match="^resources: at most 6,000 characters"):
+            store.save_profile(saved)
+        assert store.profile() == saved
+        with pytest.raises(ProfileError, match="^resources: at most 6,000 characters"):
+            from_export(to_export(saved))
+    finally:
+        store.close()
+    save_like_main(tmp_path / "h.sqlite3", keywords={"Mitochondria": 18})
+    store = OpportunityStore(tmp_path / "h.sqlite3")
+    try:
+        with pytest.raises(ProfileError, match="^keywords"):
+            store.profile()
+    finally:
+        store.close()
