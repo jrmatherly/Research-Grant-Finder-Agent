@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     sign.add_argument("section")
     sign.add_argument("--signer", required=True)
     sign.add_argument("--acknowledge", action="store_true", help="Confirm that you rewrote a section that a model mostly drafted.")
-    export = apply.add_parser("export", help="Write the sections, the requirements and the provenance log to a folder.")
+    export = apply.add_parser("export", help="Write the sections, the requirements, the provenance log and, while it is on, the AI-use statement to a folder.")
     export.add_argument("id", type=int)
     export.add_argument("--out", required=True)
     polish = apply.add_parser("polish", help="Ask the model you chose to polish the newest revision of a section. Nothing changes until you accept.")
@@ -155,7 +155,7 @@ def _models(args: argparse.Namespace) -> int:
     try:
         if args.provider:
             store.set_setting("llm.provider", args.provider)
-        # A new provider starts from its own default, not from the last provider's model.
+        # Naming a provider, even the one already chosen, resets the model to that provider's default, so one provider's model is never sent to another.
         if args.provider or args.model:
             store.set_setting("llm.model", args.model or "")
         if base_url:

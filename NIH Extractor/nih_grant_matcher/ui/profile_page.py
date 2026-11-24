@@ -85,7 +85,7 @@ def _preview(db_path: str, draft: Profile) -> pd.DataFrame | None:
     rows.sort(key=lambda row: -row["Change"])
     return pd.DataFrame([row for row in rows if row["Change"] > 0][:10] + [row for row in reversed(rows) if row["Change"] < 0][:10][::-1]) if rows else None
 
-# Streamlit cuts a value longer than max_chars without a word, so text that version 0.2.0 saved over a limit is shown whole and the save names the field.
+# Streamlit cuts a value longer than max_chars without a word, so text saved over a limit before the limits existed is shown whole and the save names the field.
 def _limit(name: str, draft: Profile) -> int | None:
     return TEXT_LIMITS[name] if len(getattr(draft, name)) <= TEXT_LIMITS[name] else None
 

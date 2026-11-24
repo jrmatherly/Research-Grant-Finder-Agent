@@ -10,7 +10,7 @@ from .rules import Limit, PageFormat, SectionRule
 
 _PLACEHOLDER = re.compile(r"\[NEEDS INPUT:[^\]]*\]")
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
-# The author is the whole surname, so McDonald is not read as Donald. A surname may be accented, and starts with a capital and ends in a small letter.
+# The author is the whole surname, so McDonald is not read as Donald. shortcut: capital and small letters are told apart in Latin-1 only, so a surname that ends in a letter such as ć is not read. Upgrade if such a citation is missed.
 _SURNAME = r"[^\W\d_a-zß-öø-ÿ](?:[^\W\d_]|['-]){0,40}[a-zß-öø-ÿ]"
 _CITATION_LIKE = re.compile(rf"(?P<doi>10\.\d{{4,9}}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>{_SURNAME})(?: et al\.?,? \(?| and {_SURNAME}(?: \(|, ))(?P<year>\d{{4}}[a-z]?)\)?|\((?P<lone>{_SURNAME}), (?P<lone_year>\d{{4}}[a-z]?)\)")
 _DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)", re.I)

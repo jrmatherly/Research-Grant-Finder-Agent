@@ -832,6 +832,22 @@ def test_the_model_expander_saves_a_key_asks_for_consent_and_tests_the_connectio
     assert b"sk-local-4f2a" not in path.read_bytes()
 
 
+def test_removing_the_saved_key_leaves_no_saved_key(tmp_path, monkeypatch) -> None:
+    import json
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.text_input(key="apply_llm_key").input("sk-local-4f2a")
+    app.button(key="apply_llm_save_key_button").click().run(timeout=30)
+    app.button(key="apply_llm_remove_key_button").click().run(timeout=30)
+    assert not app.exception and any("No key saved." in caption.value for caption in app.caption)
+    assert "compatible" not in json.loads((tmp_path / "data" / "llm-keys.json").read_text(encoding="utf-8"))
+
+
 def test_a_key_file_that_cannot_be_read_is_an_error_and_the_apply_view_still_draws(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher import keys
     for name in ("OPENAI_API_KEY", "OPENAI_API_KEY_FILE"):

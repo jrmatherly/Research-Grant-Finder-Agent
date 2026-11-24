@@ -9,7 +9,7 @@ REFERENCE_KEY_RE = re.compile(r"[A-Za-z0-9-]+")
 # focus and examples_name land in three of the six reason lines, which the dashboard renders as Markdown.
 LABEL_RE = re.compile(r"[A-Za-z0-9 /,'-]{1,60}")
 TEXT_FIELDS = ("investigator", "institution", "career_stage", "research_summary", "focus", "examples_name", "expertise", "resources")
-# This tool's limits. They hold the text fields and the sentences to about 5,000 words together before any of it reaches a prompt.
+# This tool's limits. They hold the text fields and the sentences to about 5,000 words together, so that a later prompt built from them stays small.
 TEXT_LIMITS = {"investigator": 200, "institution": 200, "career_stage": 200, "research_summary": 6000, "expertise": 6000, "resources": 6000}
 MAX_KEYWORD, MAX_SENTENCE, MAX_REFERENCES, MAX_CITATION, MAX_INSTITUTES = 80, 600, 100, 1000, 3
 # Words that say what a study does and not what it is about. As suggested terms they matched the most records ("Matched profile terms: test, how").
@@ -51,12 +51,12 @@ def ranks_like_builtin(profile: Profile) -> bool:
     return list(profile.keywords.items()) == list(BUILTIN_PROFILE.keywords.items()) and (profile.examples, profile.focus, profile.examples_name, profile.institutes) == (BUILTIN_PROFILE.examples, BUILTIN_PROFILE.focus, BUILTIN_PROFILE.examples_name, BUILTIN_PROFILE.institutes)
 
 def to_export(profile: Profile) -> str:
-    # A profile with no institute leaves the key out, so that its export still imports into version 0.2.0.
+    # A profile with no institute leaves the key out, so that its export still imports into a release that does not know the field.
     data = {name: value for name, value in asdict(profile).items() if name != "institutes" or value}
     # No sort_keys: a keyword's place in the dictionary is its place in matched_terms.
     return json.dumps({"format": EXPORT_FORMAT, "profile": {name: data[name] for name in sorted(data)}})
 
-# The limits are checked on a save and an import. A stored profile is read without them, since version 0.2.0 saved text of any length.
+# The limits are checked on a save and an import. A stored profile is read without them, since a release before the limits saved text of any length.
 def from_export(text: str, limits: bool = True) -> Profile:
     try:
         data = json.loads(text)

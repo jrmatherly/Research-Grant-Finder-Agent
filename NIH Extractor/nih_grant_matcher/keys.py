@@ -9,7 +9,7 @@ PLATFORM = sys.platform
 SERVICE = "Grant Matcher"
 SECURITY = "/usr/bin/security"
 _run = subprocess.run
-# Streamlit runs the page again on every click, and a burst of security processes has crashed securityd.
+# Streamlit runs the page again on every click, and a burst of security processes can crash securityd.
 _cache: dict[tuple[str, str], str | None | UnreadableKey] = {}
 KEYCHAIN_ERRORS = {36: "The login keychain is locked. Unlock it and try again.", 51: "The Keychain prompt was declined, so Grant Matcher cannot read the key.", 128: "The Keychain prompt was cancelled, so Grant Matcher cannot read the key."}
 

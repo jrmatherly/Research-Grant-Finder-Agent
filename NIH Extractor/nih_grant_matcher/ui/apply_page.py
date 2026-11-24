@@ -259,7 +259,7 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
 
 def _choose_provider(store: OpportunityStore) -> None:
     store.set_setting("llm.provider", st.session_state["apply_llm_provider"])
-    # A new provider starts from its own default model and base URL.
+    # A new provider starts from its own default model. The Base URL box is redrawn from what is saved for the compatible provider.
     store.set_setting("llm.model", "")
     for key in ("apply_llm_model", "apply_llm_base_url"):
         st.session_state.pop(key, None)
@@ -431,7 +431,7 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     export_key = f"apply_export_{app_id}"
     if export_key not in st.session_state:
         st.session_state[export_key] = f"outputs/application-{app_id}"
-    st.text_input("Export folder", key=export_key, help="One Markdown file per section, the requirements and the provenance log. A section that is not signed off starts with DRAFT-.")
+    st.text_input("Export folder", key=export_key, help="One Markdown file per section, the requirements, the provenance log and, while it is on, the AI-use statement. A section that is not signed off starts with DRAFT-.")
     st.button("Export", key="apply_export_button", on_click=_on, args=(db_path, app_id, lambda w, export_key=export_key: f"Wrote the application to {escape_markdown(str(w.export(Path(st.session_state[export_key]))))}."))
     st.subheader("Delete this application")
     number = view.application.opportunity_number

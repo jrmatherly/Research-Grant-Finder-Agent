@@ -425,6 +425,14 @@ def test_a_truncated_reply_is_not_offered(tmp_path) -> None:
     with pytest.raises(ModelError, match="cut off"):
         ws.propose("specific-aims", "polish")
     assert len(ws.store.calls(ws.application_id)) == 1 and len(ws.view().log) == 1
+    assert ws.pending("specific-aims") is None and ws.store.calls(ws.application_id)[0].purpose == "failed"
+
+def test_a_reply_with_no_text_is_not_offered(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(" \n "))
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(ModelError, match="returned no text"):
+        ws.propose("specific-aims", "polish")
+    assert ws.pending("specific-aims") is None and [c.purpose for c in ws.store.calls(ws.application_id)] == ["failed"]
 
 def test_a_refusal_is_reported_and_logged(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel(error=ModelError("declined", kind="refused")))
@@ -432,6 +440,7 @@ def test_a_refusal_is_reported_and_logged(tmp_path) -> None:
     with pytest.raises(ModelError):
         ws.propose("specific-aims", "polish")
     assert ws.store.calls(ws.application_id)[0].response == ""
+    assert ws.pending("specific-aims") is None and ws.store.calls(ws.application_id)[0].purpose == "failed"
 
 def test_a_call_whose_error_cannot_be_read_is_logged_as_failed(tmp_path, post) -> None:
     post.queue.append(error_with_unreadable_body(TimeoutError("timed out")))
@@ -518,6 +527,25 @@ def test_no_text_is_sent_without_consent_for_the_host(tmp_path) -> None:
     with pytest.raises(NotReady, match="Agree to send text to example.test first"):
         ws.propose("specific-aims", "polish")
     assert model.seen == [] and ws.store.calls(ws.application_id) == []
+
+def test_consent_for_one_host_does_not_send_text_to_another(tmp_path) -> None:
+    model = FakeModel("We study cardiac muscle cells.")
+    ws = start(tmp_path, model=model, consent=False)
+    ws.store.set_setting("consent:localhost", "2026-11-23T00:00:00")
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    with pytest.raises(NotReady, match="Agree to send text to example.test first"):
+        ws.propose("specific-aims", "polish")
+    assert model.seen == [] and ws.store.calls(ws.application_id) == []
+
+def test_a_revise_prompt_holds_only_the_live_inputs_the_section_uses(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We map the heart."))
+    ws.add_fact("aim", "Map the heart.")
+    ws.retire_fact(ws.add_fact("aim", "Cure every disease.").id)
+    ws.add_fact("team", "Dr. Okafor leads the lab.")
+    ws.write("specific-aims", "We study heart cells.", parent=None)
+    ws.propose("specific-aims", "revise", "Name the aim.")
+    sent = ws.model.seen[0].user
+    assert "Map the heart." in sent and "Cure every disease." not in sent and "Dr. Okafor" not in sent
 
 def test_a_proposal_needs_a_model_saved_text_and_for_a_revise_an_instruction(tmp_path) -> None:
     model = FakeModel("We study cardiac muscle cells.")
