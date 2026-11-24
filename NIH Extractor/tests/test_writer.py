@@ -475,8 +475,8 @@ def test_a_log_that_cannot_be_written_after_the_request_says_the_text_was_sent(e
         blocker.rollback()
         blocker.close()
     said = str(failed.value)
-    assert len(fake.seen) == 1 and "sent to example.test" in said and "database is locked" in said and "AI-use statement will not show this call" in said
-    assert error is None or said.startswith("example.test answered 500: overloaded.")
+    assert len(fake.seen) == 1 and "database is locked" in said and "AI-use statement will not show this call" in said
+    assert said.startswith("Your text was sent to example.test" if error is None else "example.test answered 500: overloaded. Grant Matcher also could not write")
 
 def test_the_statement_says_only_what_the_log_shows(tmp_path) -> None:
     ws = start(tmp_path, model=FakeModel("We study cardiac muscle cells."))
