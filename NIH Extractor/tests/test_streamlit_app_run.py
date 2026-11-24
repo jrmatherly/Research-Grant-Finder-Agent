@@ -1694,3 +1694,12 @@ def test_the_empty_apply_view_points_to_settings(tmp_path, monkeypatch) -> None:
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Apply").run(timeout=30)
     assert "A model is optional, and you set one up under Settings." in " ".join(i.value for i in app.info)
+
+
+def test_the_find_controls_explain_themselves(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert app.sidebar.selectbox(key="find_source").help == "nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number."
+    assert app.sidebar.slider(key="find_min_score").help == "Hides the rows that score lower. It changes what is shown, not what is saved."
+    assert app.sidebar.slider(key="find_max_saved").help == "The most saved rows that Load Saved Results reads from the database."
+    assert app.sidebar.text_input[0].help == "The file that holds your results, your profile, your applications and your settings."
