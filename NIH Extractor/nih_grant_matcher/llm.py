@@ -19,11 +19,12 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 Kind = Literal["auth", "rate", "quota", "overload", "refused", "other"]
 WORKSPACE_HINT = "A Claude key that is not scoped to one workspace needs the ID of the workspace to use, which the Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists. Set it as the Workspace ID in the Model section, under Settings or in the Apply view, or with models --workspace."
-# What a failed answer means for this key and this model. No provider reports a key's plan, so none of these names one.
+# No provider reports a key's plan, so none of these names one.
 HINTS = {"auth": "The provider refused this request, most often because of the key. The key may be mistyped, revoked or expired, or it may lack permission for this model or project. Copy it again from the provider's page, or check its permissions there.",
     "quota": "The provider stopped the request at a quota, credit or spending limit of the account that owns the key. A limit can differ from model to model, so another model may still answer. Check the plan and the billing on the provider's site, or wait for the limit to reset.",
     "rate": "The provider asks for fewer requests at a time. Wait a minute and try again.",
     "overload": "The provider is busy or failed on its side, which says nothing about your key. Try again in a few minutes, or choose another model.",
+    "nokey": "This server asks for a key, and none is saved. Save one in the Model section.",
     "missing": "The provider did not find this model. Its name may be wrong or retired, or this key may not be allowed to use it. List the provider's models and choose one from the list."}
 
 @dataclass(frozen=True)
@@ -96,7 +97,8 @@ def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None,
             # The error page can drop mid-read or name a redirect that does not parse, and the caller logs only a ModelError.
             failed = ModelError(_redact(f"{host} answered {exc.code}, and Grant Matcher could not read the rest of its answer: {unread}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
     except (OSError, http.client.HTTPException) as exc:
-        failed = ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key))
+        late = isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError)
+        failed = ModelError(_redact(f"{host} did not answer: {exc}. The request may have reached {host}, so it may be charged. It was not sent again.", key) + (f" No answer came within {timeout} seconds. {HINTS['overload']}" if late else ""))
     except Exception as exc:
         failed = ModelError(_redact(f"The request to {host} failed: {exc}." + (f" The request may have reached {host}, so it may be charged." if left else "") + " It was not sent again.", key))
     # Raised outside the except clauses, so that the error does not carry the original, which can quote the key, as its context.
@@ -126,7 +128,7 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     # Redacted before it is cut, so that a cut cannot leave part of the key.
     message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
     # A free-tier quota of zero for a model reads limit: 0 in the message, and waiting does not raise it.
-    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and (re.search(r"quota|credit|spend|usage_limit", names, re.I) or re.search(r"\blimit: 0(?![.\d])", message)) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
+    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and (re.search(r"quota|credit|spend|usage_limit", names, re.I) or re.search(r"\blimit: 0(?!\.?\d)", message)) else "rate" if status == 429 else "overload" if status in (500, 502, 503, 504, 529) else "other"
     try:
         wait = float((exc.headers or {}).get("retry-after") or 2)
     except ValueError:
@@ -136,7 +138,7 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     # A model list names no model, so its 404 gets the provider's words alone.
     listing = (exc.url or "").split("?")[0].endswith("/models")
     # Anthropic's pages give these for a workspace ID that is missing, not an ID, or not one the key can use.
-    hint = WORKSPACE_HINT if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message) else HINTS.get("missing" if status == 404 and not listing and error else kind, "")
+    hint = WORKSPACE_HINT if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message) else HINTS.get("missing" if status == 404 and not listing and error else "nokey" if kind == "auth" and not key else kind, "")
     # Added after the redaction, which would otherwise mangle a word of the hint that a short key matches.
     said = _redact(f"{host} answered {status}: {message}", key)
     return ModelError(f"{said.rstrip('. ')}. {hint}" if hint else said, kind, status, wait)
@@ -173,7 +175,7 @@ class HttpModel:
     def complete(self, system: str, user: str, max_tokens: int = 16000, probe: bool = False) -> Completion:
         build, read = _WIRES[self.wire]
         url, headers, body = build(self, system, user, max_tokens)
-        # The applicant waits on a probe and can press again, so it gets one try of at most a minute.
+        # The applicant waits on a probe and can press again, so it skips the wait-and-retry and each send times out after a minute.
         send = (lambda body: _send(url, headers, body, self._key, 60)) if probe else (lambda body: _retry(lambda: _send(url, headers, body, self._key)))
         try:
             data = send(body)
@@ -242,7 +244,7 @@ def _gemini_reply(m: HttpModel, data: dict) -> Completion:
 
 _WIRES = {"anthropic": (_anthropic_request, _anthropic_reply), "openai": (_openai_request, _openai_reply), "gemini": (_gemini_request, _gemini_reply)}
 
-# shortcut: a pattern on the name, since only Anthropic's list says what a model does. Add a family when a provider lists a new kind that cannot write text.
+# shortcut: a pattern on the name, since OpenAI's and Gemini's lists do not say which models write text. Add a family when a provider lists a new kind that cannot write text.
 NOT_TEXT = {"openai": r"embedding|moderation|tts|whisper|transcribe|realtime|audio|image|dall-e|sora|live|translate|computer-use|codex|deep-research|-pro\b|babbage|davinci", "gemini": r"tts|image|embedding|live|audio|transcribe|translate|omni|genie|lyria|imagen|veo|robotics|computer-use|deep-research|antigravity|decision|nano-banana|aqa"}
 
 def writes_text(provider: Provider, names: list[str]) -> list[str]:

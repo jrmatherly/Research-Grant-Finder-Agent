@@ -296,7 +296,7 @@ def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None 
         st.session_state[consent_key] = agreed
         # A label is its accessible name as written and renders an IPv6 or www. host as an emoji or a link whatever the escape, so the host stays in the caption above.
         st.checkbox("I agree to send my text to this host", disabled=agreed, key=consent_key, on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
-        # Not a callback, so that the spinner shows while the request waits. Its notice is drawn here, since the notices above were drawn before the click was read.
+        # Not a callback, so that the spinner shows while the request waits. Its notice is drawn here, since the notices above were drawn before this request made one.
         if st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for."):
             with st.spinner(f"Waiting for {escape_markdown(host)} to answer, for up to a minute."):
                 _act(db_path, _test_connection)
