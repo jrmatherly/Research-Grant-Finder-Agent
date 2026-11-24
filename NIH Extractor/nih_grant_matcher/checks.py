@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+import unicodedata
 from bisect import bisect_left, bisect_right
 from itertools import accumulate
 from typing import Sequence
@@ -46,12 +47,16 @@ def _numbers(text: str) -> list[str]:
 
 def _trimmed(doi: str) -> str:
     # A DOI ends before what closes a wrapper or a sentence, and a ")" is its own only while it closes a "(" in it.
-    while doi and (doi[-1] in ".,;:\"'”’>}]" or doi[-1] == ")" and doi.count(")") > doi.count("(")):
+    while doi and (doi[-1] in ".,;:\"'”’»›。）」』】>}]" or doi[-1] == ")" and doi.count(")") > doi.count("(")):
         doi = doi[:-1]
     return doi
 
 def _doi(found: str) -> str:
     return _trimmed(found).lower()
+
+def _pmid(digits: str) -> str:
+    # NCBI keys its record by the PMID in plain digits without leading zeros, so a padded or full-width one would never be found. int() refuses a run of more than 4,300 digits.
+    return "".join(str(unicodedata.decimal(c)) for c in digits).lstrip("0")
 
 def _field_pmid(reference: Fact) -> list[str]:
     # The field is a PMID only as a whole, so a PubMed Central ID or a list of numbers is not read as one.
@@ -61,7 +66,7 @@ def _cites(m: re.Match[str], reference: Fact) -> bool:
     if m["doi"]:
         return _doi(m["doi"]) in set(map(_doi, _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")))
     if m["pmid"]:
-        return m["pmid"] in {*_field_pmid(reference), *_PMID.findall(reference.text)}
+        return _pmid(m["pmid"]) in {_pmid(p) for p in (*_field_pmid(reference), *_PMID.findall(reference.text))}
     author, year = (m["author"], m["year"]) if m["author"] else (m["lone"], m["lone_year"])
     year = year if year[-1].isalpha() else year + "[a-z]?"
     return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(author), year))
@@ -70,8 +75,7 @@ def identifiers(reference: Fact) -> tuple[str, str]:
     # The profile's prior work keeps the PMID and DOI in detail, and a reference typed under Your inputs keeps them in its text.
     pmid = _field_pmid(reference) or _PMID.findall(reference.text)
     doi = _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")
-    # NCBI keys its record by the PMID in plain digits without leading zeros, so a padded or full-width one would never be found.
-    return (str(int(pmid[0])).lstrip("0") if pmid else "", _trimmed(doi[0]) if doi else "")
+    return (_pmid(pmid[0]) if pmid else "", _trimmed(doi[0]) if doi else "")
 
 def not_in_crossref(doi_id: str) -> str:
     # Crossref answers 404 for a real work that another agency registered, so its silence does not mean the work does not exist.

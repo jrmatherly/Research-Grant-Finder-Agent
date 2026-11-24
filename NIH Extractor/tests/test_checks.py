@@ -200,6 +200,31 @@ def test_a_pmid_in_full_width_digits_is_sent_in_plain_digits(reference) -> None:
     assert identifiers(reference) == ("33611339", "")
 
 
+@pytest.mark.parametrize("reference", [Fact(1, "reference", "Mine A. 2021. PMID: " + "1" * 5000, label="mine"), Fact(1, "reference", "Mine A. 2021.", label="mine", detail={"pmid": "1" * 5000})], ids=["text", "detail"])
+def test_a_pmid_too_long_to_be_one_does_not_stop_the_check(reference) -> None:
+    assert identifiers(reference) == ("1" * 5000, "")
+    assert "unverified-reference" in _codes("As shown [@mine].", facts=(reference,))
+
+
+@pytest.mark.parametrize("reference, found", [(Fact(1, "reference", "Mine A. 2021. PMID: 0000"), ("", "")), (Fact(1, "reference", "Mine A. 2021.", detail={"pmid": "0"}), ("", "")), (Fact(1, "reference", "Mine A. 2021. PMID: 000 doi:10.1000/x"), ("", "10.1000/x"))], ids=["text", "detail", "falls-to-doi"])
+def test_a_pmid_of_only_zeros_is_no_identifier(reference, found) -> None:
+    assert identifiers(reference) == found
+
+
+def _unknown(draft: str, reference: Fact) -> list:
+    return [f for f in check_section(draft, RULE["specific-aims"], Limit(1, "pages"), R21.page, (reference,), "", tuple((w, "draft") for w in draft.split())) if f.code == "unknown-citation"]
+
+
+@pytest.mark.parametrize("reference", [Fact(1, "reference", "Mine A. 2021. PMID: 0033611339"), Fact(1, "reference", "Mine A. 2021.", detail={"pmid": "３３６１１３３９"})], ids=["padded", "full-width"])
+def test_a_model_pmid_matches_a_reference_that_holds_it_padded_or_full_width(reference) -> None:
+    assert not _unknown("PMID: 33611339 held.", reference)
+
+
+@pytest.mark.parametrize("draft", ["This held “10.1000/xyz”.", "This held ‘10.1000/xyz’, as shown."], ids=["curly-double", "curly-single"])
+def test_a_model_doi_in_curly_quotes_matches_the_reference(draft) -> None:
+    assert not _unknown(draft, Fact(1, "reference", "Smith J. 2020. doi:10.1000/xyz", label="smith2020"))
+
+
 @pytest.mark.parametrize("pmid, found", [("123", "123"), (" PMID: 0123 ", "123"), ("pmid 123", "123"), ("PMC7654321", ""), ("12345, 67890", ""), ("123a", "")], ids=["digits", "prefixed", "lower", "pmcid", "two", "trailing"])
 def test_a_pmid_field_counts_only_when_the_whole_field_is_one(pmid, found) -> None:
     reference = Fact(1, "reference", "Smith J. 2020. doi:10.1000/right", detail={"pmid": pmid})
@@ -209,6 +234,6 @@ def test_a_pmid_field_counts_only_when_the_whole_field_is_one(pmid, found) -> No
     assert any(f.code == "unknown-citation" for f in cited)
 
 
-@pytest.mark.parametrize("text, doi", [("doi={10.1000/xyz},", "10.1000/xyz"), ("<https://doi.org/10.1000/xyz>", "10.1000/xyz"), ('doi:10.1000/xyz".', "10.1000/xyz"), ("(doi:10.1000/abc(1)).", "10.1000/abc(1)"), ("doi:10.1002/(SICI)1097-4636(199706).", "10.1002/(SICI)1097-4636(199706)"), ("doi:10.1016/j.cell.2020.01.001.", "10.1016/j.cell.2020.01.001"), ("doi: 10.1000/xyz]; see", "10.1000/xyz"), ("“10.1000/xyz”.", "10.1000/xyz"), ("‘10.1000/xyz’,", "10.1000/xyz")], ids=["braces", "angle", "quote", "closing-bracket", "ends-in-bracket", "dots", "square", "curly-double", "curly-single"])
+@pytest.mark.parametrize("text, doi", [("doi={10.1000/xyz},", "10.1000/xyz"), ("<https://doi.org/10.1000/xyz>", "10.1000/xyz"), ('doi:10.1000/xyz".', "10.1000/xyz"), ("(doi:10.1000/abc(1)).", "10.1000/abc(1)"), ("doi:10.1002/(SICI)1097-4636(199706).", "10.1002/(SICI)1097-4636(199706)"), ("doi:10.1016/j.cell.2020.01.001.", "10.1016/j.cell.2020.01.001"), ("doi: 10.1000/xyz]; see", "10.1000/xyz"), ("“10.1000/xyz”.", "10.1000/xyz"), ("‘10.1000/xyz’,", "10.1000/xyz"), ("「doi:10.1000/xyz」。", "10.1000/xyz"), ("«doi:10.1000/xyz»", "10.1000/xyz"), ("（doi:10.1000/xyz）", "10.1000/xyz")], ids=["braces", "angle", "quote", "closing-bracket", "ends-in-bracket", "dots", "square", "curly-double", "curly-single", "corner-bracket", "guillemet", "full-width-bracket"])
 def test_a_doi_loses_what_closes_a_wrapper_or_ends_a_sentence(text, doi) -> None:
     assert identifiers(Fact(1, "reference", f"Smith J. 2020. {text}")) == ("", doi)
