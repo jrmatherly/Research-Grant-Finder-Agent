@@ -19,6 +19,12 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 Kind = Literal["auth", "rate", "quota", "overload", "refused", "other"]
 WORKSPACE_HINT = "A Claude key that is not scoped to one workspace needs the ID of the workspace to use, which the Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists. Set it as the Workspace ID in the Model section, under Settings or in the Apply view, or with models --workspace."
+# What a failed answer means for this key and this model. No provider reports a key's plan, so none of these names one.
+HINTS = {"auth": "The provider refused this request, most often because of the key. The key may be mistyped, revoked or expired, or it may lack permission for this model or project. Copy it again from the provider's page, or check its permissions there.",
+    "quota": "The provider stopped the request at a quota, credit or spending limit of the account that owns the key. A limit can differ from model to model, so another model may still answer. Check the plan and the billing on the provider's site, or wait for the limit to reset.",
+    "rate": "The provider asks for fewer requests at a time. Wait a minute and try again.",
+    "overload": "The provider is busy or failed on its side, which says nothing about your key. Try again in a few minutes, or choose another model.",
+    "missing": "The provider did not find this model. Its name may be wrong or retired, or this key may not be allowed to use it. List the provider's models and choose one from the list."}
 
 @dataclass(frozen=True)
 class Provider:
@@ -117,19 +123,23 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     if 300 <= status < 400:
         to = host_of(urllib.parse.urljoin(exc.url or "", (exc.headers or {}).get("location") or ""))
         return ModelError(f"{host} answered {status}, a redirect to another address{f' at {to}' if to else ''}. Grant Matcher does not follow a redirect, so nothing was sent there. Check the server's address.", "other", status)
-    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and re.search(r"quota|credit|spend|usage_limit", names, re.I) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
+    # Redacted before it is cut, so that a cut cannot leave part of the key.
+    message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
+    # A free-tier quota of zero for a model reads limit: 0 in the message, and waiting does not raise it.
+    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and (re.search(r"quota|credit|spend|usage_limit", names, re.I) or re.search(r"\blimit: 0\b", message)) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
     try:
         wait = float((exc.headers or {}).get("retry-after") or 2)
     except ValueError:
         wait = 2.0
     # A negative or NaN wait fails this test, and time.sleep refuses both.
     wait = min(wait, 30.0) if wait >= 0 else 2.0
-    # Redacted before it is cut, so that a cut cannot leave part of the key.
-    message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
+    # A model list names no model, so its 404 gets the provider's words alone.
+    listing = (exc.url or "").split("?")[0].endswith("/models")
     # Anthropic's pages give these for a workspace ID that is missing, not an ID, or not one the key can use.
-    if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message):
-        message += f" {WORKSPACE_HINT}"
-    return ModelError(_redact(f"{host} answered {status}: {message}", key), kind, status, wait)
+    hint = WORKSPACE_HINT if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message) else HINTS.get("missing" if status == 404 and not listing else kind, "")
+    # Added after the redaction, which would otherwise mangle a word of the hint that a short key matches.
+    said = _redact(f"{host} answered {status}: {message}", key)
+    return ModelError(f"{said.rstrip('. ')}. {hint}" if hint else said, kind, status, wait)
 
 def _retry(send: Callable[[], dict]) -> dict:
     try:
@@ -160,11 +170,13 @@ class HttpModel:
         self._limit = "max_tokens" if provider.name == "compatible" else "max_completion_tokens"
         # OpenAI's page says developer messages replace system messages from o1 on, and Ollama's lists system and no developer role.
         self._role = "system" if provider.name == "compatible" else "developer"
-    def complete(self, system: str, user: str, max_tokens: int = 16000) -> Completion:
+    def complete(self, system: str, user: str, max_tokens: int = 16000, probe: bool = False) -> Completion:
         build, read = _WIRES[self.wire]
         url, headers, body = build(self, system, user, max_tokens)
+        # The applicant waits on a probe and can press again, so it gets one try of at most a minute.
+        send = (lambda body: _send(url, headers, body, self._key, 60)) if probe else (lambda body: _retry(lambda: _send(url, headers, body, self._key)))
         try:
-            data = _retry(lambda: _send(url, headers, body, self._key))
+            data = send(body)
         except ModelError as exc:
             said = str(exc) if self.wire == "openai" and exc.status == 400 else ""
             # The server named the token limit or the role it was sent, so it did not process the request.
@@ -176,7 +188,7 @@ class HttpModel:
             else:
                 raise
             try:
-                data = _retry(lambda: _send(url, headers, body, self._key))
+                data = send(body)
             except ModelError as again:
                 # The first 400 named what was wrong, and a second one most likely refuses only the other name.
                 if again.status != 400:
