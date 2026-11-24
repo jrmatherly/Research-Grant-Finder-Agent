@@ -14,6 +14,7 @@ from nih_grant_matcher.profile import ProfileError, ranks_like_builtin
 from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for, why_not_covered
 from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.ui.apply_page import apply_page, show_notices, start_application
+from nih_grant_matcher.ui.find_page import picked_option
 from nih_grant_matcher.ui.markdown import escape_markdown
 from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
 from nih_grant_matcher.workflow import load_saved, run_and_save
@@ -215,7 +216,14 @@ next_deadline = filtered["Close Date"].dropna().min() if not filtered.empty else
 metric_col4.metric("Next Expiration", next_deadline.strftime("%Y-%m-%d") if pd.notna(next_deadline) else "Not listed")
 st.caption("For an NIH Guide notice, Expires is the day the notice expires, and application due dates are in the announcement. For a Grants.gov row, Expires is the closing date.")
 
-tab_results, tab_visuals, tab_detail = st.tabs(["Results", "Visuals", "Details"])
+options = (filtered["Opportunity Number"].fillna("") + " | " + filtered["Title"].fillna("")).tolist()
+
+def _pick_row(options: list[str] = options) -> None:
+    picked = picked_option(st.session_state.get("find_table"), options)
+    if picked is not None:
+        st.session_state["find_opportunity"] = picked
+
+tab_results, tab_visuals, tab_detail = st.tabs(["Results", "Visuals", "Details"], key="find_tabs")
 
 with tab_results:
     st.dataframe(
@@ -229,7 +237,11 @@ with tab_results:
             "Open Date": st.column_config.DateColumn("Open Date", format="YYYY-MM-DD"),
             "Close Date": st.column_config.DateColumn("Expires", format="YYYY-MM-DD"),
         },
+        key="find_table",
+        on_select=_pick_row,
+        selection_mode="single-cell",
     )
+    st.caption("Select a row, then open Details to read it.")
 
 with tab_visuals:
     chart_col1, chart_col2 = st.columns(2)
@@ -255,10 +267,9 @@ with tab_visuals:
             st.bar_chart(month_counts)
 
 with tab_detail:
-    options = filtered["Opportunity Number"].fillna("") + " | " + filtered["Title"].fillna("")
-    selected = st.selectbox("Opportunity", options.tolist(), key="find_opportunity", persist_state="session") if not filtered.empty else None
+    selected = st.selectbox("Opportunity", options, key="find_opportunity", persist_state="session") if not filtered.empty else None
     if selected:
-        row = filtered.iloc[options.tolist().index(selected)]
+        row = filtered.iloc[options.index(selected)]
         st.subheader(row["Title"])
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Score", f"{row['Score']:.1f}")

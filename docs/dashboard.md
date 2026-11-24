@@ -86,6 +86,8 @@ An opportunity whose date has passed is left out of the dashboard, the digest, a
 
 The table lists the visible rows, highest score first. Select a column heading to sort by that column. Scroll right for the remaining columns.
 
+Select any cell of a row to choose that row for the **Details** tab.
+
 | Column | Contents |
 | --- | --- |
 | **Rank**, **Classification**, **Score** | The position in the loaded results, the level, and the score. |
@@ -113,7 +115,7 @@ The table lists the visible rows, highest score first. Select a column heading t
 ![The Details tab for one opportunity](../images/dashboard-details.jpg)
 
 1. Select the **Details** tab.
-2. Under **Opportunity**, choose a row. The list holds the visible rows, so narrow the results first to shorten it.
+2. Under **Opportunity**, the row you selected in the table is chosen. Choose another row there if you want one.
 
 The tab shows the score, the level, the institute, the date, the matched terms, the reasons for the score, and the summary. **Open NIH Guide** and **Open Grants.gov** open the official records.
 
