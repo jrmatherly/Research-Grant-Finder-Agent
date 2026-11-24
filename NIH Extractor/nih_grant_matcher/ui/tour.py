@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import secrets
 import streamlit as st
 
 VENDOR = Path(__file__).parent / "vendor"
@@ -41,4 +42,6 @@ def _start() -> None:
 def tour_button() -> None:
     st.button("Show me around", key="tour_start", on_click=_start, width="stretch")
     # The script starts the tour only for a nonce it has not seen, so a rerun does not restart it.
-    _tour(data={"nonce": st.session_state.get("tour_nonce", 0), "steps": [{"key": k, "title": t, "text": x} for k, t, x in TOUR_STEPS]}, key="tour")
+    # The count starts again in a new session, and a tab that outlives its server keeps the last press it saw, so each session has its own name.
+    session, presses = st.session_state.setdefault("tour_session", secrets.token_hex(4)), st.session_state.get("tour_nonce", 0)
+    _tour(data={"nonce": f"{session}:{presses}" if presses else "", "steps": [{"key": k, "title": t, "text": x} for k, t, x in TOUR_STEPS]}, key="tour")
