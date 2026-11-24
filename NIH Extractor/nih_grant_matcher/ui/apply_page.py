@@ -118,6 +118,11 @@ def _propose(ws: Workspace, section: str, action: str, instruction: str = "") ->
     ws.propose(section, action, instruction)
     return "The model's proposal is below the section. Nothing has changed yet."
 
+def _extract(ws: Workspace) -> str:
+    ws.model = connect(ws.store)
+    found, dropped = ws.extract_requirements()
+    return f"The model read {len(found)} requirement{'' if len(found) == 1 else 's'} from the announcement. Confirm or reject each under Requirements." + (f" Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply, because the quote is not in the announcement or the item is not in the form asked for." if dropped else "")
+
 def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
     try:
         revision = ws.accept(call_id, edited)
@@ -203,7 +208,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     with announcement_tab:
         _announcement_tab(view, db_path, app_id)
     with requirements_tab:
-        _requirements_tab(view, db_path, app_id)
+        _requirements_tab(view, ws, db_path, app_id)
     with inputs_tab:
         _inputs_tab(view, db_path, app_id)
     with sections_tab:
@@ -303,7 +308,7 @@ def _announcement_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
             with st.expander(title):
                 st.text(text)
 
-def _requirements_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
+def _requirements_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: int) -> None:
     st.subheader("Standing rules")
     st.caption(f"NIH sets these for every {view.grant_type.code} application unless the announcement says otherwise.")
     for s in view.sections:
@@ -311,12 +316,15 @@ def _requirements_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     for source in view.grant_type.sources:
         st.caption(f"[{source.url}]({source.url}), read on {source.read_on}. {source.says}")
     st.subheader("What the announcement adds")
+    if ws.model is not None:
+        st.caption(f"A model can read Sections I, IV and V and list what they ask for, each with the sentence it comes from. The text goes to {escape_markdown(ws.model.host)}, and nothing counts until you confirm it.")
+    st.button("Ask the model to read the announcement", key="apply_extract_button", disabled=ws.model is None or view.announcement is None, help="Set up a model under Model first." if ws.model is None else "Fetch the announcement under Announcement first." if view.announcement is None else None, on_click=_on, args=(db_path, app_id, _extract))
     if view.no_section_iv:
         st.info(NO_SECTION_IV)
     elif not view.requirements:
         st.info("Fetch the full announcement to see what it adds." if view.announcement is None else "Grant Matcher found no added requirement in the announcement. Read Section IV under Announcement.")
     for r in view.requirements:
-        st.markdown(f"**{escape_markdown(r.text)}** {DECISIONS[r.confirmed].capitalize()}.")
+        st.markdown(f"**{escape_markdown(r.text)}** {DECISIONS[r.confirmed].capitalize()}." + (" A model read this." if r.origin == "model" else ""))
         st.text(r.quote)
         confirm, reject = st.columns(2)
         confirm.button("Confirm", key=f"apply_confirm_{r.id}_button", disabled=r.confirmed is True, on_click=_on, args=(db_path, app_id, lambda w, rid=r.id: w.decide(rid, True)))
@@ -380,6 +388,8 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         polish, revise = st.columns(2)
         polish.button("Polish", key="apply_polish_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "polish")))
         revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
+        if s.rule.model == "draft":
+            st.button("Draft from my inputs", key="apply_draft_button", disabled=bool(s.gaps), help=f"Add {', '.join(s.gaps)} under Your inputs first." if s.gaps else f"Sends your inputs for this section, the requirements you confirmed for it, and the research summary and expertise in your profile to {escape_markdown(ws.model.host)}.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "draft")))
     elif s.rule.model != "none":
         st.caption(f"Polish and Revise need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     # A proposal waits in the log, so a reload shows it again.
