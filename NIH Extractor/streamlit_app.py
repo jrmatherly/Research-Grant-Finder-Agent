@@ -114,28 +114,26 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists, except the table, whose selection is set on every run.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
+    if view == "Find":
+        tour_button()
     # A path is read as typed everywhere below, and without this a ~ would become a folder of that name.
     db_path = os.path.expanduser(st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings."))
     if view == "Find":
         st.header("Run Search")
-        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session", help="nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number.")
         keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword", persist_state="session")
-        limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25, key="find_rows", persist_state="session")
+        with st.expander("Source and rows", key="find_source_rows"):
+            source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session", help="nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number.")
+            limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25, key="find_rows", persist_state="session")
         run_clicked = st.button("Run Search", type="primary", width="stretch", key="find_run")
-
-        st.divider()
-        st.header("Display")
-        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session", help="Hides the rows that score lower. It changes what is shown, not what is saved.")
-        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session", help="The most saved rows read from the database, when the page opens and when you select Load Saved Results.")
-        load_clicked = st.button("Load Saved Results", width="stretch")
-
-        st.divider()
-        st.header("Export")
-        excel_path = st.text_input("Excel output", DEFAULT_EXCEL, key="find_excel", persist_state="session")
-        export_clicked = st.button("Export Current View", width="stretch")
-
-        st.divider()
-        tour_button()
+        with st.expander("Display", key="find_display"):
+            min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session", help="Hides the rows that score lower. It changes what is shown, not what is saved.")
+            max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session", help="The most saved rows read from the database, when the page opens and when you select Load Saved Results.")
+            load_clicked = st.button("Load Saved Results", width="stretch")
+        if min_score > 0:
+            st.caption(f"Showing scores of {min_score:g} and up.")
+        with st.expander("Export", key="find_export"):
+            excel_path = st.text_input("Excel output", DEFAULT_EXCEL, key="find_excel", persist_state="session")
+            export_clicked = st.button("Export Current View", width="stretch")
 
 
 if "scored_items" not in st.session_state:

@@ -8,18 +8,18 @@ To start the dashboard, see the [README](../README.md#getting-started) for a loc
 
 ## The layout
 
-- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**, and the **Database** path. In the Find view it holds three groups of controls: **Run Search**, **Display**, and **Export**.
+- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**, and the **Database** path. In the Find view it holds **Show me around**, the **Keyword** box and **Run Search**, and three sections that open when selected: **Source and rows**, **Display**, and **Export**. A section closes again when you leave the view, and its values are kept.
 - **The filter row** at the top of the page narrows the results that are already loaded.
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
 
-**Show me around**, at the bottom of the sidebar in the Find view, points at each part of the page in turn. The controls do not respond while it runs. Press Escape to leave it.
+**Show me around**, at the top of the sidebar under **View** in the Find view, points at each part of the page in turn. The controls do not respond while it runs. Press Escape to leave it.
 
 When you open the dashboard and saved results exist, the dashboard loads them. You do not have to search first.
 
 ## Run a search
 
-1. In the sidebar, under **Run Search**, choose a **Source**.
+1. In the sidebar, under **Source and rows**, choose a **Source**.
 2. To search by topic, enter a **Keyword**. To see everything that is open, leave it empty.
 3. Select **Run Search**.
 
@@ -36,7 +36,7 @@ If a yellow message says that a source reached the row limit, the source holds m
 
 A keyword changes which opportunities the search fetches. It does not change how an opportunity is scored.
 
-After a search, the page shows the results of that search only. Results from earlier searches stay in the database. To see everything that is saved, select **Load Saved Results**.
+After a search, the page shows the results of that search only. Results from earlier searches stay in the database. To see everything that is saved, select **Load Saved Results** under **Display** in the sidebar.
 
 ## Read the score and the level
 
@@ -54,14 +54,14 @@ The score ranks opportunities for a first look. It does not judge scientific fit
 
 ## Narrow the results
 
-Use the filter row at the top of the page and the **Display** group in the sidebar. A filter changes what you see. It does not search again and does not change the saved results.
+Use the filter row at the top of the page and the **Display** section in the sidebar, which holds the two sliders below. A filter changes what you see. It does not search again and does not change the saved results.
 
 | Control | What it does |
 | --- | --- |
 | **Classification** | Shows the levels that you keep selected. All three are selected at the start. |
 | **NIH institute** | Shows the institutes that you select, such as NCI or NLM. With none selected, every institute shows. |
 | **Filter within results** | Shows the rows whose title, matched terms, or summary contain the text. Capital letters do not matter. The filter does not search the opportunity number or the institute. |
-| **Minimum score shown** | Hides rows below the score. It also applies to the Excel export. |
+| **Minimum score shown** | Hides rows below the score. It also applies to the Excel export. While a minimum is set, the sidebar says, for example, `Showing scores of 35 and up.` under **Display**. |
 | **Saved rows to load** | The most saved rows that the dashboard reads, highest score first, when it opens and when you select **Load Saved Results**. The range is 50 to 1000. |
 
 The four metrics follow the filters.
@@ -124,7 +124,7 @@ The tab shows the score, the level, the institute, the date, the matched terms, 
 ## Export to Excel
 
 1. Narrow the results to the rows that you want.
-2. In the sidebar, under **Export**, select **Export Current View**.
+2. In the sidebar, open **Export** and select **Export Current View**.
 3. Select **Download Excel**, which appears at the bottom of the page.
 
 The export holds the visible rows. It also writes the file to the path in **Excel output**, which is `outputs/nih_grant_opportunities_ui.xlsx` at the start. With Docker Compose, that folder is `NIH Extractor/outputs` in the repository.
