@@ -891,3 +891,53 @@ def test_a_failed_save_after_the_replies_says_the_text_was_sent_and_saves_nothin
         ws.extract_requirements()
     monkeypatch.undo()
     assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["extract"] * 3 and not [r for r in ws.store.requirements(ws.application_id) if r.origin == "model"]
+
+
+REVIEWED = json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "appropriate"}, "points": []})
+
+def test_the_reviewer_does_not_see_the_inputs(tmp_path) -> None:
+    fake = FakeModel(json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "appropriate"}, "points": []}))
+    ws = start(tmp_path, model=fake, facts={"aim": "SECRET-AIM-TEXT", "hypothesis": "h"})
+    ws.write("specific-aims", "Aim 1 is to test the drug.", parent=None)
+    ws.review("specific-aims")
+    assert "SECRET-AIM-TEXT" not in fake.seen[-1].user and "Rigor and Feasibility" in fake.seen[-1].user
+
+def test_a_review_goes_stale_when_the_section_changes(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel(json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "appropriate"}, "points": []})))
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    ws.review("specific-aims")
+    assert ws.view().section("specific-aims").review is not None
+    ws.write("specific-aims", "Aim 1, revised.", parent=first.id)
+    assert ws.view().section("specific-aims").review is None
+
+def test_the_reviewer_sees_neither_the_profile_nor_a_writer_prompt_and_its_review_is_kept_with_its_call(tmp_path) -> None:
+    point = {"factor": "importance", "kind": "strength", "text": "A clear aim.", "quote": "Aim 1 is to test the drug in mice."}
+    fake = FakeModel("Aim 1 tests the drug in mice.", json.dumps({"scores": {"importance": 3, "rigor": 4, "expertise": "No team is named."}, "points": [point]}))
+    ws = start(tmp_path, model=fake, profile=Profile(research_summary="SECRET-PROFILE-TEXT"))
+    first = ws.write("specific-aims", "Aim 1 is to test the drug in mice.", parent=None)
+    ws.propose("specific-aims", "polish")
+    review = ws.review("specific-aims")
+    seen = fake.seen[-1].system + fake.seen[-1].user
+    assert "SECRET-PROFILE-TEXT" not in seen and "Change wording only" not in seen and "Aim 1 is to test the drug in mice." in fake.seen[-1].user
+    call = ws.store.calls(ws.application_id)[-1]
+    assert (call.purpose, call.parent_id) == ("review", first.id) and (review.revision_id, review.model, review.scores["expertise"], [p.text for p in review.points]) == (first.id, "fake-1", "No team is named.", ["A clear aim."])
+    assert ws.view().section("specific-aims").review == review == ws.store.reviews(ws.application_id)[-1]
+
+def test_a_section_with_no_text_is_not_sent_for_review(tmp_path) -> None:
+    fake = FakeModel(REVIEWED)
+    ws = start(tmp_path, model=fake)
+    with pytest.raises(NotReady, match="no text"):
+        ws.review("specific-aims")
+    ws.write("specific-aims", "  ", parent=None)
+    with pytest.raises(NotReady, match="no text"):
+        ws.review("specific-aims")
+    assert fake.seen == [] and ws.store.calls(ws.application_id) == []
+
+def test_a_review_that_cannot_be_read_stays_in_the_log_and_saves_nothing(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("I liked it."))
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    with pytest.raises(ModelError, match="the call is in the log"):
+        ws.review("specific-aims")
+    assert [(c.purpose, c.parent_id) for c in ws.store.calls(ws.application_id)] == [("review", first.id)] and ws.store.reviews(ws.application_id) == []
+    view = ws.view()
+    assert view.section("specific-aims").review is None and "to review drafts against NIH's review criteria" in view.disclosure

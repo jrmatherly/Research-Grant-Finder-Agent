@@ -125,6 +125,22 @@ class Signoff:
     signed_at: datetime
 
 @dataclass(frozen=True)
+class ReviewPoint:
+    factor: str
+    kind: Literal["strength", "weakness", "prose"]
+    text: str
+    quote: str
+
+@dataclass(frozen=True)
+class Review:
+    revision_id: int
+    scores: dict[str, int | str]
+    points: tuple[ReviewPoint, ...]
+    model: str
+    # The points of the reply that Grant Matcher dropped, so the applicant knows the model said more.
+    dropped: int = 0
+
+@dataclass(frozen=True)
 class Attribution:
     applicant_words: int
     written_words: int

@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
 from .announcement import Announcement, Requirement
-from .models import Application, Fact, ModelCall, Opportunity, Revision, ScoreBreakdown, ScoredOpportunity, Signoff
+from .models import Application, Fact, ModelCall, Opportunity, Review, ReviewPoint, Revision, ScoreBreakdown, ScoredOpportunity, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError, from_export, to_export
 from .rules import Limit
 
@@ -29,6 +29,9 @@ CREATE TRIGGER IF NOT EXISTS model_calls_fixed BEFORE UPDATE ON model_calls BEGI
 CREATE TRIGGER IF NOT EXISTS model_calls_stay BEFORE DELETE ON model_calls WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'model_calls is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signoffs_fixed BEFORE UPDATE ON signoffs BEGIN SELECT RAISE(ABORT, 'signoffs is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signoffs_stay BEFORE DELETE ON signoffs WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'signoffs is append-only'); END;
+CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL REFERENCES applications(id), revision_id INTEGER NOT NULL REFERENCES revisions(id), call_id INTEGER NOT NULL REFERENCES model_calls(id), review_json TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TRIGGER IF NOT EXISTS reviews_fixed BEFORE UPDATE ON reviews BEGIN SELECT RAISE(ABORT, 'reviews is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS reviews_stay BEFORE DELETE ON reviews WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = 'deleting' AND value = CAST(OLD.application_id AS TEXT)) BEGIN SELECT RAISE(ABORT, 'reviews is append-only'); END;
 """
 class ReadOnlyDatabase(sqlite3.DatabaseError):
     pass
@@ -127,7 +130,7 @@ class OpportunityStore:
         with self._write("applications"):
             self.conn.execute("INSERT INTO settings VALUES ('deleting', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(app_id),))
             self.conn.execute("DELETE FROM settings WHERE key IN (SELECT 'discarded:' || id FROM model_calls WHERE application_id = ?)", (app_id,))
-            for table in ("signoffs", "revisions", "requirements", "facts", "model_calls"):
+            for table in ("signoffs", "reviews", "revisions", "requirements", "facts", "model_calls"):
                 self.conn.execute(f"DELETE FROM {table} WHERE application_id = ?", (app_id,))
             self.conn.execute("DELETE FROM applications WHERE id = ?", (app_id,))
             self.conn.execute("DELETE FROM settings WHERE key = 'deleting'")
@@ -192,6 +195,13 @@ class OpportunityStore:
             self._own_revision(revision_id, app_id, section)
             self.conn.execute("INSERT INTO signoffs (application_id, section, revision_id, signer, attestation, findings_json, tool_version, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (app_id, section, revision_id, signer, attestation, json.dumps(list(findings)), tool_version, signed_at))
         return Signoff(section, revision_id, signer, attestation, tuple(findings), tool_version, datetime.fromisoformat(signed_at))
+    def reviews(self, app_id: int) -> list[Review]:
+        return [Review(row["revision_id"], (data := json.loads(row["review_json"]))["scores"], tuple(ReviewPoint(**p) for p in data["points"]), data["model"], data["dropped"]) for row in self._rows("reviews", "SELECT * FROM reviews WHERE application_id = ? ORDER BY id", (app_id,))]
+    def add_review(self, app_id: int, revision_id: int, call_id: int, review: Review) -> None:
+        with self._write("reviews"):
+            if self.conn.execute("SELECT 1 FROM model_calls WHERE id = ? AND application_id = ? AND purpose = 'review' AND parent_id = ?", (call_id, app_id, revision_id)).fetchone() is None:
+                raise ValueError(f"Call {call_id} is not a review of revision {revision_id} of application {app_id}.")
+            self.conn.execute("INSERT INTO reviews (application_id, revision_id, call_id, review_json, created_at) VALUES (?, ?, ?, ?, ?)", (app_id, revision_id, call_id, json.dumps({k: v for k, v in asdict(review).items() if k != "revision_id"}), _now()))
     def setting(self, key: str) -> str | None:
         rows = self._rows("settings", "SELECT value FROM settings WHERE key = ?", (key,))
         return rows[0]["value"] if rows else None

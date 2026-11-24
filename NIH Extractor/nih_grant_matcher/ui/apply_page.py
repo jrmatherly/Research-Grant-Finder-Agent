@@ -13,12 +13,13 @@ from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe, read_summary
+from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe, dropped_points, read_summary, score_line
 from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
 HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application."
 ACTION_NOUNS = {"revise": "revision"}
+POINT_LABELS = {"strength": "Strength", "weakness": "Weakness", "prose": "Writing"}
 PROVIDER_LABELS = {"claude": "Claude, from Anthropic", "openai": "OpenAI", "gemini": "Gemini, from Google", "compatible": "A server that speaks the OpenAI API, such as Ollama"}
 
 def _notice(kind: str, text: str) -> None:
@@ -117,6 +118,10 @@ def _propose(ws: Workspace, section: str, action: str, instruction: str = "") ->
     ws.model = connect(ws.store)
     ws.propose(section, action, instruction)
     return "The model's proposal is below the section. Nothing has changed yet."
+
+def _review(ws: Workspace, section: str) -> str:
+    ws.model = connect(ws.store)
+    return f"The model reviewed revision {ws.review(section).revision_id}. Its review is below the section."
 
 def _extract(ws: Workspace) -> str:
     ws.model = connect(ws.store)
@@ -394,6 +399,8 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
             st.button("Draft from my inputs", key="apply_draft_button", disabled=bool(s.gaps), help=f"Add {', '.join(s.gaps)} under Your inputs first." if s.gaps else f"Sends your inputs for this section, the requirements you confirmed for it, and the research summary and expertise in your profile to {escape_markdown(ws.model.host)}.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "draft")))
     elif s.rule.model != "none":
         st.caption(f"{'Draft, Polish and Revise' if s.rule.model == 'draft' else 'Polish and Revise'} need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
+    if ws.model is not None:
+        st.button("Review against NIH criteria", key="apply_review_button", disabled=not s.text.strip(), help=f"Sends only the saved revision and the review criteria you confirmed to {escape_markdown(ws.model.host)}. The model scores it as a reviewer would, and the section does not change.", on_click=_on, args=(db_path, app_id, lambda w, key=key: _review(w, key)))
     # A proposal waits in the log, so a reload shows it again.
     if (proposal := ws.pending(key)) is not None:
         st.markdown(f"**A model's {ACTION_NOUNS.get(proposal.action, proposal.action)}, proposal {proposal.call_id}**")
@@ -412,6 +419,18 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         accept.button("Accept", key="apply_accept_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _accept(w, call_id, None)))
         mine.button("Accept with my edits", key="apply_accept_edited_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id, edit_key=edit_key: _accept(w, call_id, st.session_state.get(edit_key))))
         discard.button("Discard", key="apply_discard_button", on_click=_on, args=(db_path, app_id, lambda w, call_id=proposal.call_id: _discard(w, call_id)))
+    if (review := s.review) is not None:
+        factors = view.grant_type.factors
+        st.markdown(f"**A model's review of revision {review.revision_id}**")
+        st.caption(f"{escape_markdown(review.model)} saw only this revision and the review criteria you confirmed. NIH's reviewers score the whole application.")
+        for factor in factors:
+            st.markdown(escape_markdown(score_line(factor, review.scores[factor.key])))
+        titles = {f.key: f.title for f in factors}
+        for point in review.points:
+            st.markdown(f"**{POINT_LABELS[point.kind]}**{f' ({titles[point.factor]})' if point.factor else ''}. {escape_markdown(point.text)}")
+            st.text(point.quote)
+        if review.dropped:
+            st.caption(dropped_points(review))
     words = s.attribution
     st.caption(f"You wrote {percent(words.applicant_words / (words.applicant_words + words.model_words or 1))} of the words. A model drafted or revised {percent(words.written_share)}, and a model polished {percent(words.polished_share)}.")
     for f in s.findings:
