@@ -1368,6 +1368,19 @@ def test_the_key_line_shows_an_ending_only_for_a_key_of_12_characters_or_more(tm
     assert not app.exception and (line.endswith(f", ends in {ending}.") if ending else "ends in" not in line and "4f2a" not in line)
 
 
+# A label's text is its accessible name as written, so an escaped host reads with backslashes, and a label renders an IPv6 host or a www. host as an emoji or a link whatever the escape.
+def test_the_consent_and_delete_labels_hold_no_host_or_number(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.text_input(key="apply_llm_base_url").set_value("http://a*b*.example/v1").run(timeout=30)
+    labels = [app.checkbox(key="apply_llm_consent_a*b*.example").label, app.text_input(key="apply_delete_1").label]
+    assert not app.exception and labels == ["I agree to send my text to this host", "Type the opportunity number to confirm"]
+    assert "Your text goes to a\\*b\\*\\.example." in [c.value for c in app.caption] and any("type PAR\\-1 below" in c.value for c in app.caption)
+
+
 def test_the_consent_box_is_drawn_ticked_on_the_run_that_records_consent(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher import keys
     for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):

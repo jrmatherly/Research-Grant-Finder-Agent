@@ -281,7 +281,8 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
         agreed, consent_key = bool(store.setting(f"consent:{host}")), f"apply_llm_consent_{host}"
         # Streamlit unticks a box on the run that turns disabled on, whatever value says, so the box takes its state from the record on every run.
         st.session_state[consent_key] = agreed
-        st.checkbox(f"I agree to send my text to {escape_markdown(host)}", disabled=agreed, key=consent_key, on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
+        # A label is its accessible name as written and renders an IPv6 or www. host as an emoji or a link whatever the escape, so the host stays in the caption above.
+        st.checkbox("I agree to send my text to this host", disabled=agreed, key=consent_key, on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
         st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for.", on_click=_act, args=(db_path, _test_connection))
 
 def _choose_provider(store: OpportunityStore) -> None:
@@ -494,8 +495,8 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     st.button("Export", key="apply_export_button", on_click=_on, args=(db_path, app_id, lambda w, export_key=export_key: f"Wrote the application to {escape_markdown(str(w.export(Path(st.session_state[export_key]))))}."))
     st.subheader("Delete this application")
     number = view.application.opportunity_number
-    st.caption("Delete removes this application with its text, its inputs, its sign-offs, its reviews and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
-    typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}", persist_state="session")
+    st.caption(f"Delete removes this application with its text, its inputs, its sign-offs, its reviews and every model call logged for it. It cannot be undone. Files you exported stay where you exported them. To delete it, type {escape_markdown(number)} below.")
+    typed = st.text_input("Type the opportunity number to confirm", key=f"apply_delete_{app_id}", persist_state="session")
     st.button("Delete this application", key="apply_delete_button", disabled=typed.strip() != number, on_click=_on, args=(db_path, app_id, lambda w, number=number: _delete(w, number)))
 
 def _missing(store: OpportunityStore) -> str:
