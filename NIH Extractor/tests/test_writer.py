@@ -450,7 +450,7 @@ def test_a_call_whose_error_cannot_be_read_is_logged_as_failed(tmp_path, post) -
         ws.propose("specific-aims", "polish")
     assert [c.purpose for c in ws.store.calls(ws.application_id)] == ["failed"] and "No AI model was used" not in ws.view().disclosure
 
-@pytest.mark.parametrize("odd", [{"model": {"id": "served-2"}}, {"model": ["served-2"]}, {"usage": {"prompt_tokens": "40", "completion_tokens": 7.0}}, {"usage": {"prompt_tokens": True, "completion_tokens": {"text": 7}}}, {"usage": {"prompt_tokens": [40], "completion_tokens": "7"}}])
+@pytest.mark.parametrize("odd", [{"model": {"id": "served-2"}}, {"model": ["served-2"]}, {"usage": {"prompt_tokens": "40", "completion_tokens": 7.0}}, {"usage": {"prompt_tokens": True, "completion_tokens": {"text": 7}}}, {"usage": {"prompt_tokens": [40], "completion_tokens": "7"}}, {"usage": {"prompt_tokens": 10**20, "completion_tokens": -3}}])
 def test_a_reply_with_a_model_or_a_count_of_another_type_is_offered_and_logged(odd, tmp_path, post) -> None:
     post.reply({"model": "served-1", "choices": [{"message": {"role": "assistant", "content": "We study cardiac cells."}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 9, "completion_tokens": 5}, **odd})
     ws = start(tmp_path, model=model("compatible", base_url="https://example.test/v1"))

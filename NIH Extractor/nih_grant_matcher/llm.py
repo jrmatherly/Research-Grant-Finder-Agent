@@ -124,6 +124,10 @@ def _fields(data: dict, key: str | None) -> str:
     # Names only: a value can hold the applicant's text or an echoed key.
     return _redact(f"Its top-level fields are {', '.join(sorted(data)) or 'none'}.", key)
 
+def _count(value: Any) -> int:
+    # SQLite holds a whole number below 2**63, and a count is never negative.
+    return value if type(value) is int and 0 <= value < 2**63 else 0
+
 def _bearer(key: str | None) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"} if key else {}
 
@@ -154,7 +158,7 @@ class HttpModel:
         try:
             done = read(self, data)
             # Any JSON passes the readers, and the log stores the model as text and each count as a whole number.
-            return replace(done, model=done.model if isinstance(done.model, str) and done.model else self.name, input_tokens=done.input_tokens if type(done.input_tokens) is int else 0, output_tokens=done.output_tokens if type(done.output_tokens) is int else 0)
+            return replace(done, model=done.model if isinstance(done.model, str) and done.model else self.name, input_tokens=_count(done.input_tokens), output_tokens=_count(done.output_tokens))
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
             unread = repr(exc)
         raise ModelError(f"The reply from {self.host} was not in the form Grant Matcher reads: {unread}. {_fields(data, self._key)}")
