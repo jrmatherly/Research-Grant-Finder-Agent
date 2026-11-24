@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 from . import __version__, prompts
 from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
-from .checks import check_section, identifiers
+from .checks import check_section, identifiers, not_in_crossref
 from .clients import ApiError, ReferenceClient
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Review, Revision, Signoff
@@ -86,7 +86,7 @@ def lookup_line(reference: Fact) -> str:
         return "It has no PMID or DOI, so Grant Matcher cannot check that it exists."
     if (found := reference.detail.get("lookup")) is None:
         return "Not checked yet."
-    return f"Checked on {found['on']}. " + (f"{found['service']} holds {found['id']} as: {found['title']}" if found["title"] else f"{found['service']} has no record of {found['id']}.")
+    return f"Checked on {found['on']}. " + (f"{found['service']} holds {found['id']} as: {found['title']}" if found["title"] else not_in_crossref(found["id"]) if found["service"] == "Crossref" else f"{found['service']} has no record of {found['id']}.")
 
 def dropped_points(review: Review) -> str:
     return f"Grant Matcher dropped {review.dropped} point{'' if review.dropped == 1 else 's'} of the reply. {REVIEW_DROPPED}"
@@ -262,19 +262,29 @@ class Workspace:
         self.store.retire_fact(fact_id)
 
     def verify_references(self, client: ReferenceClient | None = None) -> int:
-        client, checked = client or ReferenceClient(), 0
-        for f in [f for f in self.store.facts(self.application_id) if f.kind == "reference" and f.retired_at is None]:
+        client, checked, failed, streak = client or ReferenceClient(), 0, [], 0
+        references = [f for f in self.store.facts(self.application_id) if f.kind == "reference" and f.retired_at is None and any(identifiers(f))]
+        for n, f in enumerate(references):
             pmid, doi = identifiers(f)
-            if not (pmid or doi):
-                continue
             try:
                 title = client.lookup(pmid, doi)
             except ApiError as exc:
                 # Nothing is recorded for this reference, so "no record" in detail always means that the index said so.
-                raise ApiError(f"{exc} Grant Matcher checked {checked} reference{'' if checked == 1 else 's'} before this one and saved what it found. Nothing was recorded for the rest.") from exc
+                failed.append(f"{f'[@{f.label}]' if f.label else f.text[:40]}: {str(exc).rstrip('.')}.")
+                # Two in a row most likely mean the index is not answering, and each further try can wait half a minute.
+                if (streak := streak + 1) == 2:
+                    break
+                continue
+            streak, sent = 0, f"PMID {pmid} to PubMed" if pmid else f"DOI {doi} to Crossref"
             # The applicant typed the text, so the index's answer goes in detail beside it.
-            self.store.set_fact_detail(f.id, {**f.detail, "lookup": {"service": "PubMed" if pmid else "Crossref", "id": f"PMID {pmid}" if pmid else f"DOI {doi}", "on": datetime.now(timezone.utc).date().isoformat(), "title": title}})
+            try:
+                self.store.set_fact_detail(self.application_id, f.id, {**f.detail, "lookup": {"service": "PubMed" if pmid else "Crossref", "id": f"PMID {pmid}" if pmid else f"DOI {doi}", "on": date.today().isoformat(), "title": title}})
+            except sqlite3.Error as exc:
+                raise WorkspaceError(f"Grant Matcher sent {sent}, but could not save what it found ({exc}). It checked {checked} reference{'' if checked == 1 else 's'} before it." + (" What it found for them is saved." if checked else "")) from None
             checked += 1
+        if failed:
+            rest = len(references) - n - 1
+            raise ApiError(f"Grant Matcher could not check {len(failed)} reference{'' if len(failed) == 1 else 's'}. {' '.join(failed)} It checked {checked} reference{'' if checked == 1 else 's'} and saved what it found." + (f" Two lookups in a row failed, so the index is most likely not answering, and Grant Matcher did not try the {rest} reference{'' if rest == 1 else 's'} after them." if streak == 2 and rest else "") + " Nothing was recorded for a reference it could not check. Try again later. For a reference that fails every time, correct its identifier or retire it.")
         return checked
 
     def write(self, section: str, text: str, parent: int | None) -> Revision:

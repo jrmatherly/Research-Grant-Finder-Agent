@@ -227,3 +227,12 @@ def test_a_review_is_append_only_and_names_a_review_call_of_the_revision_it_read
     for statement in ("UPDATE reviews SET review_json = '{}'", "DELETE FROM reviews"):
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             store.conn.execute(statement)
+
+def test_a_lookup_is_written_only_to_a_live_reference_of_its_own_application(store) -> None:
+    app, other = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t").id
+    live, retired, foreign = store.add_fact(app, "reference", "A."), store.add_fact(app, "reference", "B."), store.add_fact(other, "reference", "C.")
+    store.retire_fact(retired.id)
+    for fact in (live, retired, foreign):
+        store.set_fact_detail(app, fact.id, {"lookup": 1})
+    store.set_fact_detail(app, 999, {"lookup": 1})
+    assert [f.detail for f in store.facts(app)] == [{"lookup": 1}, {}] and store.facts(other)[0].detail == {}

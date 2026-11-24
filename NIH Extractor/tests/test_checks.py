@@ -1,6 +1,6 @@
 from time import perf_counter
 import pytest
-from nih_grant_matcher.checks import check_section, estimate
+from nih_grant_matcher.checks import check_section, estimate, identifiers
 from nih_grant_matcher.models import Fact
 from nih_grant_matcher.prose import scan
 from nih_grant_matcher.rules import GRANT_TYPES, Limit
@@ -188,3 +188,8 @@ def test_a_found_or_uncited_reference_raises_no_unverified_warning() -> None:
     found = Fact(1, "reference", "Smith J. Heart cells. 2021.", label="smith2021", detail={"pmid": "123", **_found("Heart cells.")})
     assert "unverified-reference" not in _codes("As shown [@smith2021].", facts=(found,))
     assert "unverified-reference" not in _codes("As shown before.", facts=(REFERENCE,))
+
+
+@pytest.mark.parametrize("reference", [Fact(1, "reference", "Mine A. 2021. PMID: 0033611339"), Fact(1, "reference", "Mine A. 2021.", detail={"pmid": "0033611339"})], ids=["text", "detail"])
+def test_a_pmid_loses_its_leading_zeros(reference) -> None:
+    assert identifiers(reference) == ("33611339", "")

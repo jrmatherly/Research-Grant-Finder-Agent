@@ -345,7 +345,7 @@ def test_apply_verify_prints_what_each_index_holds(tmp_path, monkeypatch, capsys
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "verify", "1"]) == 0
     out = capsys.readouterr().out
-    assert "[@known]" in out and "PubMed holds PMID 123 as: Heart cells." in out and "Crossref has no record of DOI 10.9999/none" in out and "[@bare]  It has no PMID or DOI" in out
+    assert "[@known]" in out and "PubMed holds PMID 123 as: Heart cells." in out and "Crossref holds no record for DOI 10.9999/none" in out and "[@bare]  It has no PMID or DOI" in out
 
 
 @pytest.mark.parametrize("text, said", [("A notice with no headings at all. " * 40, True), (FOUR_PAGES, False)])

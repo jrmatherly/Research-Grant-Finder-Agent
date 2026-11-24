@@ -188,6 +188,8 @@ class ReferenceClient:
     crossref_url: str = CROSSREF_WORKS_URL
     # NCBI allows three requests a second without a key, and the lookups share one pace across both services.
     pause_seconds: float = 0.4
+    # _read tries three times, so a dead network costs about half a minute per reference rather than a minute and a half.
+    timeout: int = 10
     def lookup(self, pmid: str = "", doi: str = "") -> str:
         if not (pmid or doi):
             raise ValueError("A lookup needs a PMID or a DOI.")
@@ -200,7 +202,7 @@ class ReferenceClient:
         return "" if title is None else " ".join("".join(c if c.isprintable() else " " for c in title).split())[:300] or UNTITLED
     def _pubmed(self, pmid: str) -> str | None:
         query = urllib.parse.urlencode({"db": "pubmed", "id": pmid, "retmode": "json", "tool": "nih-grant-matcher"})
-        parsed = _read_json(urllib.request.Request(f"{self.pubmed_url}?{query}", headers={"User-Agent": "nih-grant-matcher/0.1"}), 30)
+        parsed = _read_json(urllib.request.Request(f"{self.pubmed_url}?{query}", headers={"User-Agent": "nih-grant-matcher/0.1"}), self.timeout)
         # NCBI answers an id it does not hold with 200 and an error, and a rate limit with an error too, so only the id's own errors mean no record.
         if "error" in parsed:
             if str(parsed["error"]).startswith("Invalid uid"):
@@ -216,7 +218,7 @@ class ReferenceClient:
         # The DOI goes into the URL path, so a ? or # in it cannot start a query or a fragment.
         request = urllib.request.Request(f"{self.crossref_url}/{urllib.parse.quote(doi, safe='/')}", headers={"User-Agent": "nih-grant-matcher/0.1"})
         try:
-            parsed = _read_json(request, 30)
+            parsed = _read_json(request, self.timeout)
         except ApiError as exc:
             # Crossref answers a DOI it does not hold with a 404, which _read keeps as the cause.
             if isinstance(exc.__cause__, urllib.error.HTTPError) and exc.__cause__.code == 404:
