@@ -1110,3 +1110,98 @@ def test_accepting_with_edits_a_proposal_already_accepted_elsewhere_says_the_edi
     app.button(key="apply_accept_edited_button").click().run(timeout=30)
     assert not app.exception and any(escape_markdown(f"Proposal {call.id} was already accepted, so your edits were not saved.") in e.value for e in app.error)
     assert not any("Accepted the proposal" in x.value for x in app.success)
+
+
+def _page_notices(app):
+    # The container right under the Apply header holds the notices of the actions, above the tabs, where every tab shows them.
+    children = list(app.main.children.values())
+    at = next(i for i, c in enumerate(children) if type(c).__name__ == "Header" and c.value == "Apply")
+    return [e.value for kind in ("success", "warning", "error") for e in children[at + 1].get(kind)]
+
+
+def test_a_refused_restore_says_so_above_the_tabs(tmp_path, monkeypatch) -> None:
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    for text in ("Aim 1.", "Aim 2."):
+        app.text_area(key="apply_text_1_specific-aims").set_value(text)
+        app.button(key="apply_save_button").click().run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", 2, "applicant", "write", "Tab two.")
+    finally:
+        store.close()
+    app.button(key="apply_restore_1_button").click().run(timeout=30)
+    assert not app.exception and _page_notices(app) == ["This section changed in another tab, so nothing was restored. The page now shows the current text."]
+
+
+def test_the_sections_tab_says_what_the_model_set_up_still_needs(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    for name in ("OPENAI_API_KEY", "OPENAI_API_KEY_FILE", "GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    needs = lambda: [c.value for c in app.caption if c.value.startswith("Polish and Revise need")]
+    assert not app.exception and needs() == ["Polish and Revise need a model. No provider is chosen. Set it up under Model at the top of this page."]
+    app.selectbox(key="apply_llm_provider").set_value("openai").run(timeout=30)
+    assert needs() == ["Polish and Revise need a model. No API key was found for the provider. Set it up under Model at the top of this page."]
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert needs() == ["Polish and Revise need a model. No model is chosen. Set it up under Model at the top of this page."]
+    assert not any(b.key == "apply_polish_button" for b in app.button)
+
+
+@pytest.mark.parametrize("key, ending", [("sk-4f2a", None), ("abcdefgh4f2a", "...4f2a"), ("sk-local-x4f2a", "...4f2a")])
+def test_the_key_line_shows_an_ending_only_for_a_key_of_12_characters_or_more(tmp_path, monkeypatch, key, ending) -> None:
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.text_input(key="apply_llm_key").input(key)
+    app.button(key="apply_llm_save_key_button").click().run(timeout=30)
+    line = next(c.value for c in app.caption if c.value.startswith("Saved"))
+    assert not app.exception and (line.endswith(f", ends in {ending}.") if ending else "ends in" not in line and "4f2a" not in line)
+
+
+def test_the_consent_box_is_drawn_ticked_on_the_run_that_records_consent(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.checkbox(key="apply_llm_consent_localhost").check().run(timeout=30)
+    box = app.checkbox(key="apply_llm_consent_localhost")
+    assert not app.exception and box.value and box.disabled
+    app.run(timeout=30)
+    assert app.checkbox(key="apply_llm_consent_localhost").value
+    store = OpportunityStore(path)
+    try:
+        assert store.setting("consent:localhost")
+    finally:
+        store.close()
+
+
+def test_the_model_expander_stays_open_until_the_set_up_is_complete(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    opened = lambda: next(e for e in app.expander if e.label == "Model").proto.expanded
+    assert opened()
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert not app.exception and opened()
+    store = OpportunityStore(path)
+    try:
+        store.set_setting("llm.model", "llama9")
+    finally:
+        store.close()
+    app.run(timeout=30)
+    assert opened()
+    app.checkbox(key="apply_llm_consent_localhost").check().run(timeout=30)
+    assert not app.exception and not opened()

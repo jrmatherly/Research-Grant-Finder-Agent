@@ -507,3 +507,14 @@ def test_a_profile_saved_over_a_limit_shows_and_exports_and_its_file_does_not_im
     assert json.loads(out.read_text(encoding="utf-8"))["profile"]["resources"] == "r" * 7200
     assert cli.main(["--db", str(tmp_path / "new.sqlite3"), "profile", "import", str(out)]) == 1
     assert "resources: at most 6,000 characters" in capsys.readouterr().err
+
+
+def test_polish_with_no_model_ready_names_the_models_command(tmp_path, capsys) -> None:
+    db, text = _apply_db(tmp_path), tmp_path / "aims.txt"
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    text.write_text("We study heart cells.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(text)])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "polish", "1", "specific-aims"]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("No provider is chosen.") and "models --provider" in err and "under Model" not in err

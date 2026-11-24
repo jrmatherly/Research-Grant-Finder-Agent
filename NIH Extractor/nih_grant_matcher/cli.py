@@ -7,7 +7,7 @@ from .agents import DigestAgent, NihContextAgent
 from .clients import ApiError, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
-from .llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models
+from .llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models, missing
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
 from .rules import FACT_KINDS
@@ -312,6 +312,8 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(f"Wrote the application to {ws.export(Path(args.out))}.")
     elif args.action in ("polish", "revise"):
         ws.model = connect(store)
+        if ws.model is None:
+            raise NotReady(f"{missing(store)} Set up the model with the models command, starting with models --provider.")
         proposal = ws.propose(args.section, args.action, getattr(args, "instruction", ""))
         print(f"Proposal {proposal.call_id} for {args.section}. Nothing has changed yet.\n\n{proposal.text}\n")
         for finding in proposal.findings:

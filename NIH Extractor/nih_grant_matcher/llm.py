@@ -207,6 +207,16 @@ def chosen(store: OpportunityStore) -> tuple[Provider, str, str] | None:
     base_url = (store.setting("llm.base_url") if provider.name == "compatible" else None) or provider.base_url
     return provider, store.setting("llm.model") or provider.default_model, base_url
 
+def missing(store: OpportunityStore) -> str | None:
+    # What the set-up lacks while connect returns no model. The dashboard and the CLI each add where to set it.
+    picked = chosen(store)
+    if picked is None:
+        return "No provider is chosen."
+    provider, name, _ = picked
+    if provider.needs_key and not keys.get(provider, store.db_path.parent):
+        return "No API key was found for the provider."
+    return None if name else "No model is chosen."
+
 def connect(store: OpportunityStore) -> Model | None:
     picked = chosen(store)
     if picked is None:

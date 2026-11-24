@@ -101,9 +101,8 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
 | `apply export 1 --out outputs/application-1` | Writes the section files, the requirements, and the provenance log to the folder. Give a path under `outputs/`, so that the files land in the mounted folder. A relative path outside the mounted folders fails with "Permission denied". An absolute path such as `/tmp/export` is written inside the container and is lost with it. |
 | `apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
-
 | `models --provider claude` | Chooses the provider of the model that helps you write, prints the host that receives your text and where the key was found, and lists the provider's models. Add `--model NAME` to choose one of them. For a self-hosted server, use `--provider compatible --base-url http://host:port/v1`. |
-| `models --consent` | Agrees to send your text to the chosen provider's host. Nothing is sent to a host before you agree. |
+| `models --consent` | Agrees to send your text to the chosen provider's host. None of your text is sent to a host before you agree. Listing the models contacts the provider, with your key when there is one. |
 
 Add `--help` to a command to see its options. Do not run `rarity-table` in the container. It rewrites a file inside the image, and the container's user cannot write there.
 

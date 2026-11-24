@@ -8,7 +8,7 @@ import streamlit as st
 from .. import keys
 from ..announcement import SECTION_TITLES
 from ..clients import ApiError
-from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models
+from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models, missing
 from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
@@ -55,8 +55,11 @@ def _on(db_path: str, app_id: int, action: Callable[[Workspace], str | None], st
         try:
             return action(Workspace(store, app_id))
         except StaleEdit as exc:
-            # The Sections tab shows both texts for this section, which says more than the message.
-            st.session_state["apply_stale"] = (app_id, exc.head.section, stale)
+            # Restore is pressed on the Log and export tab, so its refusal goes above the tabs. For a save or a sign-off the Sections tab shows both texts, which says more.
+            if stale == "restore":
+                _notice("warning", "This section changed in another tab, so nothing was restored. The page now shows the current text.")
+            else:
+                st.session_state["apply_stale"] = (app_id, exc.head.section, stale)
             return None
     _act(db_path, run)
 
@@ -210,7 +213,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
 
 def _model_settings(store: OpportunityStore, db_path: str) -> None:
     picked = chosen(store)
-    with st.expander("Model", expanded=picked is None):
+    with st.expander("Model", expanded=not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}"))):
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
         if "apply_llm_provider" not in st.session_state:
             st.session_state["apply_llm_provider"] = picked[0].name if picked else None
@@ -230,7 +233,8 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
             st.button("Try again", key="apply_llm_retry_button", on_click=keys.forget)
             return
         where = keys.where(provider, store.db_path.parent)
-        st.caption(f"{escape_markdown(where)}, ends in ...{escape_markdown(key[-4:])}." if key and where.startswith("Saved") else f"{escape_markdown(where)}." if key else "No key saved." + ("" if provider.needs_key else " This provider does not need one."))
+        # The last four characters of a short key are most of it.
+        st.caption(f"{escape_markdown(where)}, ends in ...{escape_markdown(key[-4:])}." if key and len(key) >= 12 and where.startswith("Saved") else f"{escape_markdown(where)}." if key else "No key saved." + ("" if provider.needs_key else " This provider does not need one."))
         if keys.PLATFORM == "win32":
             st.caption("On Windows the key file is protected by your user account only.")
         with st.form("apply_llm_key_form"):
@@ -247,8 +251,10 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
         st.caption(f"Your text goes to {escape_markdown(host)}.")
         for caution in cautions(provider, base_url):
             st.warning(escape_markdown(caution))
-        agreed = bool(store.setting(f"consent:{host}"))
-        st.checkbox(f"I agree to send my text to {escape_markdown(host)}", value=agreed, disabled=agreed, key=f"apply_llm_consent_{host}", on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
+        agreed, consent_key = bool(store.setting(f"consent:{host}")), f"apply_llm_consent_{host}"
+        # Streamlit unticks a box on the run that turns disabled on, whatever value says, so the box takes its state from the record on every run.
+        st.session_state[consent_key] = agreed
+        st.checkbox(f"I agree to send my text to {escape_markdown(host)}", disabled=agreed, key=consent_key, on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
         st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for.", on_click=_act, args=(db_path, _test_connection))
 
 def _choose_provider(store: OpportunityStore) -> None:
@@ -351,7 +357,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
     if s.gaps:
         st.info(f"This section still needs {', '.join(s.gaps)}. Add them under Your inputs.")
     if (stale := st.session_state.get("apply_stale")) and stale[:2] == (app_id, key):
-        st.warning({"sign": "This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off.", "restore": "This section changed in another tab, so nothing was restored. The page now shows the current text."}.get(stale[2], "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision."))
+        st.warning({"sign": "This section changed since this page loaded, so nothing was signed. The newest revision and your text are below. Read the newest revision before you sign off."}.get(stale[2], "This section changed after you opened it, so your text was not saved. The newest revision and your text are below. Copy what you need, then load the newest revision."))
         newest, yours = st.columns(2)
         newest.caption(f"Revision {s.revision_id}")
         newest.text(s.text)
@@ -374,6 +380,8 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         polish, revise = st.columns(2)
         polish.button("Polish", key="apply_polish_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key: _propose(w, key, "polish")))
         revise.button("Revise", key="apply_revise_button", disabled=s.revision_id is None, on_click=_on, args=(db_path, app_id, lambda w, key=key, instruction_key=instruction_key: _propose(w, key, "revise", st.session_state.get(instruction_key, ""))))
+    elif s.rule.model != "none":
+        st.caption(f"Polish and Revise need a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     # A proposal waits in the log, so a reload shows it again.
     if (proposal := ws.pending(key)) is not None:
         st.markdown(f"**A model's {ACTION_NOUNS.get(proposal.action, proposal.action)}, proposal {proposal.call_id}**")
@@ -430,6 +438,12 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     st.caption("Delete removes this application with its text, its inputs, its sign-offs and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
     typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}")
     st.button("Delete this application", key="apply_delete_button", disabled=typed.strip() != number, on_click=_on, args=(db_path, app_id, lambda w, number=number: _delete(w, number)))
+
+def _missing(store: OpportunityStore) -> str:
+    try:
+        return missing(store) or ""
+    except (keys.UnreadableKey, OSError):
+        return "The key cannot be read."
 
 def _load_newest(text_key: str, base_key: str, text: str, revision_id: int | None) -> None:
     st.session_state[text_key], st.session_state[base_key] = text, revision_id
