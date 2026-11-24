@@ -60,7 +60,7 @@ The app does not read the database in your clone. To keep earlier results, copy 
 
 ## Where the app keeps a model's key
 
-A key you save in the Apply view's **Model** section goes to your login Keychain, as a password item whose service is `Grant Matcher` and whose account is the provider's name: `claude`, `openai`, `gemini` or `compatible`. Grant Matcher writes and reads it with `/usr/bin/security`, so an update of the app does not lock you out of it.
+A key you save in the **Model** section, under Settings or in the Apply view, goes to your login Keychain, as a password item whose service is `Grant Matcher` and whose account is the provider's name: `claude`, `openai`, `gemini` or `compatible`. Grant Matcher writes and reads it with `/usr/bin/security`, so an update of the app does not lock you out of it.
 
 The key is encrypted at rest and locked while the login keychain is locked, and it does not travel with a copy or a backup of the data folder. Any program that runs as you can still read it with `security`. `security find-generic-password -s "Grant Matcher" -a claude` shows the item without the key. **Remove the saved key** in the dashboard deletes it. A locked keychain, or a declined or cancelled Keychain prompt, gives a red message and is never taken for a missing key. Grant Matcher asks the Keychain once and keeps the answer, so unlock the keychain, then select **Try again** under the message.
 

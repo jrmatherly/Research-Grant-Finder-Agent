@@ -17,6 +17,7 @@ from nih_grant_matcher.ui.apply_page import apply_page, show_notices, start_appl
 from nih_grant_matcher.ui.find_page import picked_option
 from nih_grant_matcher.ui.markdown import escape_markdown
 from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
+from nih_grant_matcher.ui.settings_page import settings_page
 from nih_grant_matcher.workflow import load_saved, run_and_save
 
 
@@ -110,7 +111,7 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget persists.
 with st.sidebar:
-    view = st.sidebar.radio("View", ["Find", "Apply", "Profile"], key="view")
+    view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
     db_path = st.text_input("Database", value=DEFAULT_DB)
     if view == "Find":
         st.header("Run Search")
@@ -152,6 +153,9 @@ if view == "Profile":
     st.stop()
 if view == "Apply":
     apply_page(db_path)
+    st.stop()
+if view == "Settings":
+    settings_page(db_path)
     st.stop()
 if db_error:
     st.warning(f"Could not open the database, so ranking uses the built-in profile. {db_error}")

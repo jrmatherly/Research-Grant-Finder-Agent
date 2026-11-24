@@ -1649,3 +1649,48 @@ def test_each_apply_value_shown_again_is_sent_to_the_browser(tmp_path, monkeypat
              "apply_instruction": app.text_input(key="apply_instruction_1_specific-aims"), "apply_disclosure_1": app.toggle(key="apply_disclosure_1")}
     assert {key: (w.proto.set_value, w.value) for key, w in shown.items()} == {"apply_llm_provider": (True, "compatible"), "apply_llm_base_url": (True, "http://localhost:11434/v1"),
                                                                                  "apply_signer": (True, "Ada Lovelace"), "apply_instruction": (True, "Make the second aim shorter."), "apply_disclosure_1": (True, True)}
+
+
+def test_settings_shows_the_model_panel_before_any_database_exists(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    assert not app.exception
+    assert app.selectbox(key="apply_llm_provider").value is None
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    assert not app.exception
+    assert "Run a search or load saved results to populate the dashboard." in " ".join(i.value for i in app.info)
+
+
+def test_a_provider_chosen_in_settings_is_the_one_apply_shows(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert not app.exception
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        assert store.setting("llm.provider") == "compatible"
+    finally:
+        store.close()
+    app.sidebar.radio[0].set_value("Apply").run(timeout=30)
+    assert app.selectbox(key="apply_llm_provider").value == "compatible"
+    assert app.text_input(key="apply_llm_base_url").value == "http://localhost:11434/v1"
+
+
+def test_settings_says_so_when_the_database_folder_cannot_be_made(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "notes.txt").write_text("x")
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.text_input[0].set_value("notes.txt/sub/grants.sqlite3")
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    assert not app.exception
+    assert "Not a directory" in " ".join(e.value for e in app.error)
+
+
+def test_the_empty_apply_view_points_to_settings(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Apply").run(timeout=30)
+    assert "A model is optional, and you set one up under Settings." in " ".join(i.value for i in app.info)

@@ -18,7 +18,7 @@ ANTHROPIC_VERSION = "2026-10-21"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 Kind = Literal["auth", "rate", "quota", "overload", "refused", "other"]
-WORKSPACE_HINT = "A Claude key that is not scoped to one workspace needs the ID of the workspace to use, which the Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists. Set it as the Workspace ID in the Model section of the Apply view, or with models --workspace."
+WORKSPACE_HINT = "A Claude key that is not scoped to one workspace needs the ID of the workspace to use, which the Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists. Set it as the Workspace ID in the Model section, under Settings or in the Apply view, or with models --workspace."
 
 @dataclass(frozen=True)
 class Provider:

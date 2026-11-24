@@ -17,7 +17,7 @@ from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL,
 from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
-HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application."
+HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application. A model is optional, and you set one up under Settings."
 ACTION_NOUNS = {"revise": "revision"}
 POINT_LABELS = {"strength": "Strength", "weakness": "Weakness", "prose": "Writing"}
 PROVIDER_LABELS = {"claude": "Claude, from Anthropic", "openai": "OpenAI", "gemini": "Gemini, from Google", "compatible": "A server that speaks the OpenAI API, such as Ollama"}
@@ -209,11 +209,11 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     app_id = st.selectbox("Application", ids, format_func=labels.__getitem__, key="application_id", persist_state="session")
     path = str(store.db_path)
     st.caption(f"Your text, your inputs and every model call for this application are stored in {f'`{path}`' if '`' not in path else escape_markdown(path)}. Anyone who can read that file can read them.")
-    _model_settings(store, db_path)
+    model_settings(store, db_path)
     try:
         model = connect(store)
     except (keys.UnreadableKey, OSError):
-        # The Model expander above already shows why the key cannot be read.
+        # The Model section above already shows why the key cannot be read.
         model = None
     ws = Workspace(store, app_id, model)
     view = ws.view()
@@ -233,9 +233,9 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     with log_tab:
         _log_tab(view, db_path, app_id)
 
-def _model_settings(store: OpportunityStore, db_path: str) -> None:
+def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None = None) -> None:
     picked = chosen(store)
-    with st.expander("Model", expanded=not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}"))):
+    with st.expander("Model", expanded=expanded if expanded is not None else not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}"))):
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
         if "apply_llm_provider" not in st.session_state:
             st.session_state["apply_llm_provider"] = picked[0].name if picked else None
