@@ -7,7 +7,7 @@ from .agents import DigestAgent, NihContextAgent
 from .clients import ApiError, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
-from .llm import PROVIDERS, cautions, checked_base_url, chosen, host_of, list_models
+from .llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
 from .rules import FACT_KINDS
@@ -75,6 +75,21 @@ def build_parser() -> argparse.ArgumentParser:
     export = apply.add_parser("export", help="Write the sections, the requirements and the provenance log to a folder.")
     export.add_argument("id", type=int)
     export.add_argument("--out", required=True)
+    polish = apply.add_parser("polish", help="Ask the model you chose to polish the newest revision of a section. Nothing changes until you accept.")
+    revise = apply.add_parser("revise", help="Ask the model you chose to revise the newest revision of a section. Nothing changes until you accept.")
+    for asked in (polish, revise):
+        asked.add_argument("id", type=int)
+        asked.add_argument("section")
+    revise.add_argument("--instruction", required=True, help="What to change.")
+    for name, text in (("accept", "Make a model's proposal the newest revision of its section."), ("discard", "Set a model's proposal aside. It stays in the log.")):
+        proposal = apply.add_parser(name, help=text)
+        proposal.add_argument("id", type=int)
+        proposal.add_argument("call", type=int, help="The number of the proposal, which polish and revise print.")
+    disclosure = apply.add_parser("disclosure", help="Turn the AI-use statement in the export on or off, and print it.")
+    disclosure.add_argument("id", type=int)
+    toggle = disclosure.add_mutually_exclusive_group(required=True)
+    toggle.add_argument("--on", action="store_true")
+    toggle.add_argument("--off", action="store_true")
     delete = apply.add_parser("delete", help="Delete an application and everything logged for it.")
     delete.add_argument("id", type=int)
     delete.add_argument("--yes", action="store_true", help="Confirm the delete.")
@@ -295,6 +310,22 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(signed.attestation)
     elif args.action == "export":
         print(f"Wrote the application to {ws.export(Path(args.out))}.")
+    elif args.action in ("polish", "revise"):
+        ws.model = connect(store)
+        proposal = ws.propose(args.section, args.action, getattr(args, "instruction", ""))
+        print(f"Proposal {proposal.call_id} for {args.section}. Nothing has changed yet.\n\n{proposal.text}\n")
+        for finding in proposal.findings:
+            print(f"  {finding.severity}  {finding.code}  {finding.message}")
+        print(f"Accept it with apply accept {args.id} {proposal.call_id}, or discard it with apply discard {args.id} {proposal.call_id}.")
+    elif args.action == "accept":
+        revision = ws.accept(args.call)
+        print(f"Accepted proposal {args.call} as revision {revision.id} of {revision.section}.")
+    elif args.action == "discard":
+        ws.discard(args.call)
+        print(f"Discarded proposal {args.call}. It stays in the log.")
+    elif args.action == "disclosure":
+        ws.set_disclosure(args.on)
+        print(ws.view().disclosure if args.on else "The export leaves out the AI-use statement.")
     else:
         if not args.yes:
             print(f"Nothing was deleted. Add --yes to delete application {args.id} and everything logged for it.", file=sys.stderr)

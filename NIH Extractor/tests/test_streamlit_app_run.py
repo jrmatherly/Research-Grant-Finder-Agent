@@ -60,6 +60,7 @@ def test_the_profile_view_is_reachable_with_an_empty_database(tmp_path, monkeypa
     assert not app.exception
     assert any("built-in profile" in info.value for info in app.info)
     assert "Set up my profile" in [button.label for button in app.button]
+    assert any(caption.value.endswith("references. It holds no API key.") for caption in app.caption)
 
 
 def test_importing_a_profile_saves_it(tmp_path, monkeypatch) -> None:
@@ -731,7 +732,7 @@ def test_keeping_the_built_in_ranking_saves_a_name_and_changes_no_score(tmp_path
     _ranking(app).set_value("Keep the built-in ranking")
     app.text_input[0].set_value("Ada Lovelace")
     _press(app, "Next")
-    assert not app.exception and "5. Your background" in _subheaders(app)
+    assert not app.exception and "5. What the writer reuses" in _subheaders(app)
     _press(app, "Back")
     assert "1. You" in _subheaders(app)
     _press(app, "Save profile")
@@ -854,3 +855,39 @@ def test_test_connection_refuses_a_host_without_consent(tmp_path, monkeypatch, p
     finally:
         store.close()
     assert post.calls == 0
+
+
+def _openai_reply(text: str) -> dict:
+    return {"model": "llama9", "choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 9, "completion_tokens": 5}}
+
+
+def test_polish_shows_a_proposal_that_changes_nothing_until_accepted_and_the_statement_names_it(tmp_path, monkeypatch, post) -> None:
+    from nih_grant_matcher import keys
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    path = _r21_database(tmp_path, start=True)
+    store = OpportunityStore(path)
+    try:
+        for name, value in (("llm.provider", "compatible"), ("llm.model", "llama9"), ("consent:localhost", "2026-11-23T00:00:00")):
+            store.set_setting(name, value)
+        store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells.")
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    post.reply(_openai_reply("We study *cardiac* muscle cells."))
+    app.button(key="apply_polish_button").click().run(timeout=30)
+    assert not app.exception and post.calls == 1 and "We study heart cells." in post.body["messages"][1]["content"]
+    assert app.text_area(key="apply_text_1_specific-aims").value == "We study heart cells."
+    assert any("~~heart~~" in m.value and "\\*cardiac\\*" in m.value for m in app.markdown)
+    app.run(timeout=30)
+    assert app.button(key="apply_accept_button")
+    app.button(key="apply_accept_button").click().run(timeout=30)
+    assert not app.exception and app.text_area(key="apply_text_1_specific-aims").value == "We study *cardiac* muscle cells."
+    assert any("I used llama9 (compatible) to polish the Specific Aims." in m.value.replace("\\", "") for m in app.markdown)
+    app.toggle(key="apply_disclosure_1").set_value(False).run(timeout=30)
+    assert not app.exception and not any("I used llama9" in m.value for m in app.markdown)
+
+
+def test_polish_is_not_offered_without_a_model(tmp_path, monkeypatch) -> None:
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and not [b for b in app.button if b.key in ("apply_polish_button", "apply_revise_button")]

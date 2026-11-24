@@ -139,19 +139,19 @@ Ranking starts from a built-in profile for machine learning and data science. A 
 2. **Your research.** A summary, then three to six sentences, as a paragraph or one per line, that state the aims of recent or planned work. Ranking compares each opportunity with these sentences.
 3. **Your terms.** Terms proposed from the text of step 2, each with a weight from 1 to 30. Keep, remove, re-weight, or add terms. A term is saved in lower case. Words that say what a study does, such as "test", "whether" and "how", are not proposed. Below the table, choose up to three **NIH institutes**. A record issued by one of them gets 8 points, and its reasons say so. A record issued by NIH for several institutes gets no bonus.
 4. **Preview.** The saved opportunities scored with your draft beside the current profile. The table shows the ten largest rises and the ten largest falls, each with its reasons. Nothing is saved yet.
-5. **Your background.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and an optional PMID and DOI. A key holds only letters, digits, and hyphens.
+5. **What the writer reuses.** Your expertise, your resources, and your prior work, one reference per row with a key, a citation, and an optional PMID and DOI. A key holds only letters, digits, and hyphens.
 
 Select **Save profile** on any step to keep the draft, the step on screen included. A profile needs the example sentences of step 2 and the terms of step 3, and a red message names a step that is still missing. The Find view then scores the saved opportunities again with your profile.
 
 | Control | What it does |
 | --- | --- |
-| **Export profile** | Downloads the profile in use as a JSON file, the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text, and references. |
+| **Export profile** | Downloads the profile in use as a JSON file, the built-in one when none is saved. The file holds everything you entered, including your name, institution, research text, and references. It holds no API key. |
 | **Import a profile** | Paste the contents of an exported file. A line names the investigator and the number of terms, or a red message says what is wrong. Select **Import profile** to save it. |
 | **Reset to built-in** | Removes your profile, so ranking uses the built-in profile again. When a saved profile cannot be read, a red message says so, ranking uses the built-in profile, and **Export profile** is turned off. This button then deletes the saved profile, and the database file holds its only copy. |
 
 ## Write an application
 
-Grant Matcher holds an application for an NIH opportunity while you write it. It shows the full announcement, the limits and the parts that each section needs, and it checks the text you save. In this version no model writes or edits your text, so every word of a section is yours.
+Grant Matcher holds an application for an NIH opportunity while you write it. It shows the full announcement, the limits and the parts that each section needs, and it checks the text you save. A model you choose can polish or revise a section that you wrote. Its text enters the section only when you accept it, and the log records which words came from it.
 
 It writes applications for the activity codes R01, R03, R15, R16, R21, R34, RF1, and U01. It does not write a phased award such as an R21/R33, or a notice from FDA or NIOSH, which review by their own criteria.
 
@@ -159,9 +159,9 @@ It writes applications for the activity codes R01, R03, R15, R16, R21, R34, RF1,
 2. **Read the announcement.** Under **Announcement**, select **Fetch the full announcement**. Sections I, IV, and V of the announcement each get a panel that you open. Grant Matcher takes the text from Grants.gov, NIH's official source since fiscal 2026, and from the NIH Guide when Grants.gov only links to the announcement or does not answer. Fetch again to get a revised announcement. A copy saved from Grants.gov is not replaced by the NIH Guide's text, which can be older. A decision you made is kept while the new text still has its sentence and Grant Matcher reads the same requirement from it. The message names each decision that was dropped, in this application and in any other application for the same announcement. When Grants.gov does not answer and the NIH Guide's text is saved, the message says that the text may not be the official one. When the announcement cannot be fetched, a red message says so, and the standing rules of the grant type still apply. When the text has no Section IV, a line says that Grant Matcher read no requirement from it, and the standing rules apply.
 3. **Decide the requirements.** Under **Requirements**, the standing rules give each section's limit, with the NIH pages they come from. Below them, each requirement that Grant Matcher found in the announcement shows the text it comes from. Select **Confirm** or **Reject**. A page limit that you confirm replaces the standing one only for a section whose standing limit is in pages. For the Project Summary and the Project Narrative, a notice says that Grant Matcher does not apply it.
 4. **Enter your inputs.** Under **Your inputs**, add your aims, hypotheses, preliminary data, methods, and the rest, one at a time. Give a reference a key and cite it in a section as `[@key]`. The prior work of your profile is already there as references. A line names the inputs that each section still needs. **Retire** takes an input out of the checks and keeps it in the record.
-5. **Write each section.** Under **Sections**, choose a section, write in the box, and select **Save**. Each save that changes the text adds a revision. The checks run on the saved revision and list the errors first, then the warnings. A line gives the share of the words that you wrote.
+5. **Write each section.** Under **Sections**, choose a section, write in the box, and select **Save**. Each save that changes the text adds a revision. The checks run on the saved revision and list the errors first, then the warnings. A line gives the share of the words that you wrote. To have a model polish or revise the section, see [Polish and revise with a model](#polish-and-revise-with-a-model).
 6. **Sign off.** Keep the name from your profile or type yours, and select **Sign off**. A section with an error, or with no text, cannot be signed off. The sign-off records a statement that the section states your own ideas, with the revision and a hash of its text. A later save makes the section a draft again. So does an error that appears after the sign-off, such as a citation to a reference you retired. A yellow line then says why, and the sign-off stays in the log.
-7. **Export.** Under **Log and export**, select **Export**. Grant Matcher writes one Markdown file for each section, `requirements.md`, and `provenance-log.md` to the **Export folder**. The file of a section that is not signed off starts with `DRAFT-`. A green line gives the full path of the folder.
+7. **Export.** Under **Log and export**, select **Export**. Grant Matcher writes one Markdown file for each section, `requirements.md`, and `provenance-log.md` to the **Export folder**, and `ai-use-statement.md` while the AI-use statement is on. The file of a section that is not signed off starts with `DRAFT-`. A green line gives the full path of the folder.
 
 The checks look for a section over its limit, a missing Significance, Innovation, or Approach heading in the Research Strategy, a figure where the section takes none, a citation that names no reference you entered, a link, the first person in the Project Summary, and wording that marks text as written by a model. A page or line count is an estimate at NIH's densest allowed format, so the final PDF decides. The Project Narrative counts sentences, and a fourth sentence is an error. When an initial or a single letter, a closing quote, or a sentence that starts in lower case leaves the count in doubt, a warning gives both counts. Count the sentences by hand.
 
@@ -184,6 +184,11 @@ The same steps run on the command line, from `NIH Extractor/`. Confirm or reject
 | `uv run python -m nih_grant_matcher apply add 1 --kind reference --label smith2021 --text "Smith J. Heart cells. 2021."` | Adds an input. `--file PATH` reads the text from a UTF-8 file. |
 | `uv run python -m nih_grant_matcher apply write 1 project-narrative --file narrative.txt` | Saves the text of a UTF-8 file as the newest revision of the section. |
 | `uv run python -m nih_grant_matcher apply check 1` | Prints each section with its state and its findings. It exits with 1 while an error stands. |
+| `uv run python -m nih_grant_matcher apply polish 1 specific-aims` | Sends the newest revision of the section to the model you chose and prints its proposal, with the number of the proposal and its findings. The section does not change. |
+| `uv run python -m nih_grant_matcher apply revise 1 specific-aims --instruction "Make the second aim shorter."` | The same, for a revision that follows your instruction. |
+| `uv run python -m nih_grant_matcher apply accept 1 3` | Makes proposal 3 the newest revision of its section. A proposal made from an older revision is refused. Ask again. |
+| `uv run python -m nih_grant_matcher apply discard 1 3` | Sets proposal 3 aside. It stays in the log, and the AI-use statement counts it. |
+| `uv run python -m nih_grant_matcher apply disclosure 1 --on` | Puts the AI-use statement in the export and prints it. `--off` leaves it out. |
 | `uv run python -m nih_grant_matcher apply sign 1 project-narrative --signer "A. Applicant"` | Signs off the newest revision. |
 | `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, and the provenance log to the folder, and prints its full path. |
 | `uv run python -m nih_grant_matcher apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
@@ -195,6 +200,20 @@ The **Model** section at the top of the Apply view sets the model that will help
 Select **List the provider's models** and choose one. A line names the host that receives your text. Nothing is sent to that host until you select **I agree to send my text to** it, once. **Test connection** then sends one short request, which the provider may charge for. A free-tier Gemini key lets Google use what you send to improve its products, so use a paid key for unpublished work. An `http://` address on another computer gets a warning, because your text and your key travel to it unencrypted.
 
 On the command line, `uv run python -m nih_grant_matcher models --provider claude` chooses the provider, says where the key was found, and lists the models. Add `--model NAME` to choose one, `--base-url URL` for the compatible provider, and `--consent` to agree to send your text to the host.
+
+### Polish and revise with a model
+
+Once a model is chosen, the **Sections** tab shows **Polish** and **Revise** under the section box. Both send the saved revision, not text you have not saved, and nothing goes to the host until you agree to send it there. **Polish** asks the model to change the wording only. **Revise** follows what you type in **What to change**. Each asks the model to add no claim, number, name, or citation of its own, and to treat your text as material, not as instructions.
+
+The model's proposal appears below the section, beside the current text, as a word diff: struck words go and bold words come in. The checks run on it, so a number or a citation that the model made up shows before you take it. Choose one of three:
+
+- **Accept** makes the proposal the newest revision. Its changed words count as the model's.
+- **Accept with my edits** takes the proposal as you changed it in **Your edits to the proposal**. The words you changed count as yours.
+- **Discard** sets the proposal aside. It stays in the log.
+
+A proposal waits in the log, so it is still there after a reload. A proposal made from an older revision is not offered once the section has changed. Ask again. A reply that was cut off at the model's token limit, or that the model refused, is never offered. A red message says so, and the call is logged. The share line counts a model's polish apart from its drafts and revisions. When a model drafted or revised most of a section, the sign-off asks you to confirm that you rewrote what you needed to.
+
+Under **Log and export**, the **AI-use statement** says what the log shows, one sentence for each thing it holds: the inputs you entered, each model you used and what for, the sections you edited after you accepted model text, the share of each section's words that came from a model, the sections written without one, the text you sent and did not use, and the sections you signed off. No model writes the statement. **Include the statement in the export** turns it on or off. NIH names no field for it, so the export writes it to `ai-use-statement.md` for you to place.
 
 ## Use the command line
 

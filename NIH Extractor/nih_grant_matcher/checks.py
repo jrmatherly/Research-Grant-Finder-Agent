@@ -10,8 +10,9 @@ from .rules import Limit, PageFormat, SectionRule
 
 _PLACEHOLDER = re.compile(r"\[NEEDS INPUT:[^\]]*\]")
 _CITATION = re.compile(r"\[@([^\]\s]+)\]")
-# The author is the whole surname, so McDonald is not read as Donald.
-_CITATION_LIKE = re.compile(r"(?P<doi>10\.\d{4,9}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>[A-Z][A-Za-z'-]{0,40}[a-z]) et al\.?,? \(?(?P<year>\d{4}[a-z]?)\)?")
+# The author is the whole surname, so McDonald is not read as Donald. A surname may be accented, and starts with a capital and ends in a small letter.
+_SURNAME = r"[^\W\d_a-zß-öø-ÿ](?:[^\W\d_]|['-]){0,40}[a-zß-öø-ÿ]"
+_CITATION_LIKE = re.compile(rf"(?P<doi>10\.\d{{4,9}}/\S+)|(?i:PMID):?\s*(?P<pmid>\d+)|\b(?P<author>{_SURNAME})(?: et al\.?,? \(?| and {_SURNAME}(?: \(|, ))(?P<year>\d{{4}}[a-z]?)\)?|\((?P<lone>{_SURNAME}), (?P<lone_year>\d{{4}}[a-z]?)\)")
 _DOI, _PMID = re.compile(r"10\.\d{4,9}/\S+"), re.compile(r"PMID:?\s*(\d+)", re.I)
 _FIGURE = re.compile(r"!\[|<img|^[ \t]*(?:Figure|Table)[ \t]+\d", re.M)
 _URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+", re.I)
@@ -49,8 +50,9 @@ def _cites(m: re.Match[str], reference: Fact) -> bool:
         return _doi(m["doi"]) in set(map(_doi, _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")))
     if m["pmid"]:
         return m["pmid"] in {*re.findall(r"\d+", str(reference.detail.get("pmid", ""))), *_PMID.findall(reference.text)}
-    year = m["year"] if m["year"][-1].isalpha() else m["year"] + "[a-z]?"
-    return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(m["author"]), year))
+    author, year = (m["author"], m["year"]) if m["author"] else (m["lone"], m["lone_year"])
+    year = year if year[-1].isalpha() else year + "[a-z]?"
+    return all(re.search(rf"\b{k}\b", reference.text, re.I) for k in (re.escape(author), year))
 
 def check_section(text: str, rule: SectionRule, limit: Limit, page: PageFormat, facts: Sequence[Fact], grounding: str, words: Sequence[tuple[str, str]]) -> tuple[Finding, ...]:
     references = [f for f in facts if f.kind == "reference" and f.retired_at is None]

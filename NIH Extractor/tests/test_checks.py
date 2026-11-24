@@ -154,3 +154,12 @@ def test_a_citation_names_your_inputs() -> None:
 def test_a_figure_line_in_the_research_strategy_is_allowed() -> None:
     assert "figure-not-allowed" not in _codes("Significance\nHeart cells fail.\nFigure 1. Heart cells in failure.", "research-strategy")
     assert "figure-not-allowed" in _codes("Aim 1.\nFigure 1. Heart cells in failure.")
+
+def test_a_model_citation_in_the_other_author_year_forms_must_match_a_reference() -> None:
+    for made_up in ("As Smith and Jones (2020) held.", "This held (Smith, 2020).", "As Müller et al. (2021) held.", "This held (Łukasiewicz, 2021).", "As Peña and Smith (2021) held."):
+        assert _model_cited(made_up), made_up
+    for known in ("As Goldsmith and Jones (2021) held.", "This held (Goldsmith, 2021).", "Boston, 2021 held.", "As Smith and Jones held in 2021."):
+        assert not _model_cited(known), known
+    muller = Fact(9, "reference", "Müller K. Heart cells. 2021.", label="muller2021")
+    words = tuple((word, "polish") for word in "As Müller et al. (2021) held.".split())
+    assert not [f for f in check_section("As Müller et al. (2021) held.", RULE["specific-aims"], Limit(1, "pages"), R21.page, (muller,), "", words) if f.code == "unknown-citation"]
