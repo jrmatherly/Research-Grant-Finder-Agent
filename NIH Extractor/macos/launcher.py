@@ -9,6 +9,10 @@ UPDATER: list = []
 OS_CA_FILES = ("/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem")
 
 
+def holds_certificates(path: str) -> bool:
+    return os.path.isfile(path) and os.path.getsize(path) > 0
+
+
 def data_dir(home: Path) -> Path:
     return home / "Library" / "Application Support" / NAME
 
@@ -147,10 +151,14 @@ def main() -> int:
     if "--check-tls" in sys.argv:
         # build.sh runs this. Nothing else fails a build that trusts no certificate on a user's Mac, where every search and model call would then fail.
         cafile = ssl.get_default_verify_paths().openssl_cafile
-        if cafile in OS_CA_FILES:
-            return 0
-        print(f"{NAME} would read its CA certificates from {cafile}, and macOS keeps them in /etc/ssl/cert.pem. Build with a Python that reads that file, as uv's own does, and check that UV_PYTHON does not select another.", file=sys.stderr)
-        return 1
+        if cafile not in OS_CA_FILES:
+            print(f"{NAME} would read its CA certificates from {cafile}, and macOS keeps them in /etc/ssl/cert.pem. Build with a Python that reads that file, as uv's own does, and check that UV_PYTHON does not select another.", file=sys.stderr)
+            return 1
+        # The check rests on macOS shipping that file, so each build tries it on the Mac it runs on.
+        if not holds_certificates(cafile):
+            print(f"{NAME} reads its CA certificates from {cafile}, and this Mac has none there. The app would trust no server on a Mac like this one.", file=sys.stderr)
+            return 1
+        return 0
     # A windowed app has no console, so an error here would otherwise close the app with nothing shown.
     try:
         run_window()
