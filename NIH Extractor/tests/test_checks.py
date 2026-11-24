@@ -195,6 +195,11 @@ def test_a_pmid_loses_its_leading_zeros(reference) -> None:
     assert identifiers(reference) == ("33611339", "")
 
 
+@pytest.mark.parametrize("reference", [Fact(1, "reference", "Mine A. 2021. PMID: ３３６１１３３９"), Fact(1, "reference", "Mine A. 2021.", detail={"pmid": "３３６１１３３９"})], ids=["text", "detail"])
+def test_a_pmid_in_full_width_digits_is_sent_in_plain_digits(reference) -> None:
+    assert identifiers(reference) == ("33611339", "")
+
+
 @pytest.mark.parametrize("pmid, found", [("123", "123"), (" PMID: 0123 ", "123"), ("pmid 123", "123"), ("PMC7654321", ""), ("12345, 67890", ""), ("123a", "")], ids=["digits", "prefixed", "lower", "pmcid", "two", "trailing"])
 def test_a_pmid_field_counts_only_when_the_whole_field_is_one(pmid, found) -> None:
     reference = Fact(1, "reference", "Smith J. 2020. doi:10.1000/right", detail={"pmid": pmid})
@@ -204,6 +209,6 @@ def test_a_pmid_field_counts_only_when_the_whole_field_is_one(pmid, found) -> No
     assert any(f.code == "unknown-citation" for f in cited)
 
 
-@pytest.mark.parametrize("text, doi", [("doi={10.1000/xyz},", "10.1000/xyz"), ("<https://doi.org/10.1000/xyz>", "10.1000/xyz"), ('doi:10.1000/xyz".', "10.1000/xyz"), ("(doi:10.1000/abc(1)).", "10.1000/abc(1)"), ("doi:10.1002/(SICI)1097-4636(199706).", "10.1002/(SICI)1097-4636(199706)"), ("doi:10.1016/j.cell.2020.01.001.", "10.1016/j.cell.2020.01.001"), ("doi: 10.1000/xyz]; see", "10.1000/xyz")], ids=["braces", "angle", "quote", "closing-bracket", "ends-in-bracket", "dots", "square"])
+@pytest.mark.parametrize("text, doi", [("doi={10.1000/xyz},", "10.1000/xyz"), ("<https://doi.org/10.1000/xyz>", "10.1000/xyz"), ('doi:10.1000/xyz".', "10.1000/xyz"), ("(doi:10.1000/abc(1)).", "10.1000/abc(1)"), ("doi:10.1002/(SICI)1097-4636(199706).", "10.1002/(SICI)1097-4636(199706)"), ("doi:10.1016/j.cell.2020.01.001.", "10.1016/j.cell.2020.01.001"), ("doi: 10.1000/xyz]; see", "10.1000/xyz"), ("“10.1000/xyz”.", "10.1000/xyz"), ("‘10.1000/xyz’,", "10.1000/xyz")], ids=["braces", "angle", "quote", "closing-bracket", "ends-in-bracket", "dots", "square", "curly-double", "curly-single"])
 def test_a_doi_loses_what_closes_a_wrapper_or_ends_a_sentence(text, doi) -> None:
     assert identifiers(Fact(1, "reference", f"Smith J. 2020. {text}")) == ("", doi)

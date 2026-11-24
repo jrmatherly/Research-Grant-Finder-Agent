@@ -46,7 +46,7 @@ def _numbers(text: str) -> list[str]:
 
 def _trimmed(doi: str) -> str:
     # A DOI ends before what closes a wrapper or a sentence, and a ")" is its own only while it closes a "(" in it.
-    while doi and (doi[-1] in ".,;:\"'>}]" or doi[-1] == ")" and doi.count(")") > doi.count("(")):
+    while doi and (doi[-1] in ".,;:\"'”’>}]" or doi[-1] == ")" and doi.count(")") > doi.count("(")):
         doi = doi[:-1]
     return doi
 
@@ -70,8 +70,8 @@ def identifiers(reference: Fact) -> tuple[str, str]:
     # The profile's prior work keeps the PMID and DOI in detail, and a reference typed under Your inputs keeps them in its text.
     pmid = _field_pmid(reference) or _PMID.findall(reference.text)
     doi = _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")
-    # NCBI keys its record by the PMID without leading zeros, so a padded one would never be found.
-    return (pmid[0].lstrip("0") if pmid else "", _trimmed(doi[0]) if doi else "")
+    # NCBI keys its record by the PMID in plain digits without leading zeros, so a padded or full-width one would never be found.
+    return (str(int(pmid[0])).lstrip("0") if pmid else "", _trimmed(doi[0]) if doi else "")
 
 def not_in_crossref(doi_id: str) -> str:
     # Crossref answers 404 for a real work that another agency registered, so its silence does not mean the work does not exist.
