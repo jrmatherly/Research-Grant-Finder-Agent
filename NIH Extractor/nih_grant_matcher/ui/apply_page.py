@@ -8,7 +8,7 @@ import streamlit as st
 from .. import keys
 from ..announcement import SECTION_TITLES
 from ..clients import ApiError
-from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models, missing
+from ..llm import PROVIDERS, cautions, checked_base_url, checked_workspace, chosen, connect, host_of, list_models, missing, workspace
 from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
@@ -247,6 +247,10 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
             if "apply_llm_base_url" not in st.session_state:
                 st.session_state["apply_llm_base_url"] = base_url
             st.text_input("Base URL", key="apply_llm_base_url", persist_state="session", help="The address of the server's OpenAI API, such as http://localhost:11434/v1 for Ollama.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.base_url", checked_base_url(st.session_state["apply_llm_base_url"]))))
+        if provider.name == "claude":
+            if "apply_llm_workspace" not in st.session_state:
+                st.session_state["apply_llm_workspace"] = workspace(store)
+            st.text_input("Workspace ID", key="apply_llm_workspace", persist_state="session", placeholder="wrkspc_...", help="Only for a key that is not scoped to one workspace, such as a personal key made for every workspace you can use. The Workspaces page of the Claude Console, platform.claude.com/settings/workspaces, lists each ID. Leave it empty for a key made for one workspace.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.workspace", checked_workspace(st.session_state["apply_llm_workspace"]))))
         try:
             key = keys.get(provider, store.db_path.parent)
         except (keys.UnreadableKey, OSError) as exc:
@@ -281,9 +285,9 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
 
 def _choose_provider(store: OpportunityStore) -> None:
     store.set_setting("llm.provider", st.session_state["apply_llm_provider"])
-    # A new provider starts from its own default model. The Base URL box is redrawn from what is saved for the compatible provider.
+    # A new provider starts from its own default model. The Base URL and Workspace ID boxes are redrawn from what is saved.
     store.set_setting("llm.model", "")
-    for key in ("apply_llm_model", "apply_llm_base_url"):
+    for key in ("apply_llm_model", "apply_llm_base_url", "apply_llm_workspace"):
         st.session_state.pop(key, None)
 
 def _save_key(store: OpportunityStore) -> str:
@@ -296,7 +300,7 @@ def _remove_key(store: OpportunityStore) -> str:
 
 def _list_models(store: OpportunityStore) -> str:
     provider, _, base_url = chosen(store)
-    found = list_models(provider, base_url, keys.get(provider, store.db_path.parent))
+    found = list_models(provider, base_url, keys.get(provider, store.db_path.parent), workspace(store))
     st.session_state["apply_llm_models"] = {**st.session_state.get("apply_llm_models", {}), provider.name: found}
     return f"{escape_markdown(host_of(base_url))} lists {len(found)} model{'' if len(found) == 1 else 's'}."
 

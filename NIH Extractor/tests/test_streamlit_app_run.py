@@ -894,6 +894,26 @@ def test_the_model_expander_saves_a_key_asks_for_consent_and_tests_the_connectio
     assert b"sk-local-4f2a" not in path.read_bytes()
 
 
+def test_the_workspace_id_box_is_shown_for_claude_only_and_saves_only_an_id(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-1")
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert not any(box.key == "apply_llm_workspace" for box in app.text_input)
+    app.selectbox(key="apply_llm_provider").set_value("claude").run(timeout=30)
+    box = app.text_input(key="apply_llm_workspace")
+    assert box.label == "Workspace ID" and "platform.claude.com/settings/workspaces" in box.help
+    box.input("sk-ant-api03-secret").run(timeout=30)
+    # The notice escapes the underscore for Markdown.
+    assert any("starts with wrkspc" in error.value for error in app.error) and "secret" not in " ".join(error.value for error in app.error)
+    app.text_input(key="apply_llm_workspace").input("wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ").run(timeout=30)
+    store = OpportunityStore(path)
+    try:
+        assert not app.exception and store.setting("llm.workspace") == "wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ"
+    finally:
+        store.close()
+
+
 def test_removing_the_saved_key_leaves_no_saved_key(tmp_path, monkeypatch) -> None:
     import json
     from nih_grant_matcher import keys

@@ -69,8 +69,8 @@ def fixture(name: str) -> dict:
     data.pop("_source")
     return data
 
-def model(name: str, key: str | None = "k", base_url: str = "") -> HttpModel:
-    return HttpModel(PROVIDERS[name], PROVIDERS[name].default_model or "m", base_url or PROVIDERS[name].base_url, key)
+def model(name: str, key: str | None = "k", base_url: str = "", workspace: str = "") -> HttpModel:
+    return HttpModel(PROVIDERS[name], PROVIDERS[name].default_model or "m", base_url or PROVIDERS[name].base_url, key, workspace)
 
 def model_for(wire: str) -> HttpModel:
     return model(next(p.name for p in PROVIDERS.values() if p.wire == wire))

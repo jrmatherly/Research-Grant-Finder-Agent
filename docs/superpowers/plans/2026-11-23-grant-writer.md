@@ -1269,7 +1269,7 @@ Keys and the clients:
 - `/usr/bin/security -i` exits 2 for a failed `add-generic-password` line (run on 2026-11-23 with a dummy item), so `save` trusts its exit code.
 - The key line shows an ending only for a key of 12 characters or more.
 - `Test connection` and `Workspace._ask` both check `consent:<host>`. Consent is recorded by host name. Listing a provider's models contacts the provider before consent and sends none of the applicant's text.
-- Not sent: `anthropic-workspace-id`, which a Claude key that is not scoped to one workspace needs. Not checked against a live provider: any of the four back ends.
+- `anthropic-workspace-id`, which a Claude key that is not scoped to one workspace needs, was not sent in this stage. Stage 5 added it (see its "Changed in code of earlier stages"). Not checked against a live provider: any of the four back ends.
 
 The writer and the statement:
 
@@ -1867,6 +1867,7 @@ Changed in code of earlier stages:
 - The number of a model-read limit must not be part of an identifier or a range: "NOT-EY-24-006" does not give 24, and "pages 3-6" gives neither 3 nor 6.
 - The section's text box is kept when the Section selector moves away and back. Before, the box came back empty and Save recorded an empty revision. The same defect was on `main`.
 - The announcement text no longer loses opening brackets, glues a heading to the next word, or splits a word ("NOFO)", "GoalThe", "data ana lysis" in PAR-25-357). NIH's Guide search service serves its `doctext` that way, and Grant Matcher saved it as it came. When Grants.gov has no full announcement, `fetch_announcement` now reads the notice's own page in the Guide (`NihGuideClient.page`), saved with the origin `nih-guide-page`, and falls back to the search text only when that page is missing or fails. A notice from fiscal 2026 on has no page and gets its text from Grants.gov. A copy saved from the search text keeps the origin `nih-guide`, and the dashboard says under its source that the text drops brackets and spaces. `quoted_in` still compares letters and digits, so a decision made on such a copy carries over to the page's text.
+- A Claude key that is not scoped to one workspace now works. The setting `llm.workspace`, set in the Model expander's **Workspace ID** box (shown for Claude only) or with `models --workspace` (an empty value clears it), goes in `anthropic-workspace-id` on the Claude Messages request and the Claude model list, and on no other provider's request. `llm.checked_workspace` takes only `wrkspc_` and letters and digits, and its error does not repeat the value, which could be a key pasted into the wrong box. A 400 or 404 from api.anthropic.com whose message names the header or starts "Workspace `" gets a line that says where to set the ID. The error shapes come from Anthropic's authentication page and were not seen from a live provider.
 
 Not fixed, for the owner:
 

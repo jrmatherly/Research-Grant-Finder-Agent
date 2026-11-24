@@ -382,3 +382,21 @@ Agent ran the requests. The session lead read NOT-OD-25-143, the cited code and 
 - The same sentence differs between the two sources in spacing and punctuation. Of 9 quotes parsed from the Guide's text, `quoted_in` found 0 in the Grants.gov text, and a comparison on letters and digits found 9.
 - Defects this found in the Stage 2 code, all fixed in pull request 13: the first `Full-Announcement.html` was taken and not the newest; a Guide answer of 529 bytes was saved as the announcement; a refusal outlived the deletion of the application; a closed notice was looked up with no Grants.gov id; a Guide copy that replaced a Grants.gov copy dropped a decision and reported success; and a refusal said "gave no text" when the request had failed.
 - Decision 17 is the rule that came out of it.
+
+## Wire questions from Stage 3 (2026-11-23)
+
+Read for the two questions that Stage 3 left for the owner. No request was sent to a model provider. Each fact is labelled READ (on the page named) or UNVERIFIED (not on any page read, or only a live request would show it).
+
+### The Claude workspace header
+
+Read from the copy of Anthropic's documentation that Claude Code keeps in `~/.claude-code-docs/cache` (files dated 2026-11-18 to 2026-11-21), on 2026-11-23.
+
+- READ, `manage-claude/authentication`: three key types. A personal key and a service account key work "Either a single workspace or" more, chosen when the key is created. A legacy workspace key works in its own workspace only.
+- READ, same page: "If your API key isn't scoped to a workspace, you must specify the workspace ID in the `anthropic-workspace-id` header for each request." The Admin API takes a personal or service account key only when it is not scoped.
+- READ, same page: without the header such a key gets a 400 `invalid_request_error` whose message starts "This API key is not scoped to a workspace". A value that is not an ID gets a 400 "anthropic-workspace-id header must be a valid workspace ID." A workspace the key cannot use gets a 404 `not_found_error`, "Workspace `<id>` not found."
+- READ, `api/messages/create` and `api/models/list`: both list the header as optional. "A credential that belongs to a specific Workspace may omit it; if sent, it must match that Workspace." So the header is harmless with a scoped key when it names that key's workspace. The status for a mismatch is not on the pages (UNVERIFIED).
+- READ, `manage-claude/workspaces`: IDs "use the `wrkspc_` prefix", for example `wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ`. The Console lists them at `platform.claude.com/settings/workspaces`. That the rest of an ID is only letters and digits is UNVERIFIED beyond the examples, all of which are.
+- READ, `api/overview`: every response carries an `anthropic-workspace-id` header naming the workspace the key resolved to, absent on Admin API requests and on a request that fails before authentication. The code does not read it.
+- READ, unchanged and still true: `Authorization: Bearer` is the form for direct HTTP and `x-api-key` the "Legacy fallback for `Authorization`, still supported"; `anthropic-version: 2026-10-21`; `max_tokens` is required; the reply's text is in `content` blocks of type `text`; `stop_reason` lists `max_tokens`, `refusal` and `model_context_window_exceeded`, which the code reads as cut off, refused and cut off; `temperature`, `top_p` and `top_k` return 400 on `2026-10-21`. The raw form of `fallbacks` is now on `build-with-claude/refusals-and-fallback`: header `anthropic-beta: server-side-fallback-2026-07-01` and body `"fallbacks": "default"`, as the code sends.
+- UNVERIFIED: that a live Claude request with an unscoped key and the header succeeds, and that the live error bodies match the page.
+

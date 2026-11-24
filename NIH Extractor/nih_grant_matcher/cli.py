@@ -7,7 +7,7 @@ from .agents import DigestAgent, NihContextAgent
 from .clients import ApiError, NihGuideClient, NihReporterClient, one_line
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
-from .llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models, missing
+from .llm import PROVIDERS, cautions, checked_base_url, checked_workspace, chosen, connect, host_of, list_models, missing, workspace
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
 from .rules import FACT_KINDS, GRANT_TYPES
@@ -99,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     models.add_argument("--provider", choices=tuple(PROVIDERS))
     models.add_argument("--model", help="A name from the list that this command prints.")
     models.add_argument("--base-url", help="The server's address, for the compatible provider. For example http://localhost:11434/v1.")
+    models.add_argument("--workspace", help="For a Claude key that is not scoped to one workspace: the ID of the workspace to use, from platform.claude.com/settings/workspaces. An empty value clears it.")
     models.add_argument("--consent", action="store_true", help="Agree to send your text to the provider's host.")
     return parser
 
@@ -150,6 +151,7 @@ def _dispatch(args: argparse.Namespace) -> int:
 def _models(args: argparse.Namespace) -> int:
     try:
         base_url = checked_base_url(args.base_url) if args.base_url else None
+        ws = None if args.workspace is None else checked_workspace(args.workspace)
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -162,6 +164,8 @@ def _models(args: argparse.Namespace) -> int:
             store.set_setting("llm.model", args.model or "")
         if base_url:
             store.set_setting("llm.base_url", base_url)
+        if ws is not None:
+            store.set_setting("llm.workspace", ws)
         picked = chosen(store)
         if picked is None:
             print(f"No provider is chosen. Choose one with models --provider and one of {', '.join(PROVIDERS)}.", file=sys.stderr)
@@ -173,12 +177,14 @@ def _models(args: argparse.Namespace) -> int:
         print(f"Provider {provider.name}. Model {name or 'not chosen'}. Your text goes to {host}" + (". You agreed to that." if store.setting(f"consent:{host}") else ", once you agree with models --consent."))
         for caution in cautions(provider, base_url):
             print(caution)
+        if provider.name == "claude" and workspace(store):
+            print(f"Workspace {workspace(store)}.")
         key = keys.get(provider, store.db_path.parent)
         if provider.needs_key and not key:
             print(f"No key. Set {provider.key_env}, or {provider.key_env}_FILE to a file that holds it, or save one in the dashboard.", file=sys.stderr)
             return 1
         print(f"Key: {keys.where(provider, store.db_path.parent)}." if key else "No key, which this provider does not need.")
-        for listed in list_models(provider, base_url, key):
+        for listed in list_models(provider, base_url, key, workspace(store)):
             print(listed)
     finally:
         store.close()
