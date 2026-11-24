@@ -1764,6 +1764,10 @@ Not fixed, for the owner:
 - A confirmed limit replaces the standing one even when it is larger, and a confirmed requirement with no section is not sent to a draft prompt.
 - A number the applicant types in one section after a model touched that section no longer grounds a model's use of it in another section. That gives a warning, which does not block a sign-off.
 - A parsed row whose text already gives its limit now shows the number twice.
+- A reply in prose that holds a bracketed token that is valid JSON, such as "I cannot do that [1].", still reads as a list: that section's undecided rows are replaced and the page says one item was dropped. A correct list beside a note that holds a bracket fails the read, and the applicant is told.
+- A limit's number has to stand somewhere in the announcement, not in the quoted sentence of the announcement, and the check is not run again on a fetch that changes the text.
+- The polished share is described as "a model's polish of my own text" and also counts polished words of a draft.
+- The extract prompt offers every section key of the grant type, so "introduction" is offered for an application that is not a resubmission.
 - Nothing was checked against a live provider. The browser check used a local stand-in model, and the screens changed by the last fix wave were checked only by the dashboard tests.
 
 ### Task 11: Model-read requirements and grounded drafts
