@@ -70,7 +70,8 @@ cp "macos/dist/Grant Matcher.dmg" "$new_dmg"
 port=$(/usr/bin/python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 feed_key=$seed
 if [ "$mode" = bad-signature ]; then feed_key=$(keypair | sed -n 1p); fi
-SPARKLE_ED_KEY=$feed_key APPCAST_DOWNLOAD_BASE=http://127.0.0.1:$port /bin/bash macos/make-appcast.sh "$new_dmg" 0.0.2 >"$work/feed/appcast.xml"
+printf '%s\n' '## Rehearsal notes' '' '- A list item, **bold**, and a [link](https://sparkle-project.org).' >"$work/notes.md"
+RELEASE_NOTES=$work/notes.md SPARKLE_ED_KEY=$feed_key APPCAST_DOWNLOAD_BASE=http://127.0.0.1:$port /bin/bash macos/make-appcast.sh "$new_dmg" 0.0.2 >"$work/feed/appcast.xml"
 app_path="$work/install/Grant Matcher.app"
 if [ "$mode" != bad-signature ]; then /bin/bash macos/verify-appcast.sh "$app_path" "$new_dmg" "$work/feed/appcast.xml"; fi
 
@@ -95,7 +96,7 @@ agents_before=$(ls "$agents_dir" 2>/dev/null || true)
 # Sparkle reads this default in place of SUFeedURL in Info.plist.
 defaults write "$bundle_id" SUFeedURL "http://127.0.0.1:$port/appcast.xml"
 open "$app_path"
-echo "rehearse: running $app_path ($mode). In the Grant Matcher menu choose Check for Updates…, then Install Update, then Install and Relaunch. Waiting up to $deadline s." >&2
+echo "rehearse: running $app_path ($mode). If no window opens, choose Check for Updates… in the Grant Matcher menu. Then choose Install Update, then Install and Relaunch. Waiting up to $deadline s." >&2
 
 disk_version() { plutil -extract CFBundleShortVersionString raw -o - "$app_path/Contents/Info.plist"; }
 sparkle_jobs() {

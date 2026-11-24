@@ -72,7 +72,7 @@ The tour in the Find view uses driver.js 1.14.0, under the MIT licence. Its two 
 
 The updater is [Sparkle](https://sparkle-project.org). The build downloads Sparkle 2.10.1 and checks it against the checksum in `build.sh`. To move to a newer Sparkle, change `sparkle_version` and `sparkle_sha256` there together, then run `NIH Extractor/macos/rehearse-update.sh`.
 
-The rehearsal updates a throwaway version 0.0.1 to 0.0.2 with a key of its own. It needs `CODESIGN_IDENTITY`, and someone to choose `Check for Updates…`, then `Install Update`, then `Install and Relaunch`. Its app is also named Grant Matcher, so it reads the real database and rotates the real `server.log`. When it ends, it deletes `Grant Matcher.app` and `Grant Matcher.dmg` from `NIH Extractor/macos/dist`.
+The rehearsal updates a throwaway version 0.0.1 to 0.0.2 with a key of its own. It needs `CODESIGN_IDENTITY`, and someone to choose `Install Update`, then `Install and Relaunch`. The update window opens by itself. `Check for Updates…` is needed only when no window opens, as with `--stop-feed`. Its app is also named Grant Matcher, so it reads the real database and rotates the real `server.log`. When it ends, it deletes `Grant Matcher.app` and `Grant Matcher.dmg` from `NIH Extractor/macos/dist`.
 
 The icon is `NIH Extractor/macos/icon.png`, a 1024-pixel render of `icon.svg` beside it. After a change to the SVG, render it again with a browser, for example:
 
@@ -101,7 +101,7 @@ Use a Developer ID Application certificate issued by the Developer ID G2 Sub-CA.
 
 `.github/workflows/macos-release.yml` runs on a `v*` tag. It builds, signs and notarizes the disk image on an Apple silicon runner, then attaches `Grant-Matcher-<version>-arm64.dmg`, its checksum and the update feed `appcast.xml` to the tag's GitHub release. Installed apps read the feed from the newest release that is not a pre-release. The same tag also publishes the Docker image.
 
-The workflow stops before it builds when the tag does not equal `v` plus the `version` in `NIH Extractor/pyproject.toml`, when the tagged commit is not on `main`, or when a secret is missing. It never replaces an asset on an existing release.
+The workflow stops before it builds when the tag does not equal `v` plus the `version` in `NIH Extractor/pyproject.toml`, when the tagged commit is not on `main`, or when a secret is missing. It also stops before it builds when `NIH Extractor/macos/release-notes/<version>.md` is missing, because the test suite runs first. It never replaces an asset on an existing release.
 
 The repository needs six Actions secrets:
 
@@ -116,7 +116,7 @@ The repository needs six Actions secrets:
 
 The public half of that key is `NIH Extractor/macos/sparkle-public-key.txt`, which the build writes into the app. The workflow stops before it publishes when the secret does not match that file, because every installed app would refuse the update.
 
-To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml` and `__version__` in `NIH Extractor/nih_grant_matcher/__init__.py`, run `uv lock` in `NIH Extractor/`, merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.
+To release version `X.Y.Z`: set `version = "X.Y.Z"` in `NIH Extractor/pyproject.toml` and `__version__` in `NIH Extractor/nih_grant_matcher/__init__.py`, run `uv lock` in `NIH Extractor/`, and add `NIH Extractor/macos/release-notes/X.Y.Z.md` in the same pull request. That file is the text the update window shows, so write it for a researcher, with headings, lists, bold and links only. Merge that to `main`, then tag the merged commit `vX.Y.Z` and push the tag.
 
 Three rules keep installed apps able to update:
 
