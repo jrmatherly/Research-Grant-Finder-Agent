@@ -1835,3 +1835,27 @@ def test_settings_keeps_the_model_section_open_once_a_model_is_set_up(tmp_path, 
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert [(e.label, e.proto.expanded) for e in app.expander] == [("Model", True)]
+
+
+def test_the_find_sidebar_keeps_keyword_and_run_search_in_view_and_tucks_the_rest_away(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert [(e.label, e.proto.expanded) for e in app.sidebar.expander] == [("Source and rows", False), ("Display", False), ("Export", False)]
+    assert [b.label for b in app.sidebar.button][:2] == ["Show me around", "Run Search"]
+    # `app.sidebar.button` also lists a button inside a section, so this is what keeps Keyword and Run Search out of one.
+    assert ([b.label for e in app.sidebar.expander for b in e.button], [t.label for e in app.sidebar.expander for t in e.text_input]) == (["Load Saved Results", "Export Current View"], ["Excel output"])
+    # A collapsed section still runs its controls, so a search and the load on opening have their values.
+    assert (app.sidebar.selectbox(key="find_source").value, app.sidebar.slider(key="find_rows").value, app.sidebar.slider(key="find_max_saved").value) == ("nih-guide", 500, 500)
+
+
+def test_the_sidebar_says_which_scores_are_shown_while_a_minimum_is_set(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert not [c for c in app.sidebar.caption if "Showing scores" in c.value]
+    app.sidebar.slider(key="find_min_score").set_value(35.0).run(timeout=30)
+    assert "Showing scores of 35 and up." in [c.value for c in app.sidebar.caption]
+    # The line is outside the sections, so a collapsed Display does not hide it.
+    assert not [c for e in app.sidebar.expander for c in e.caption]
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    assert "Showing scores of 35 and up." in [c.value for c in app.sidebar.caption]
