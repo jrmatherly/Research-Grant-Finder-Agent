@@ -21,7 +21,7 @@ def test_the_styles_put_the_overlay_above_the_sidebar() -> None:
 
 def test_every_step_points_at_a_key_the_find_view_draws() -> None:
     text = APP.read_text(encoding="utf-8")
-    keys = [key for key, _, _ in tour.TOUR_STEPS if key]
+    keys = [key for key, _, _, _ in tour.TOUR_STEPS if key]
     assert keys == ["view", "find_run", "find_classes", "find_table", "find_tabs"]
     assert all(f'key="{key}"' in text for key in keys)
     assert tour.TOUR_STEPS[-1][0] == ""
@@ -41,7 +41,7 @@ def test_show_me_around_starts_the_tour_once_for_each_press(tmp_path, monkeypatc
     assert not app.exception
     assert app.session_state["tour_nonce"] == 1
     sent = json.loads(app.get("bidi_component")[0].proto.json)
-    assert sent["nonce"] == f"{app.session_state['tour_session']}:1" and [step["key"] for step in sent["steps"]] == [key for key, _, _ in tour.TOUR_STEPS]
+    assert sent["nonce"] == f"{app.session_state['tour_session']}:1" and [step["key"] for step in sent["steps"]] == [key for key, _, _, _ in tour.TOUR_STEPS]
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     assert app.session_state["tour_nonce"] == 2
 
@@ -55,7 +55,7 @@ def test_the_tour_waits_for_a_press_and_is_sent_its_words(tmp_path, monkeypatch)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     sent = lambda: json.loads(app.get("bidi_component")[0].proto.json)
     assert sent()["nonce"] == ""
-    assert [(s["key"], s["title"], s["text"]) for s in sent()["steps"]] == list(tour.TOUR_STEPS)
+    assert [(s["key"], s["part"], s["title"], s["text"]) for s in sent()["steps"]] == list(tour.TOUR_STEPS)
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     first = sent()["nonce"]
     # A rerun that is not a press sends the same nonce, so the script does not start the tour again.
@@ -63,3 +63,24 @@ def test_the_tour_waits_for_a_press_and_is_sent_its_words(tmp_path, monkeypatch)
     assert sent()["nonce"] == first
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     assert sent()["nonce"] == f"{app.session_state['tour_session']}:2" != first
+
+def test_the_details_step_lights_the_tab_bar_and_not_the_table_under_it() -> None:
+    assert {key: part for key, part, _, _ in tour.TOUR_STEPS if part} == {"find_tabs": '[role="tablist"]'}
+    assert "'.st-key-' + s.key + (s.part ? ' ' + s.part : '')" in tour.script()
+
+def test_the_tour_keys_do_not_reach_macos_which_would_play_the_alert_sound() -> None:
+    script = tour.script()
+    # The listener goes on after drive(), because driver.js ignores a key whose keydown was prevented before its own listener ran.
+    assert script.index(".drive();") < script.index("window.addEventListener('keydown', quiet)")
+    assert "onDestroyed: () => window.removeEventListener('keydown', quiet)" in script
+
+def test_the_popover_takes_the_colours_of_the_app() -> None:
+    assert ".driver-popover{background-color:var(--gm-tour-bg,#fff);color:var(--gm-tour-fg,#2d2d2d)" in tour.styles()
+    assert "setProperty('--gm-tour-bg', c.backgroundColor)" in tour.script()
+
+def test_a_click_outside_the_popover_still_closes_the_tour() -> None:
+    # The owner chose to keep driver.js's default. The vendored file names the option too, so the glue is what is searched.
+    assert "overlayClickBehavior" not in tour.GLUE and "overlayClickBehavior:`close`" in tour.script()
+
+def test_the_run_search_step_names_the_section_that_holds_source() -> None:
+    assert "under Source and rows." in tour.TOUR_STEPS[1][3]
