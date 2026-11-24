@@ -163,3 +163,8 @@ def test_a_model_citation_in_the_other_author_year_forms_must_match_a_reference(
     muller = Fact(9, "reference", "Müller K. Heart cells. 2021.", label="muller2021")
     words = tuple((word, "polish") for word in "As Müller et al. (2021) held.".split())
     assert not [f for f in check_section("As Müller et al. (2021) held.", RULE["specific-aims"], Limit(1, "pages"), R21.page, (muller,), "", words) if f.code == "unknown-citation"]
+
+@pytest.mark.parametrize("placeholder", ["[NEEDS INPUT: effect size]", "[needs input: effect size]", "[NEEDS INPUT]", "[NEEDS INPUT - effect size]", "[NEEDS INPUT : x]", "[ NEEDS INPUT ]"])
+def test_a_placeholder_in_any_case_or_form_is_an_error(placeholder) -> None:
+    found = check_section(f"Aim 1 tests {placeholder} today.", RULE["specific-aims"], Limit(1, "pages"), R21.page, (), "", ())
+    assert [f.excerpt for f in found if f.code == "placeholder" and f.severity == "error"] == [placeholder]

@@ -13,7 +13,7 @@ from ..models import Finding, Opportunity
 from ..provenance import percent
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
-from ..writer import DECISIONS, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe
+from ..writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, ApplicationView, NotReady, StaleEdit, Workspace, describe, read_summary
 from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
@@ -121,7 +121,7 @@ def _propose(ws: Workspace, section: str, action: str, instruction: str = "") ->
 def _extract(ws: Workspace) -> str:
     ws.model = connect(ws.store)
     found, dropped = ws.extract_requirements()
-    return f"The model read {len(found)} requirement{'' if len(found) == 1 else 's'} from the announcement. Confirm or reject each under Requirements." + (f" Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply, because the quote is not in the announcement or the item is not in the form asked for." if dropped else "")
+    return f"{read_summary(found)} Confirm or reject each under Requirements." + (f" Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply. {DROPPED}" if dropped else "")
 
 def _accept(ws: Workspace, call_id: int, edited: str | None) -> str:
     try:
@@ -318,13 +318,15 @@ def _requirements_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id
     st.subheader("What the announcement adds")
     if ws.model is not None:
         st.caption(f"A model can read Sections I, IV and V and list what they ask for, each with the sentence it comes from. The text goes to {escape_markdown(ws.model.host)}, and nothing counts until you confirm it.")
+    else:
+        st.caption(f"Reading the announcement needs a model. {_missing(ws.store)} Set it up under Model at the top of this page.")
     st.button("Ask the model to read the announcement", key="apply_extract_button", disabled=ws.model is None or view.announcement is None, help="Set up a model under Model first." if ws.model is None else "Fetch the announcement under Announcement first." if view.announcement is None else None, on_click=_on, args=(db_path, app_id, _extract))
     if view.no_section_iv:
         st.info(NO_SECTION_IV)
     elif not view.requirements:
         st.info("Fetch the full announcement to see what it adds." if view.announcement is None else "Grant Matcher found no added requirement in the announcement. Read Section IV under Announcement.")
     for r in view.requirements:
-        st.markdown(f"**{escape_markdown(r.text)}** {DECISIONS[r.confirmed].capitalize()}." + (" A model read this." if r.origin == "model" else ""))
+        st.markdown(f"**{escape_markdown(r.text)}** {DECISIONS[r.confirmed].capitalize()}." + (f" At most {describe(r.limit)}." if r.limit else "") + (" A model read this." if r.origin == "model" else ""))
         st.text(r.quote)
         confirm, reject = st.columns(2)
         confirm.button("Confirm", key=f"apply_confirm_{r.id}_button", disabled=r.confirmed is True, on_click=_on, args=(db_path, app_id, lambda w, rid=r.id: w.decide(rid, True)))
@@ -396,7 +398,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
     if (proposal := ws.pending(key)) is not None:
         st.markdown(f"**A model's {ACTION_NOUNS.get(proposal.action, proposal.action)}, proposal {proposal.call_id}**")
         current, proposed = st.columns(2)
-        current.caption(f"Revision {s.revision_id}")
+        current.caption(f"Revision {s.revision_id}" if s.revision_id is not None else "The section has no text yet.")
         current.text(s.text)
         proposed.caption("Struck words go and bold words come in.")
         proposed.markdown(_word_diff(s.text, proposal.text))

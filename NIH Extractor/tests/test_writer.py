@@ -775,3 +775,62 @@ def test_a_fetch_keeps_a_model_item_while_its_quote_is_in_the_text_and_names_a_d
     _, notes = ws.fetch_announcement(Guide(READ.replace("Applicants must describe data sharing.", "").replace("The Specific Aims must state one hypothesis.", "")), Grants(""))
     assert [r.text for r in ws.view().requirements if r.origin == "model"] == ["Rigor."]
     assert notes == ['Your decision on "State one hypothesis." was dropped, because the new text no longer has the sentence it came from.']
+
+DRAFT_412 = "We enrolled 412 patients in the pilot cohort and it works."
+
+def test_an_invented_number_stays_flagged_after_the_applicant_edits_the_draft_and_signs(tmp_path) -> None:
+    facts = {"aim": "A pilot cohort.", "hypothesis": "It works."}
+    flagged = lambda ws: "number-not-in-inputs" in {f.code for f in ws.view().section("specific-aims").findings}
+    ws = start(tmp_path / "a", model=FakeModel(DRAFT_412), facts=facts)
+    ws.accept(ws.propose("specific-aims", "draft").call_id)
+    ws.write("specific-aims", DRAFT_412 + " Indeed.", ws.view().section("specific-aims").revision_id)
+    assert flagged(ws)
+    ws = start(tmp_path / "b", model=FakeModel(DRAFT_412), facts=facts)
+    ws.accept(ws.propose("specific-aims", "draft").call_id, DRAFT_412.replace("it works", "it worked"))
+    assert flagged(ws)
+    assert "number-not-in-inputs" in ws.sign("specific-aims", "A. Applicant", ws.view().section("specific-aims").revision_id, True).findings
+
+def test_a_number_the_applicant_wrote_before_a_model_touched_the_section_grounds_the_model(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We test (40) mice."))
+    ws.write("specific-aims", "We test 40 mice.", parent=None)
+    ws.accept(ws.propose("specific-aims", "polish").call_id)
+    assert "number-not-in-inputs" not in {f.code for f in ws.view().section("specific-aims").findings}
+
+def test_a_number_the_applicant_adds_after_a_draft_is_not_flagged(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("We study a pilot cohort."), facts={"aim": "A pilot cohort.", "hypothesis": "It works."})
+    accepted = ws.accept(ws.propose("specific-aims", "draft").call_id)
+    ws.write("specific-aims", accepted.text + " We enrolled 30 patients.", accepted.id)
+    assert "number-not-in-inputs" not in {f.code for f in ws.view().section("specific-aims").findings}
+
+QUOTE = "The Specific Aims must state one hypothesis."
+
+def test_a_new_reading_of_a_rejected_item_in_other_words_keeps_one_rejected_row(tmp_path) -> None:
+    again = json.dumps([item("must", "specific-aims", "Aims state a single hypothesis.", QUOTE)])
+    ws = start(tmp_path, model=FakeModel("[]", READ_REPLIES[1], "[]", "[]", again, "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, _ = ws.extract_requirements()
+    ws.decide(found[0].id, False)
+    again, _ = ws.extract_requirements()
+    assert [(r.text, r.confirmed) for r in again] == [("State one hypothesis.", False)]
+
+def test_one_reading_keeps_items_with_one_text_and_other_quotes_and_merges_items_with_one_quote(tmp_path) -> None:
+    reply = json.dumps([item("must", "", "Same.", "Applicants must describe data sharing."), item("must", "", "Same.", "Reviewers will judge rigor."), item("must", "", "Other words.", "Reviewers will judge rigor.")])
+    ws = start(tmp_path, model=FakeModel(reply, "[]", "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    found, dropped = ws.extract_requirements()
+    assert [(r.text, r.quote) for r in found] == [("Same.", "Applicants must describe data sharing."), ("Same.", "Reviewers will judge rigor.")] and dropped == 0
+
+def test_a_read_call_cannot_be_accepted_and_the_message_says_an_extract_call(tmp_path) -> None:
+    ws = start(tmp_path, model=FakeModel("[]", "[]", "[]"))
+    ws.fetch_announcement(Guide(READ), Grants(""))
+    ws.extract_requirements()
+    with pytest.raises(WorkspaceError, match="is an extract call"):
+        ws.accept(ws.store.calls(ws.application_id)[0].id)
+
+def test_the_no_section_iv_notice_holds_only_while_no_requirement_is_listed(tmp_path) -> None:
+    text = "Section I. Notice of Funding Opportunity Description\nApplicants must describe data sharing.\nSection V. Application Review Information\nReviewers will judge rigor." + " More text." * 100
+    ws = start(tmp_path, model=FakeModel(READ_I, "[]"))
+    ws.fetch_announcement(Guide(text), Grants(""))
+    assert ws.view().no_section_iv
+    ws.extract_requirements()
+    assert not ws.view().no_section_iv

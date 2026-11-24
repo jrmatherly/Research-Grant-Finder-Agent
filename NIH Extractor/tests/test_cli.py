@@ -538,7 +538,7 @@ def test_apply_extract_lists_what_the_model_read_and_draft_proposes_a_section(tm
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
     out = capsys.readouterr().out
-    assert "The model read 1 requirement" in out and "not yet decided  State one hypothesis." in out and "dropped 1 item" in out
+    assert "The model read 1 new requirement" in out and "not yet decided  State one hypothesis." in out and "dropped 1 item" in out and "a limit whose number is not in its quote" in out
     assert cli.main(["--db", db, "apply", "draft", "1", "specific-aims"]) == 1
     assert "needs aim, hypothesis" in capsys.readouterr().err and len(model.seen) == 2
     cli.main(["--db", db, "apply", "add", "1", "--kind", "aim", "--text", "Test drug X."])
@@ -546,3 +546,33 @@ def test_apply_extract_lists_what_the_model_read_and_draft_proposes_a_section(tm
     assert cli.main(["--db", db, "apply", "draft", "1", "specific-aims"]) == 0
     out = capsys.readouterr().out
     assert "Aim 1 tests drug X." in out and "apply accept 1 3" in out
+
+
+def test_apply_extract_shows_each_limit_and_counts_only_what_this_read_added(tmp_path, monkeypatch, capsys) -> None:
+    import json
+    from helpers import FakeModel
+    from nih_grant_matcher.store import OpportunityStore
+    text = "Section IV. Application and Submission Information\nThe Specific Aims must state one hypothesis.\nThe Research Strategy is limited to 6 pages.\nSection V. Application Review Information\nx" + " More text." * 100
+    item = lambda kind, section, words, quote, limit=None: {"kind": kind, "section": section, "text": words, "quote": quote, "limit": limit}
+    first = json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis."), item("limit", "research-strategy", "Keep it short.", "The Research Strategy is limited to 6 pages.", {"amount": 6, "unit": "pages"})])
+    db, model = _apply_db(tmp_path), FakeModel(first, "[]", json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis.")]), "[]")
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
+    monkeypatch.setattr(cli, "connect", lambda store: model)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    cli.main(["--db", db, "apply", "fetch", "1"])
+    store = OpportunityStore(db)
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    store.close()
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "The model read 2 new requirements" in out and "not yet decided  Keep it short.  at most 6 pages" in out
+    store = OpportunityStore(db)
+    store.decide_requirement(next(r.id for r in store.requirements(1) if r.text == "Keep it short."), True)
+    store.close()
+    assert cli.main(["--db", db, "apply", "extract", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "The model read 1 new requirement from" in out and "Your decision on 1 requirement read earlier still stands." in out
+    assert cli.main(["--db", db, "apply", "requirements", "1"]) == 0
+    assert "confirmed  Keep it short.  at most 6 pages" in capsys.readouterr().out

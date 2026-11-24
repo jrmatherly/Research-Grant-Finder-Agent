@@ -6,7 +6,7 @@ from .announcement import Requirement, letters, quoted_in
 from .models import Fact
 from .profile import TEXT_LIMITS, Profile
 from .prose import PROSE_RULES
-from .rules import GRANT_TYPES, GrantType, Limit, SectionRule
+from .rules import GRANT_TYPES, GrantType, Limit, SectionRule, describe
 
 _KINDS = {"limit": "a limit on the length of one section", "must": "something the application must contain or do", "criterion": "something the reviewers will judge"}
 _SECTION_KEYS = {s.key for g in GRANT_TYPES.values() for s in g.sections}
@@ -28,7 +28,7 @@ def fence(label: str, text: str, token: str) -> str:
 
 def _system(task: str, rule: SectionRule, token: str, claims: str) -> str:
     avoid = "\n".join(f"- {r.name}. {r.hint}" for r in PROSE_RULES)
-    return f"""{task} The section is the {rule.title} of an NIH application, and its limit is {rule.limit.amount:g} {rule.limit.unit}.
+    return f"""{task} The section is the {rule.title} of an NIH application, and its limit is {describe(rule.limit)}.
 
 Rules:
 1. Change wording only. Keep every claim and the meaning of each sentence.
@@ -82,9 +82,16 @@ def _requirement(item: Any, announcement_text: str) -> Requirement | None:
         return None
     if limit is not None:
         amount = limit.get("amount") if isinstance(limit, dict) else None
-        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount) or limit.get("unit") not in _UNITS:
+        try:
+            if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount) or limit.get("unit") not in _UNITS:
+                return None
+        # An integer too large for a float.
+        except OverflowError:
             return None
         limit = Limit(float(amount), limit["unit"])
+    # The applicant confirms a limit by reading its quote, so the quote must hold the number as a number of its own, not inside 12 or 2026. A limit item with no limit fails in Requirement.
+    if limit is not None and not re.search(rf"(?<![\d.]){re.escape(f'{limit.amount:g}')}(?!\d|[.,]\d)", quote):
+        return None
     # 0 is a placeholder: the call is logged before the reply is read, and Workspace.extract_requirements replaces it with that call's id.
     try:
         return Requirement(kind, text, quote, "model", section, limit, call_id=0)
@@ -95,7 +102,8 @@ def parse_requirements(reply: str, announcement_text: str) -> tuple[list[Require
     # A model can wrap the array in a Markdown code fence.
     try:
         items = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", reply.strip()))
-    except ValueError:
+    # The call is paid for by now, and a reply nested too deep for the parser is as unreadable as one that is not JSON.
+    except (ValueError, RecursionError):
         return [], 1
     if not isinstance(items, list):
         return [], 1
@@ -110,7 +118,7 @@ def draft(rule: SectionRule, limit: Limit, requirements: Sequence[Requirement], 
     # A profile saved before the limits can hold longer text.
     about = "\n".join(f"{name}: {text[:TEXT_LIMITS[field]]}" for name, field in (("Research summary", "research_summary"), ("Expertise", "expertise")) if (text := getattr(profile, field)).strip())
     form = [f"Use the headings {', '.join(rule.parts)}, each on a line of its own." if rule.parts else "", "" if rule.first_person else "Write in the third person.", "" if rule.figures else "Use no figure or table."]
-    system = f"""Draft the {rule.title} of an NIH application from the applicant's inputs. Its limit is {limit.amount:g} {limit.unit}.{f" {rule.guidance}" if rule.guidance else ""}{"".join(f" {line}" for line in form if line)}
+    system = f"""Draft the {rule.title} of an NIH application from the applicant's inputs. Its limit is {describe(limit)}.{f" {rule.guidance}" if rule.guidance else ""}{"".join(f" {line}" for line in form if line)}
 
 Rules:
 1. Write only from the applicant's inputs, the requirements the applicant confirmed and the applicant's profile below.

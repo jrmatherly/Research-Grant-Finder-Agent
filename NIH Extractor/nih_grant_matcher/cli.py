@@ -14,7 +14,7 @@ from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
-from .writer import DECISIONS, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe
+from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe, read_summary
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -286,7 +286,7 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         for s in view.sections:
             print(f"standing  {s.rule.title}  at most {describe(s.rule.limit)}")
         for r in view.requirements:
-            print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}")
+            print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}" + (f"  at most {describe(r.limit)}" if r.limit else ""))
         if view.no_section_iv:
             print(NO_SECTION_IV)
         if view.announcement is None:
@@ -317,11 +317,11 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(f"Wrote the application to {ws.export(Path(args.out))}.")
     elif args.action == "extract":
         found, dropped = ws.extract_requirements()
-        print(f"The model read {len(found)} requirement{'' if len(found) == 1 else 's'} from the announcement. Confirm or reject each in the dashboard.")
+        print(f"{read_summary(found)} Confirm or reject each in the dashboard.")
         for r in found:
-            print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}")
+            print(f"{r.id}  {DECISIONS[r.confirmed]}  {r.text}" + (f"  at most {describe(r.limit)}" if r.limit else ""))
         if dropped:
-            print(f"Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply, because the quote is not in the announcement or the item is not in the form asked for.")
+            print(f"Grant Matcher dropped {dropped} item{'' if dropped == 1 else 's'} of the reply. {DROPPED}")
     elif args.action in ("polish", "revise", "draft"):
         proposal = ws.propose(args.section, args.action, getattr(args, "instruction", ""))
         print(f"Proposal {proposal.call_id} for {args.section}. Nothing has changed yet.\n\n{proposal.text}\n")

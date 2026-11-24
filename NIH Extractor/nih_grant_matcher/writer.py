@@ -5,20 +5,21 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 from . import __version__, prompts
-from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, parse_requirements, quoted_in
+from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announcement, letters, parse_requirements, quoted_in
 from .checks import check_section
 from .clients import ApiError
 from .llm import ModelError
 from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import PROPOSALS, attribution, disclosure_statement, head, percent, section_state, share
-from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, grant_types_for
+from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, describe, grant_types_for
 from .store import OpportunityStore
 
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
 ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
 STALE_PROPOSAL = "The section changed after the model read it, so this proposal no longer fits. Ask the model again."
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
+DROPPED = "It drops an item whose quote is not a whole sentence of the announcement, a limit whose number is not in its quote, and an item that is not in the form asked for."
 
 class WorkspaceError(ValueError):
     pass
@@ -66,15 +67,13 @@ class ApplicationView:
     disclosure: str
     @property
     def no_section_iv(self) -> bool:
-        return self.announcement is not None and not self.announcement.section("IV")
+        # The notice says that no requirement was read, so a model's reading of Section I or V ends it.
+        return self.announcement is not None and not self.announcement.section("IV") and not self.requirements
     def section(self, key: str) -> SectionView:
         for s in self.sections:
             if s.rule.key == key:
                 return s
         raise WorkspaceError(f"This application has no section {key}. Its sections are {', '.join(s.rule.key for s in self.sections)}.")
-
-def describe(limit: Limit) -> str:
-    return f"{limit.amount:g} {limit.unit[:-1] if limit.amount == 1 else limit.unit}"
 
 def _profile(store: OpportunityStore) -> Profile:
     # The dashboard already says that the saved profile cannot be read, and an application can still be started and checked without it.
@@ -85,6 +84,10 @@ def _profile(store: OpportunityStore) -> Profile:
 
 def _same(r: Requirement) -> tuple[str, str, str]:
     return r.kind, r.section, r.text
+
+def _quoted(r: Requirement) -> tuple[str, str, str]:
+    # A model words the same sentence differently on each reading, so its items are told apart by the sentence they quote.
+    return r.kind, r.section, letters(r.quote)
 
 def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -> list[tuple[Requirement, str]]:
     rows = store.requirements(app_id)
@@ -98,11 +101,18 @@ def _reparse(store: OpportunityStore, app_id: int, announcement: Announcement) -
         store.replace_requirements(app_id, "model", [r for r in rows if r.origin == "model" and r not in gone])
     return [(r, "the new text no longer has the sentence it came from") for r in gone if r.confirmed is not None] + [(r, "Grant Matcher no longer reads that requirement from the new text" if _same(r) in carried else "the new text no longer has the sentence it came from") for r in decided if _same(r) not in carried or _same(r) not in parsed]
 
+def read_summary(found: tuple[Requirement, ...]) -> str:
+    # A decided row is carried over from an earlier read, and a row this read added is not yet decided.
+    new, kept = sum(r.confirmed is None for r in found), sum(r.confirmed is not None for r in found)
+    return f"The model read {new} new requirement{'' if new == 1 else 's'} from the announcement." + (f" Your decision on {kept} requirement{'' if kept == 1 else 's'} read earlier still stands." if kept else "")
+
 def _rules(app: Application) -> tuple[SectionRule, ...]:
     return tuple(s for s in GRANT_TYPES[app.grant_type].sections if app.resubmission or not s.resubmission_only)
 
 def _grounding(facts: tuple[Fact, ...], profile: Profile, revisions: list[Revision], announcement: Announcement | None) -> str:
-    return "\n".join([*(f.text for f in facts), profile.research_summary, profile.expertise, profile.resources, *(r.text for r in revisions if r.author == "applicant"), announcement.text if announcement else ""])
+    # An applicant's revision made after a model's in the same section holds the model's words, so it grounds nothing.
+    mine = [r.text for r in revisions if r.author == "applicant" and not any(m.author == "model" and m.section == r.section and m.id < r.id for m in revisions)]
+    return "\n".join([*(f.text for f in facts), profile.research_summary, profile.expertise, profile.resources, *mine, announcement.text if announcement else ""])
 
 def _confirmed(rule: SectionRule, requirements: tuple[Requirement, ...]) -> list[Limit]:
     # A limit in pages cannot replace a limit in lines or sentences.
@@ -203,9 +213,9 @@ class Workspace:
             kept, lost = prompts.parse_requirements(done.text, announcement.text)
             found, dropped = found + [replace(r, call_id=call.id) for r in kept], dropped + lost
         # A decision stays with its item while the item's quote is in the text, and a new reading of the same item does not add it twice.
-        items = {_same(r): r for r in self.store.requirements(app.id) if r.origin == "model" and r.confirmed is not None and quoted_in(r.quote, announcement.text)}
+        items = {_quoted(r): r for r in self.store.requirements(app.id) if r.origin == "model" and r.confirmed is not None and quoted_in(r.quote, announcement.text)}
         for r in found:
-            items.setdefault(_same(r), r)
+            items.setdefault(_quoted(r), r)
         return tuple(self.store.replace_requirements(app.id, "model", items.values())), dropped
 
     def decide(self, requirement_id: int, confirmed: bool) -> None:
@@ -336,7 +346,7 @@ class Workspace:
         if (call := next((c for c in self.store.calls(self.application_id) if c.id == call_id), None)) is None:
             raise WorkspaceError(f"Application {self.application_id} has no model call {call_id}.")
         if call.purpose not in PROPOSALS:
-            raise WorkspaceError(f"Call {call_id} is a {call.purpose} call, not a proposal for a section, so it cannot be accepted or discarded.")
+            raise WorkspaceError(f"Call {call_id} is {'an' if call.purpose[0] in 'aeiou' else 'a'} {call.purpose} call, not a proposal for a section, so it cannot be accepted or discarded.")
         return call
 
     def accept(self, call_id: int, edited: str | None = None) -> Revision:

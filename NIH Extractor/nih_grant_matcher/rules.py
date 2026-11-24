@@ -10,6 +10,9 @@ class Limit:
     amount: float
     unit: Literal["pages", "lines", "sentences"]
 
+def describe(limit: Limit) -> str:
+    return f"{limit.amount:g} {limit.unit[:-1] if limit.amount == 1 else limit.unit}"
+
 @dataclass(frozen=True)
 class SectionRule:
     key: str
