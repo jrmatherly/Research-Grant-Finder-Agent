@@ -340,7 +340,7 @@ def test_frozen_app_without_sparkle_says_so_in_the_log(monkeypatch, tmp_path) ->
 def test_started_updater_is_kept_and_the_menu_item_reaches_it(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
     checks = []
-    controller = types.SimpleNamespace(checkForUpdates_=checks.append)
+    controller = types.SimpleNamespace(checkForUpdates_=checks.append, updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: False))
     made = types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda start, a, b: controller if (start, a, b) == (True, None, None) else None)
     monkeypatch.setattr(launcher, "sparkle_class", lambda framework: types.SimpleNamespace(alloc=lambda: made))
     tools = types.ModuleType("PyObjCTools")
@@ -349,7 +349,38 @@ def test_started_updater_is_kept_and_the_menu_item_reaches_it(monkeypatch, tmp_p
     monkeypatch.setattr(launcher, "alert", lambda message: pytest.fail(message))
     launcher.start_updater(tmp_path / "Sparkle.framework", tmp_path / "server.log")
     launcher.check_for_updates()
-    assert launcher.UPDATER == [controller] and checks == [None]
+    assert launcher.UPDATER == [controller] and checks == [None] and not (tmp_path / "server.log").exists()
+
+
+@pytest.mark.parametrize("automatic", [True, False])
+def test_the_updater_checks_at_launch_only_while_automatic_checks_are_on(monkeypatch, tmp_path, automatic) -> None:
+    launcher = _load(monkeypatch)
+    background = []
+    updater = types.SimpleNamespace(automaticallyChecksForUpdates=lambda: automatic, checkForUpdatesInBackground=lambda: background.append(len(launcher.UPDATER)))
+    made = types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda *args: types.SimpleNamespace(updater=lambda: updater))
+    monkeypatch.setattr(launcher, "sparkle_class", lambda framework: types.SimpleNamespace(alloc=lambda: made))
+    log = tmp_path / "server.log"
+    launcher.start_updater(tmp_path / "Sparkle.framework", log)
+    # The controller is kept before the check, so the menu item works even when the check raises.
+    assert background == ([1] if automatic else []) and not log.exists()
+
+
+def test_a_launch_check_that_fails_leaves_the_app_open_and_the_menu_item_working(monkeypatch, tmp_path) -> None:
+    launcher = _load(monkeypatch)
+    def offline():
+        raise RuntimeError("no network")
+    checks = []
+    controller = types.SimpleNamespace(checkForUpdates_=checks.append, updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: True, checkForUpdatesInBackground=offline))
+    monkeypatch.setattr(launcher, "sparkle_class", lambda framework: types.SimpleNamespace(alloc=lambda: types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda *args: controller)))
+    tools = types.ModuleType("PyObjCTools")
+    tools.AppHelper = types.SimpleNamespace(callAfter=lambda function, *args: function(*args))
+    monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
+    monkeypatch.setattr(launcher, "alert", lambda message: pytest.fail(message))
+    log = tmp_path / "server.log"
+    launcher.start_updater(tmp_path / "Sparkle.framework", log)
+    # The menu item is pressed, since keeping the controller is only the means.
+    launcher.check_for_updates()
+    assert launcher.UPDATER == [controller] and checks == [None] and "no network" in log.read_text()
 
 
 def test_the_server_does_not_overwrite_what_the_app_writes_to_the_log(monkeypatch, tmp_path) -> None:
