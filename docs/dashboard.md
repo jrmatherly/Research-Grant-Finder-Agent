@@ -248,6 +248,7 @@ Add `--help` to a command to see its options. To use another database, put `--db
 | "Run a search or load saved results to populate the dashboard." | The database is empty or is not at the **Database** path. | Select **Run Search**. |
 | A red "Search failed" message with a web address | The named service did not answer, or it sent a reply that the tool cannot read. | Check the internet connection and search again. |
 | A message that names `SSL_CERT_FILE` | A proxy on your network inspects secure connections, and Python does not trust its certificate. | Ask your IT staff for the proxy's certificate file, and set `SSL_CERT_FILE` to its path. |
+| The same message in the macOS app, version 0.2.0 or 0.3.0 | Those versions look for their trusted certificates in a file that your Mac does not have. No proxy is involved. | Choose `Check for Updates…` in the `Grant Matcher` menu, and install version 0.3.1 or later. |
 | A yellow message that a source reached the row limit | The source holds more rows than **Rows per source**. | Raise **Rows per source** and search again. |
 | A yellow message that the scores are "shown as last saved" | The database file cannot be written to. | Check the permissions of the `data` folder. In Docker on Linux, see "Where the results are saved" in the [Docker guide](docker.md). |
 | A relevant opportunity has a low score | The text names none of the terms of the profile in use. | Lower **Minimum score shown**, or use **Filter within results** with your own term. |
