@@ -1,5 +1,5 @@
 from __future__ import annotations
-import http.client, json, re, ssl, time, urllib.error, urllib.parse, urllib.request
+import http.client, json, os, re, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -23,6 +23,13 @@ def _certificate_failed(exc: BaseException) -> bool:
     # urllib wraps a failure on connect in URLError and leaves a later one bare.
     return isinstance(exc, ssl.SSLCertVerificationError) or isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
 
+def _certificate_hint() -> str:
+    paths = ssl.get_default_verify_paths()
+    # With neither its CA file nor its CA folder, OpenSSL trusts no server, and no proxy is involved. An app built with a Python that names a file its user's computer lacks is in that state.
+    if paths.cafile is None and paths.capath is None:
+        return f". Python found no CA certificates, because {os.environ.get(paths.openssl_cafile_env) or paths.openssl_cafile} does not exist, so it trusts no server. Set SSL_CERT_FILE to a CA bundle."
+    return ". Python does not trust the server's certificate. Behind a proxy that inspects TLS, set SSL_CERT_FILE to the proxy's CA bundle."
+
 def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> bytes:
     # A run makes hundreds of requests in a row, so one dropped connection or 5xx must not end it.
     for attempt in range(1, attempts + 1):
@@ -36,7 +43,7 @@ def _read(request: urllib.request.Request, timeout: int, attempts: int = 3) -> b
             # A certificate that fails once fails every time, so do not retry it.
             failure, final = exc, _certificate_failed(exc)
         if final or attempt == attempts:
-            hint = ". Python does not trust the server's certificate. Behind a proxy that inspects TLS, set SSL_CERT_FILE to the proxy's CA bundle." if _certificate_failed(failure) else ""
+            hint = _certificate_hint() if _certificate_failed(failure) else ""
             # Name the address: the dashboard shows only this message, and a run can talk to two services.
             raise ApiError(f"{_address(request)} failed after {attempt} attempt(s): {failure}{hint}") from failure
         time.sleep(2 ** (attempt - 1))

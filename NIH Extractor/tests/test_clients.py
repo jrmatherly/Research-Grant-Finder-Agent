@@ -105,6 +105,27 @@ def test_read_reports_a_certificate_error_once_without_a_retry(monkeypatch, wrap
         clients._read(REQUEST, timeout=1)
 
 
+def _certificate_error(monkeypatch, **paths) -> str:
+    found = ssl.get_default_verify_paths()._replace(**paths)
+    monkeypatch.setattr(clients.ssl, "get_default_verify_paths", lambda: found)
+    monkeypatch.delenv(found.openssl_cafile_env, raising=False)
+    _fail_then(monkeypatch, [ssl.SSLCertVerificationError("unable to get local issuer certificate")])
+    with pytest.raises(clients.ApiError) as raised:
+        clients._read(REQUEST, timeout=1)
+    return str(raised.value)
+
+
+def test_a_certificate_error_with_no_ca_file_names_the_file_and_not_a_proxy(monkeypatch) -> None:
+    # An app can carry a CA file path that only the machine that built it has. OpenSSL then trusts no server, and no proxy is involved.
+    message = _certificate_error(monkeypatch, cafile=None, capath=None, openssl_cafile="/gone/cert.pem")
+    assert "/gone/cert.pem does not exist" in message and "SSL_CERT_FILE" in message
+    assert "proxy" not in message
+
+
+def test_a_certificate_error_with_a_ca_file_points_at_a_proxy(monkeypatch) -> None:
+    assert "proxy" in _certificate_error(monkeypatch, cafile="/etc/ssl/cert.pem")
+
+
 def test_a_failed_request_names_the_address_without_its_query(monkeypatch) -> None:
     _fail_then(monkeypatch, [_http_error(404)])
     with pytest.raises(clients.ApiError) as raised:

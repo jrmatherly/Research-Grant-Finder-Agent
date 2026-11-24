@@ -278,6 +278,13 @@ def test_check_tls_flag_fails_for_a_ca_file_inside_the_python_that_built_the_app
     assert cafile in capsys.readouterr().err
 
 
+def test_the_build_script_pins_its_python_and_runs_the_certificate_check() -> None:
+    # Nothing else fails when either line goes, and the release that follows could open no HTTPS connection.
+    script = (LAUNCHER.parent / "build.sh").read_text()
+    assert "export UV_MANAGED_PYTHON=1" in script
+    assert "--check-tls ||" in script
+
+
 def test_updater_starts_even_when_the_server_does_not(monkeypatch, tmp_path) -> None:
     launcher = _load(monkeypatch)
     scheduled = []

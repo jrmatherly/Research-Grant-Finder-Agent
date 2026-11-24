@@ -12,6 +12,8 @@ The app checks for a new release once a day and offers to install it. `Check for
 
 Version 0.1.1 has no updater. Install the next version by hand once, as in [Download](#download).
 
+Versions 0.2.0 and 0.3.0 cannot open a secure connection, so a search fails with a message that names `SSL_CERT_FILE`. Their updater still works. Install version 0.3.1 or later from the update the app offers, or with `Check for Updates…`.
+
 The rest of this page is for building the app yourself with `NIH Extractor/macos/build.sh`.
 
 ## Before you begin
@@ -36,7 +38,7 @@ To sign with your Developer ID certificate, set `CODESIGN_IDENTITY` to its name.
 CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" "NIH Extractor/macos/build.sh"
 ```
 
-The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. It checks the app's signature and the update settings in its `Info.plist`. With `CODESIGN_IDENTITY` set, it also signs the disk image.
+The build takes a few minutes. It then starts the server from the built app and fails if the dashboard script does not run cleanly within 30 seconds. It checks the app's signature and the update settings in its `Info.plist`. It also fails when the app would read its CA certificates from a file that is not part of macOS, because such an app can open no secure connection on another Mac. With `CODESIGN_IDENTITY` set, it also signs the disk image.
 
 The results are in `NIH Extractor/macos/dist`:
 
