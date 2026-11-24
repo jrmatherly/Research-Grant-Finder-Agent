@@ -115,6 +115,8 @@ def from_export(text: str) -> Profile:
     for code in institutes:
         if code not in INSTITUTES:
             raise ProfileError(f"institutes: {code!r} is not the code of an NIH institute")
+        if institutes.count(code) > 1:
+            raise ProfileError(f"institutes: {code!r} is listed twice")
     return Profile(**{**raw, "keywords": dict(keywords), "examples": tuple(examples), "prior_work": tuple(Reference(**ref) for ref in references), "institutes": tuple(institutes)})
 
 def suggest_terms(sentences: tuple[str, ...], document_frequency: dict[str, int], documents: int, limit: int = 25) -> dict[str, int]:

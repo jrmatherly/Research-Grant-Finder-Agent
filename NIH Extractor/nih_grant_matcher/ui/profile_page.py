@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from ..config import INSTITUTE_BONUS, INSTITUTES
-from ..profile import BUILTIN_PROFILE, MAX_INSTITUTES, Profile, ProfileError, Reference, from_export, ranks_like_builtin, suggest_terms, to_export
+from ..profile import BUILTIN_PROFILE, MAX_CITATION, MAX_INSTITUTES, MAX_KEYWORD, TEXT_LIMITS, Profile, ProfileError, Reference, from_export, ranks_like_builtin, suggest_terms, to_export
 from ..scoring import MLRelevanceScorer
 from ..store import OpportunityStore
 from ..workflow import config_for
@@ -29,10 +29,10 @@ def saved_profile(db_path: str) -> Profile | None:
     return None if to_export(profile) == to_export(BUILTIN_PROFILE) else profile
 
 def profile_sentence(profile: Profile) -> str:
-    name = escape_markdown(profile.investigator) or "an unnamed investigator"
+    name = escape_markdown(profile.investigator)
     if ranks_like_builtin(profile):
-        return f"Ranking uses the built-in profile (machine learning and data science) for {name}."
-    return f"Ranking uses the profile of {name}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
+        return "Ranking uses the built-in profile (machine learning and data science) " + (f"for {name}." if name else "with your background.")
+    return f"Ranking uses the profile of {name or 'an unnamed investigator'}, with {len(profile.keywords)} terms and {len(profile.examples)} example sentences."
 
 def show_unreadable(exc: ProfileError) -> None:
     st.error(f"The saved profile cannot be read, so ranking uses the built-in profile. Reset to built-in under Profile deletes the saved profile, and the database file holds its only copy. {escape_markdown(str(exc))}")
@@ -90,15 +90,15 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
     with st.form(f"profile_step_{n}"):
         if n == 0:
             ranking = st.radio("Ranking", RANKINGS, index=int(st.session_state.get("profile_builtin", False)))
-            investigator = st.text_input("Name", value=draft.investigator)
-            institution = st.text_input("Institution", value=draft.institution)
+            investigator = st.text_input("Name", value=draft.investigator, max_chars=TEXT_LIMITS["investigator"])
+            institution = st.text_input("Institution", value=draft.institution, max_chars=TEXT_LIMITS["institution"])
             stage = st.selectbox("Career stage", CAREER_STAGES, index=CAREER_STAGES.index(draft.career_stage) if draft.career_stage in CAREER_STAGES else None, placeholder="Choose a stage")
         elif n == 1:
-            summary = st.text_area("Research summary", value=draft.research_summary)
+            summary = st.text_area("Research summary", value=draft.research_summary, max_chars=TEXT_LIMITS["research_summary"])
             aims = st.text_area("Aims of recent or planned work", value="\n".join(draft.examples), help="Three to six sentences, as a paragraph or one per line. Ranking compares each opportunity with each sentence.")
         elif n == 2:
             st.caption("Terms proposed from your research text. Keep, remove, re-weight or add terms. A weight runs from 1 to 30.")
-            terms = st.data_editor(pd.DataFrame({"Term": list(draft.keywords), "Weight": list(draft.keywords.values())}, columns=["Term", "Weight"]), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Weight": st.column_config.NumberColumn("Weight", min_value=1, max_value=30, step=1, default=10)})
+            terms = st.data_editor(pd.DataFrame({"Term": list(draft.keywords), "Weight": list(draft.keywords.values())}, columns=["Term", "Weight"]), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Term": st.column_config.TextColumn("Term", max_chars=MAX_KEYWORD), "Weight": st.column_config.NumberColumn("Weight", min_value=1, max_value=30, step=1, default=10)})
             institutes = st.multiselect("Your NIH institutes", list(INSTITUTES), default=draft.institutes, format_func=lambda code: f"{code}, {INSTITUTES[code]}", max_selections=MAX_INSTITUTES)
             st.caption(f"A record issued by one of these institutes gets {INSTITUTE_BONUS:g} points. Choose up to three. It helps most when one institute funds your field. A record issued by NIH for several institutes gets no bonus.")
         elif n == 3:
@@ -111,10 +111,10 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
                 st.caption("The ten largest rises and the ten largest falls among the saved opportunities, scored with your draft beside the current profile. Nothing is saved yet.")
                 st.dataframe(preview, width="stretch", hide_index=True)
         else:
-            expertise = st.text_area("Expertise", value=draft.expertise)
-            resources = st.text_area("Resources", value=draft.resources)
+            expertise = st.text_area("Expertise", value=draft.expertise, max_chars=TEXT_LIMITS["expertise"])
+            resources = st.text_area("Resources", value=draft.resources, max_chars=TEXT_LIMITS["resources"])
             st.caption("Prior work, one reference per row. A key holds only letters, digits and hyphens.")
-            refs = st.data_editor(pd.DataFrame([{"Key": ref.key, "Citation": ref.citation, "PMID": ref.pmid, "DOI": ref.doi} for ref in draft.prior_work], columns=["Key", "Citation", "PMID", "DOI"], dtype=str), num_rows="dynamic", hide_index=True, width="stretch")
+            refs = st.data_editor(pd.DataFrame([{"Key": ref.key, "Citation": ref.citation, "PMID": ref.pmid, "DOI": ref.doi} for ref in draft.prior_work], columns=["Key", "Citation", "PMID", "DOI"], dtype=str), num_rows="dynamic", hide_index=True, width="stretch", column_config={"Citation": st.column_config.TextColumn("Citation", max_chars=MAX_CITATION)})
         last = n == len(STEPS) - 1
         cols = st.columns(2 if last else 3)
         back = cols[0].form_submit_button("Back", disabled=n == 0, width="stretch")
@@ -125,8 +125,9 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
     if n == 0:
         draft = replace(draft, investigator=investigator.strip(), institution=institution.strip(), career_stage=stage or "")
         st.session_state["profile_builtin"] = ranking == RANKINGS[1]
-        if st.session_state["profile_builtin"]:
-            draft = replace(draft, keywords=dict(BUILTIN_PROFILE.keywords), examples=BUILTIN_PROFILE.examples, focus=BUILTIN_PROFILE.focus, examples_name=BUILTIN_PROFILE.examples_name, institutes=BUILTIN_PROFILE.institutes)
+        # Leaving the built-in ranking starts the ranking as a new draft does, so none of the built-in terms or sentences stay behind.
+        if source := BUILTIN_PROFILE if st.session_state["profile_builtin"] else BLANK if ranks_like_builtin(draft) else None:
+            draft = replace(draft, keywords=dict(source.keywords), examples=source.examples, focus=source.focus, examples_name=source.examples_name, institutes=source.institutes)
     elif n == 1:
         examples = tuple(part.strip() for part in re.split(r"\n|(?<=[.?!])\s+", aims) if part.strip())
         if (forward or save) and not 3 <= len(examples) <= 6:
@@ -150,7 +151,7 @@ def _step(n: int, db_path: str, draft: Profile) -> None:
         st.error(f"A profile needs {missing}. Nothing was saved.")
         return
     if save:
-        _apply(db_path, lambda: draft, "Saved your profile. The Find view now ranks with it.")
+        _apply(db_path, lambda: draft, "Saved your profile. The Find view keeps the built-in ranking." if ranks_like_builtin(draft) else "Saved your profile. The Find view now ranks with it.")
     else:
         # The built-in ranking skips steps 2 to 4, which set the ranking, in both directions.
         skip = st.session_state.get("profile_builtin", False)

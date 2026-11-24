@@ -937,3 +937,80 @@ def test_a_revision_is_named_a_revision_on_the_page_and_in_the_log(tmp_path, mon
     app.button(key="apply_accept_button").click().run(timeout=30)
     assert not app.exception and any("A model's revision on" in m.value for m in app.markdown)
     assert not any("A model's revise" in m.value for m in app.markdown)
+
+
+def test_each_wizard_field_holds_the_profiles_limit_while_typing(tmp_path, monkeypatch) -> None:
+    import json
+    column_limit = lambda app, name: json.loads(app.dataframe[0].proto.columns).get(name, {}).get("type_config", {}).get("max_chars")
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    limits = {t.label: t.max_chars for t in app.text_input}
+    _press(app, "Next")
+    limits.update({t.label: t.max_chars for t in app.text_area})
+    app.text_area[1].set_value("Measure mitochondrial fission in heart failure. Map cardiac muscle energetics. Test mitophagy in cardiomyocytes.")
+    _press(app, "Next")
+    limits["Term"] = column_limit(app, "Term")
+    _press(app, "Next")
+    _press(app, "Next")
+    limits.update({t.label: t.max_chars for t in app.text_area})
+    limits["Citation"] = column_limit(app, "Citation")
+    expected = {"Name": 200, "Institution": 200, "Research summary": 6000, "Term": 80, "Expertise": 6000, "Resources": 6000, "Citation": 1000}
+    assert {name: limits.get(name) for name in expected} == expected
+
+
+def test_a_built_in_ranking_with_no_name_is_described_by_its_background() -> None:
+    from nih_grant_matcher.profile import Profile
+    from nih_grant_matcher.ui.profile_page import profile_sentence
+    assert profile_sentence(Profile(expertise="Cardiac imaging.")) == "Ranking uses the built-in profile (machine learning and data science) with your background."
+
+
+def test_saving_with_the_built_in_ranking_says_the_ranking_is_kept(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Set up my profile")
+    _ranking(app).set_value("Keep the built-in ranking")
+    app.text_input[0].set_value("Ada Lovelace")
+    _press(app, "Save profile")
+    assert not app.exception and [s.value for s in app.success] == ["Saved your profile. The Find view keeps the built-in ranking."]
+
+
+def test_leaving_the_built_in_ranking_starts_a_new_ranking_and_keeps_the_name(tmp_path, monkeypatch) -> None:
+    from dataclasses import replace
+    from nih_grant_matcher.profile import BUILTIN_PROFILE
+    path = tmp_path / "data" / "grants.sqlite3"
+    store = OpportunityStore(path)
+    try:
+        store.save_profile(replace(BUILTIN_PROFILE, investigator="Ada Lovelace", expertise="Cardiac imaging."))
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    _press(app, "Edit my profile")
+    _ranking(app).set_value("Rank with my own research")
+    _press(app, "Next")
+    assert not app.exception and (app.text_area[0].value, app.text_area[1].value) == ("", "")
+    app.text_area[0].set_value("Mitochondria in the heart.")
+    aims = ("Measure mitochondrial fission in heart failure.", "Map cardiac muscle energetics.", "Test mitophagy in cardiomyocytes.")
+    app.text_area[1].set_value(" ".join(aims))
+    _press(app, "Next")
+    assert not set(app.session_state["profile_draft"].keywords) & set(BUILTIN_PROFILE.keywords)
+    for _ in range(2):
+        _press(app, "Next")
+    _press(app, "Save profile")
+    assert not app.exception
+    store = OpportunityStore(path)
+    try:
+        saved = store.profile()
+    finally:
+        store.close()
+    assert (saved.investigator, saved.expertise, saved.examples, saved.focus, saved.examples_name) == ("Ada Lovelace", "Cardiac imaging.", aims, "profile", "your example sentences")
+    assert not set(saved.keywords) & set(BUILTIN_PROFILE.keywords)
+    # A ranking of the applicant's own stays when the radio is touched.
+    _press(app, "Edit my profile")
+    _ranking(app).set_value("Rank with my own research")
+    _press(app, "Next")
+    assert app.text_area[1].value == "\n".join(aims)
