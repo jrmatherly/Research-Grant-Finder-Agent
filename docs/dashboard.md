@@ -188,6 +188,14 @@ The same steps run on the command line, from `NIH Extractor/`. Confirm or reject
 | `uv run python -m nih_grant_matcher apply export 1 --out export` | Writes the section files, the requirements, and the provenance log to the folder, and prints its full path. |
 | `uv run python -m nih_grant_matcher apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
+### Choose a model
+
+The **Model** section at the top of the Apply view sets the model that will help you write. Choose a provider: Claude, OpenAI, Gemini, or a server that speaks the OpenAI API, such as Ollama, with its **Base URL**. Paste the provider's API key and select **Save key**. A line then says where the key is and its last four characters, and never shows the key. On a Mac the key goes to the login Keychain. Elsewhere it goes to `llm-keys.json` beside the database, which only your account can read. On Windows that file's mode has no effect, and the file is protected by your user account only. A key in `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or `GRANT_MATCHER_LLM_KEY` wins over a saved key, and so does a file that the same name with `_FILE` added points to. Create a Claude key for one workspace, because Grant Matcher does not send a workspace ID.
+
+Select **List the provider's models** and choose one. A line names the host that receives your text. Nothing is sent to that host until you select **I agree to send my text to** it, once. **Test connection** then sends one short request, which the provider may charge for. A free-tier Gemini key lets Google use what you send to improve its products, so use a paid key for unpublished work. An `http://` address on another computer gets a warning, because your text and your key travel to it unencrypted.
+
+On the command line, `uv run python -m nih_grant_matcher models --provider claude` chooses the provider, says where the key was found, and lists the models. Add `--model NAME` to choose one, `--base-url URL` for the compatible provider, and `--consent` to agree to send your text to the host.
+
 ## Use the command line
 
 The same search and exports run without the dashboard. Run the commands from `NIH Extractor/`. With Docker Compose, put `docker compose exec app` in place of `uv run` and run from the repository root.

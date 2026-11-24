@@ -1,10 +1,13 @@
 from __future__ import annotations
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 import streamlit as st
+from .. import keys
 from ..announcement import SECTION_TITLES
 from ..clients import ApiError
+from ..llm import PROVIDERS, cautions, checked_base_url, chosen, connect, host_of, list_models
 from ..models import Finding, Opportunity
 from ..rules import FACT_KINDS
 from ..store import OpportunityStore
@@ -13,6 +16,7 @@ from .markdown import escape_markdown
 
 ACKNOWLEDGE = "A model drafted or revised most of this section's words. I have rewritten what I needed to, and it states my own ideas."
 HOW_TO_START = "No application yet. To start one, open an opportunity under Details in the Find view and choose Start application."
+PROVIDER_LABELS = {"claude": "Claude, from Anthropic", "openai": "OpenAI", "gemini": "Gemini, from Google", "compatible": "A server that speaks the OpenAI API, such as Ollama"}
 
 def _notice(kind: str, text: str) -> None:
     st.session_state["apply_notices"] = [*st.session_state.get("apply_notices", []), (kind, text)]
@@ -32,7 +36,7 @@ def _act(db_path: str, action: Callable[[OpportunityStore], str | None]) -> bool
         done = action(store)
     except NotReady as exc:
         _notice("error", f"{escape_markdown(exc.reason)} {_findings(exc.findings)}".strip())
-    except (ApiError, sqlite3.Error, ValueError, OSError) as exc:
+    except (ApiError, keys.KeychainError, sqlite3.Error, ValueError, OSError) as exc:
         _notice("error", escape_markdown(str(exc)))
     else:
         if done:
@@ -148,6 +152,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
     app_id = st.selectbox("Application", ids, format_func=labels.__getitem__, key="application_id")
     path = str(store.db_path)
     st.caption(f"Your text, your inputs and every model call for this application are stored in {f'`{path}`' if '`' not in path else escape_markdown(path)}. Anyone who can read that file can read them.")
+    _model_settings(store, db_path)
     ws = Workspace(store, app_id)
     view = ws.view()
     with st.container():
@@ -165,6 +170,75 @@ def _page(store: OpportunityStore, db_path: str) -> None:
         _sections_tab(view, store, db_path, app_id)
     with log_tab:
         _log_tab(view, db_path, app_id)
+
+def _model_settings(store: OpportunityStore, db_path: str) -> None:
+    picked = chosen(store)
+    with st.expander("Model", expanded=picked is None):
+        st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
+        if "apply_llm_provider" not in st.session_state:
+            st.session_state["apply_llm_provider"] = picked[0].name if picked else None
+        st.selectbox("Provider", list(PROVIDERS), format_func=PROVIDER_LABELS.__getitem__, placeholder="Choose a provider", key="apply_llm_provider", on_change=_act, args=(db_path, _choose_provider))
+        if picked is None:
+            return
+        provider, name, base_url = picked
+        if provider.name == "compatible":
+            if "apply_llm_base_url" not in st.session_state:
+                st.session_state["apply_llm_base_url"] = base_url
+            st.text_input("Base URL", key="apply_llm_base_url", help="The address of the server's OpenAI API, such as http://localhost:11434/v1 for Ollama.", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.base_url", checked_base_url(st.session_state["apply_llm_base_url"]))))
+        try:
+            key = keys.get(provider, store.db_path.parent)
+        except (keys.KeychainError, OSError) as exc:
+            st.error(escape_markdown(str(exc)))
+            return
+        where = keys.where(provider, store.db_path.parent)
+        st.caption(f"{escape_markdown(where)}, ends in ...{escape_markdown(key[-4:])}." if key and where.startswith("Saved") else f"{escape_markdown(where)}." if key else "No key saved." + ("" if provider.needs_key else " This provider does not need one."))
+        if keys.PLATFORM == "win32":
+            st.caption("On Windows the key file is protected by your user account only.")
+        with st.form("apply_llm_key_form"):
+            st.text_input("API key", type="password", key="apply_llm_key", help=f"Saved in the macOS Keychain on a Mac, and in a file beside the database elsewhere. {provider.key_env} or {provider.key_env}_FILE, when set, wins over a saved key.")
+            st.form_submit_button("Save key", key="apply_llm_save_key_button", on_click=_act, args=(db_path, _save_key))
+        if key and where.startswith("Saved"):
+            st.button("Remove the saved key", key="apply_llm_remove_key_button", on_click=_act, args=(db_path, _remove_key))
+        listed = st.session_state.get("apply_llm_models", {}).get(provider.name, [])
+        if "apply_llm_model" not in st.session_state:
+            st.session_state["apply_llm_model"] = name or None
+        st.selectbox("Model", list(dict.fromkeys([*([name] if name else []), *listed])), placeholder="List the provider's models to choose one", key="apply_llm_model", on_change=_act, args=(db_path, lambda s: s.set_setting("llm.model", st.session_state["apply_llm_model"] or "")))
+        st.button("List the provider's models", key="apply_llm_list_button", on_click=_act, args=(db_path, _list_models))
+        host = host_of(base_url)
+        st.caption(f"Your text goes to {escape_markdown(host)}.")
+        for caution in cautions(provider, base_url):
+            st.warning(escape_markdown(caution))
+        agreed = bool(store.setting(f"consent:{host}"))
+        st.checkbox(f"I agree to send my text to {escape_markdown(host)}", value=agreed, disabled=agreed, key=f"apply_llm_consent_{host}", on_change=_act, args=(db_path, lambda s, host=host: s.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())))
+        st.button("Test connection", key="apply_llm_test_button", disabled=not agreed, help="Sends one short request, which the provider may charge for.", on_click=_act, args=(db_path, _test_connection))
+
+def _choose_provider(store: OpportunityStore) -> None:
+    store.set_setting("llm.provider", st.session_state["apply_llm_provider"])
+    # A new provider starts from its own default model and base URL.
+    store.set_setting("llm.model", "")
+    for key in ("apply_llm_model", "apply_llm_base_url"):
+        st.session_state.pop(key, None)
+
+def _save_key(store: OpportunityStore) -> str:
+    key, st.session_state["apply_llm_key"] = st.session_state.get("apply_llm_key", "").strip(), ""
+    return f"Saved the key in {escape_markdown(keys.save(chosen(store)[0], key, store.db_path.parent))}."
+
+def _remove_key(store: OpportunityStore) -> str:
+    keys.delete(chosen(store)[0], store.db_path.parent)
+    return "Removed the saved key."
+
+def _list_models(store: OpportunityStore) -> str:
+    provider, _, base_url = chosen(store)
+    found = list_models(provider, base_url, keys.get(provider, store.db_path.parent))
+    st.session_state["apply_llm_models"] = {**st.session_state.get("apply_llm_models", {}), provider.name: found}
+    return f"{escape_markdown(host_of(base_url))} lists {len(found)} model{'' if len(found) == 1 else 's'}."
+
+def _test_connection(store: OpportunityStore) -> str:
+    model = connect(store)
+    if model is None:
+        raise ValueError("Choose a model, and save a key if the provider needs one, before you test the connection.")
+    done = model.complete("Answer in one word.", "Say hello.", max_tokens=64)
+    return f"{escape_markdown(done.model)} at {escape_markdown(model.host)} answered. The test used {done.input_tokens + done.output_tokens} tokens."
 
 def _announcement_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     st.button("Fetch the full announcement", key="apply_fetch_button", type="primary", on_click=_on, args=(db_path, app_id, _fetch))

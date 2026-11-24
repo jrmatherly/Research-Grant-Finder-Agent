@@ -773,3 +773,34 @@ def test_the_terms_step_offers_up_to_three_institutes(tmp_path, monkeypatch) -> 
     institutes.set_value(["NHLBI"])
     _press(app, "Next")
     assert not app.exception and "4. Preview" in _subheaders(app) and app.session_state["profile_draft"].institutes == ("NHLBI",)
+
+
+def test_the_model_expander_saves_a_key_asks_for_consent_and_tests_the_connection(tmp_path, monkeypatch, post) -> None:
+    from helpers import fixture
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    path = _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    assert not app.exception and app.text_input(key="apply_llm_base_url").value == "http://localhost:11434/v1"
+    app.text_input(key="apply_llm_key").input("sk-local-4f2a")
+    app.button(key="apply_llm_save_key_button").click().run(timeout=30)
+    assert not app.exception and any("ends in ...4f2a" in caption.value for caption in app.caption)
+    assert "sk-local-4f2a" not in " ".join(element.value for element in [*app.markdown, *app.caption, *app.success])
+    post.reply({"object": "list", "data": [{"id": "llama9", "object": "model"}]})
+    app.button(key="apply_llm_list_button").click().run(timeout=30)
+    app.selectbox(key="apply_llm_model").set_value("llama9").run(timeout=30)
+    assert app.button(key="apply_llm_test_button").disabled
+    app.checkbox(key="apply_llm_consent_localhost").check().run(timeout=30)
+    post.reply(fixture("openai-ok"))
+    app.button(key="apply_llm_test_button").click().run(timeout=30)
+    assert not app.exception and any("answered" in success.value for success in app.success)
+    assert post.headers["Authorization"] == "Bearer sk-local-4f2a" and post.body["model"] == "llama9"
+    store = OpportunityStore(path)
+    try:
+        assert store.setting("consent:localhost") and store.setting("llm.model") == "llama9"
+    finally:
+        store.close()
+    assert b"sk-local-4f2a" not in path.read_bytes()

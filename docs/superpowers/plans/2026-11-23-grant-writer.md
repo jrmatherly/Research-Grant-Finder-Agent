@@ -1341,13 +1341,13 @@ The wire shapes, as each vendor's documentation showed them on 2026-11-23. The C
 
 | Wire | Request | Reply |
 | --- | --- | --- |
-| `anthropic` | `POST {base}/messages`. Headers `x-api-key`, `anthropic-version: 2026-10-21`, `content-type: application/json`. Body `{"model", "max_tokens", "system", "messages": [{"role": "user", "content"}]}`. | Text is every `content` block whose `type` is `text`, joined. `truncated` is `stop_reason == "max_tokens"`. `stop_reason == "refusal"` raises `ModelError(kind="refused")`. Tokens are `usage.input_tokens` and `usage.output_tokens`. |
-| `openai` | `POST {base}/chat/completions`. Header `Authorization: Bearer <key>`, left out when there is no key. Body `{"model", "messages": [{"role": "system", "content"}, {"role": "user", "content"}], "max_completion_tokens"}`. | Text is `choices[0].message.content`. `truncated` is `choices[0].finish_reason == "length"`. Tokens are `usage.prompt_tokens` and `usage.completion_tokens`. |
-| `gemini` | `POST {base}/interactions`. Headers `x-goog-api-key`, `Api-Revision: 2026-05-20`. Body `{"model", "system_instruction", "input", "store": false}`. | Text is every `content` item of type `text` in every `steps` item of type `model_output`, joined. `truncated` is `status == "incomplete"`. `status == "failed"` raises `ModelError`. |
+| `anthropic` | `POST {base}/messages`. Headers `Authorization: Bearer <key>` (the vendor page calls `x-api-key` a legacy fallback), `anthropic-version: 2026-10-21`, `anthropic-beta: server-side-fallback-2026-07-01`, `content-type: application/json`. Body `{"model", "max_tokens", "system", "messages": [{"role": "user", "content"}], "fallbacks": "default"}`. | Text is every `content` block whose `type` is `text`, joined. `truncated` is `stop_reason` `"max_tokens"` or `"model_context_window_exceeded"`. The model is the reply's top-level `model`, which names a fallback model when one answered. `stop_reason == "refusal"` raises `ModelError(kind="refused")`. Tokens are `usage.input_tokens` and `usage.output_tokens`. |
+| `openai` | `POST {base}/chat/completions`. Header `Authorization: Bearer <key>`, left out when there is no key. Body `{"model", "messages": [{"role": "system", "content"}, {"role": "user", "content"}], "max_completion_tokens"}`. The `compatible` provider sends `max_tokens` in its place: Ollama's page lists `max_tokens` and not `max_completion_tokens`, and its server ignores a field it does not know. | Text is `choices[0].message.content`. `truncated` is `choices[0].finish_reason == "length"`. Tokens are `usage.prompt_tokens` and `usage.completion_tokens`. |
+| `gemini` | `POST {base}/interactions`. Header `x-goog-api-key`. `Api-Revision` is ignored since the legacy schema was removed on 2026-06-08. Body `{"model", "system_instruction", "input", "generation_config": {"max_output_tokens"}, "store": false}`. | Text is every `content` item of type `text` in every `steps` item of type `model_output`, joined. `truncated` is `status == "incomplete"`. `status == "failed"` raises `ModelError`. Tokens are `usage.total_input_tokens` and `usage.total_output_tokens`. |
 
-Error mapping, by HTTP status: 401 and 403 are `auth`. 429 is `rate`, or `quota` when the body's error code or type names quota, credit or a spend limit. 500, 503 and 529 are `overload`. Anything else is `other`. The message is the status and the provider's own `error.message`, with every occurrence of the key replaced by `[key]`. A provider can echo part of a key in an error, so the replacement also covers the key's last four characters after `...`.
+Error mapping, by HTTP status: 401 and 403 are `auth`. 402 is `quota`. 429 is `rate`, or `quota` when the body's error code or type names quota, credit, a spend limit or a usage limit. 500, 503 and 529 are `overload`. Anything else is `other`. The message is the status and the provider's own `error.message`, with every occurrence of the key replaced by `[key]`. A provider can echo part of a key in an error, so the replacement also covers the key's last four characters after `...`.
 
-`_send` does not go through `clients._read`. That function retries a 429, a 5xx and a dropped connection three times, which would send a paid request three times and could wait 30 minutes, and it reduces an `HTTPError` to text, which leaves no status to map. `_send` calls `_open`. It catches `urllib.error.HTTPError`, reads at most 2,000 characters of the body, and raises `ModelError` with the kind from the table. When the kind is `rate` or `overload`, the provider did not process the request, so `_send` waits and sends it once more: it waits the `retry-after` seconds when the header is there and at most 30, and 2 seconds otherwise, through the module attribute `llm._sleep = time.sleep`, which the tests replace. A second failure is raised. The vendors' own packages retry these same statuses twice. It catches `OSError` and `http.client.HTTPException` and raises `ModelError(kind="other")` whose message says that the request may have reached the provider, so the applicant knows a charge is possible. One more resend exists, and it changes the request: when an `openai`-wire server answers 400 and names `max_completion_tokens` in its message, `_send` is called once more with `max_tokens` in its place.
+`_send` does not go through `clients._read`. That function retries a 429, a 5xx and a dropped connection three times, which would send a paid request three times and could wait 30 minutes, and it reduces an `HTTPError` to text, which leaves no status to map. `_send` calls `_open`. It catches `urllib.error.HTTPError`, reads at most 2,000 characters of the body, and raises `ModelError` with the kind from the table. When the kind is `rate` or `overload`, the provider did not process the request, so `_send` waits and sends it once more: it waits the `retry-after` seconds when the header is there and at most 30, and 2 seconds otherwise, through the module attribute `llm._sleep = time.sleep`, which the tests replace. A second failure is raised. The vendors' own packages retry these same statuses twice. It catches `OSError` and `http.client.HTTPException` and raises `ModelError(kind="other")` whose message says that the request may have reached the provider, so the applicant knows a charge is possible. One more resend exists, and it changes the request: when an `openai`-wire server answers 400 and names the token limit it was sent, `_send` is called once more with the other one, `max_tokens` or `max_completion_tokens`, in its place.
 
 - [ ] **Step 1: Read each vendor's page again, and save one reply of each as a fixture**
 
@@ -1375,7 +1375,7 @@ def test_a_reply_cut_at_the_token_limit_says_so(wire, post) -> None:
 def test_the_claude_request_has_its_headers_and_no_key_in_the_url(post) -> None:
     post.reply(fixture("anthropic-ok"))
     model("claude", key="sk-test-123").complete("s", "u")
-    assert post.headers["X-api-key"] == "sk-test-123" and post.headers["Anthropic-version"] == "2026-10-21"
+    assert post.headers["Authorization"] == "Bearer sk-test-123" and post.headers["Anthropic-version"] == "2026-10-21"
     assert "sk-test-123" not in post.url and post.body["model"] == "claude-opus-5-5"
 
 def test_gemini_asks_not_to_be_stored(post) -> None:
@@ -1419,11 +1419,12 @@ def test_a_dropped_connection_says_a_charge_is_possible_and_is_not_retried(post)
         model("claude").complete("s", "u")
     assert post.calls == 1
 
-def test_a_server_that_wants_max_tokens_gets_it_on_the_second_request(post) -> None:
-    post.fail(400, {"error": {"message": "Unsupported parameter: max_completion_tokens"}})
+@pytest.mark.parametrize("name, sent, then", [("openai", "max_completion_tokens", "max_tokens"), ("compatible", "max_tokens", "max_completion_tokens")])
+def test_a_server_that_wants_the_other_token_limit_gets_it_on_the_second_request(name, sent, then, post) -> None:
+    post.fail(400, {"error": {"message": f"Unsupported parameter: {sent}"}})
     post.reply(fixture("openai-ok"))
-    assert model("compatible", key=None, base_url="http://localhost:11434/v1").complete("s", "u").text == "Hello."
-    assert post.calls == 2 and "max_tokens" in post.body and "max_completion_tokens" not in post.body
+    assert model(name, key=None, base_url="http://localhost:11434/v1").complete("s", "u").text == "Hello."
+    assert post.calls == 2 and then in post.body and sent not in post.body
 
 def test_a_refusal_is_an_error_of_its_own_kind(post) -> None:
     post.reply({**fixture("anthropic-ok"), "stop_reason": "refusal", "content": []})

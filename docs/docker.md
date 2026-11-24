@@ -102,7 +102,52 @@ Or run a command in a container of its own: `docker compose run --rm app python 
 | `apply export 1 --out outputs/application-1` | Writes the section files, the requirements, and the provenance log to the folder. Give a path under `outputs/`, so that the files land in the mounted folder. A relative path outside the mounted folders fails with "Permission denied". An absolute path such as `/tmp/export` is written inside the container and is lost with it. |
 | `apply delete 1 --yes` | Deletes the application and everything logged for it. Without `--yes`, nothing is deleted. |
 
+| `models --provider claude` | Chooses the provider of the model that helps you write, prints the host that receives your text and where the key was found, and lists the provider's models. Add `--model NAME` to choose one of them. For a self-hosted server, use `--provider compatible --base-url http://host:port/v1`. |
+| `models --consent` | Agrees to send your text to the chosen provider's host. Nothing is sent to a host before you agree. |
+
 Add `--help` to a command to see its options. Do not run `rarity-table` in the container. It rewrites a file inside the image, and the container's user cannot write there.
+
+## Give the container a key for a model
+
+The Apply view can ask a model to help you write. Choose the provider, the model, and a self-hosted server's address in the dashboard's **Model** section or with the `models` command. The container needs only the key, in one of these variables:
+
+| Provider | Variable |
+| --- | --- |
+| `claude` | `ANTHROPIC_API_KEY`. Create the key for one workspace in the Claude Console. Grant Matcher does not send a workspace ID. |
+| `openai` | `OPENAI_API_KEY` |
+| `gemini` | `GEMINI_API_KEY` |
+| `compatible` | `GRANT_MATCHER_LLM_KEY`, when the server needs a key. Ollama does not. |
+
+The commands in this section have not yet been run against the image.
+
+[Docker's documentation](https://docs.docker.com/compose/how-tos/use-secrets/) warns that a key in an environment variable can be exposed, for example in a log. Mount the key as a file instead, and give its path in the variable of the same name with `_FILE` added. With Docker Compose, save the key in `anthropic_api_key.txt` beside `compose.yaml`, and write a file named `compose.override.yaml` beside it:
+
+```yaml
+services:
+  app:
+    environment:
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+    secrets:
+      - anthropic_api_key
+secrets:
+  anthropic_api_key:
+    file: ./anthropic_api_key.txt
+```
+
+Compose reads the override file by itself, and mounts the key at `/run/secrets/anthropic_api_key`. On Linux, the container's user, 1000 or your `APP_UID`, must be able to read the file.
+
+With `docker run`, mount the file and name it in the variable:
+
+```bash
+docker run -d --name nih-grant-matcher \
+  -p 127.0.0.1:8501:8501 \
+  -v "$PWD/data:/app/data" -v "$PWD/outputs:/app/outputs" -v "$PWD/digests:/app/digests" \
+  -v "$PWD/anthropic_api_key.txt:/run/secrets/anthropic_api_key:ro" \
+  -e ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key \
+  ghcr.io/jrmatherly/nih-grant-matcher:latest
+```
+
+`compose.yaml` also passes the eight variables on from your shell when they are set, so `ANTHROPIC_API_KEY=... docker compose up -d --no-build` works too. A variable wins over a file, and a file wins over a key saved in the dashboard. A key saved in the dashboard goes to `data/llm-keys.json`, which only the container's user can read.
 
 ## Where the results are saved
 
