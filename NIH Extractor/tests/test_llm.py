@@ -163,8 +163,23 @@ def test_a_redirect_is_not_followed_so_the_key_reaches_no_other_server(monkeypat
 def test_an_openai_reply_whose_text_is_not_a_string_has_no_text(post) -> None:
     ok = fixture("openai-ok")
     post.reply({**ok, "choices": [{**ok["choices"][0], "message": {"role": "assistant", "content": [{"type": "text", "text": "Hello."}]}}]})
-    with pytest.raises(ModelError, match="no text"):
+    with pytest.raises(ModelError, match="no text") as failed:
         model("openai").complete("s", "u")
+    assert "choices, created, id, model, object, service_tier, usage" in str(failed.value)
+
+def test_a_reply_in_another_shape_names_its_top_level_fields_and_no_values(post) -> None:
+    post.reply({"type": "message", "id": "msg-1", "result": "sk-test-123 said hello"})
+    with pytest.raises(ModelError, match="not in the form") as failed:
+        model("claude", key="sk-test-123").complete("s", "u")
+    assert "id, result, type" in str(failed.value) and "msg-1" not in str(failed.value) and "hello" not in str(failed.value)
+
+@pytest.mark.parametrize("status, shown", [(400, "max_completion_tokens is too large"), (500, "overloaded")])
+def test_when_the_other_token_limit_fails_too_the_error_that_named_the_fault_is_shown(status, shown, post) -> None:
+    post.fail(400, {"error": {"message": "max_completion_tokens is too large: 16000. This model supports at most 8192 completion tokens."}})
+    post.fail(status, {"error": {"message": "Unrecognized request argument supplied: max_tokens" if status == 400 else "overloaded"}})
+    with pytest.raises(ModelError, match=shown):
+        model("openai", key="sk-test-123").complete("s", "u")
+    assert post.calls == 2
 
 @pytest.mark.parametrize("name, wire, usage", [("claude", "anthropic", {"input_tokens": None, "output_tokens": None}), ("openai", "openai", {"prompt_tokens": None, "completion_tokens": None}), ("gemini", "gemini", {"total_input_tokens": None})])
 def test_a_missing_or_null_token_count_is_zero(name, wire, usage, post) -> None:
@@ -188,7 +203,7 @@ def test_a_reply_that_is_not_json_is_shown_without_the_key(post) -> None:
     post.queue.append(lambda url: io.BytesIO(b"<html>Bad key sk-test-123</html>"))
     with pytest.raises(ModelError, match="did not return JSON") as failed:
         model("openai", key="sk-test-123").complete("s", "u")
-    assert "sk-test" not in str(failed.value)
+    assert "sk-test" not in str(failed.value) and "reached api.openai.com, so it may be charged. It was not sent again." in str(failed.value)
 
 def test_an_error_body_cut_short_does_not_keep_part_of_the_key(post) -> None:
     def failed_with_html(url: str):

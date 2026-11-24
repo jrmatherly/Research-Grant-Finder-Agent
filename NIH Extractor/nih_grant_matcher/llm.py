@@ -81,7 +81,7 @@ def _send(url: str, headers: dict[str, str], body: dict | None, key: str | None,
     try:
         parsed = json.loads(raw.decode("utf-8"))
     except ValueError:
-        raise ModelError(f"{host} did not return JSON. The reply starts with {_redact(raw.decode('utf-8', 'replace'), key)[:80]!r}") from None
+        raise ModelError(f"{host} did not return JSON. The request reached {host}, so it may be charged. It was not sent again. The reply starts with {_redact(raw.decode('utf-8', 'replace'), key)[:80]!r}") from None
     if not isinstance(parsed, dict):
         raise ModelError(f"{host} returned JSON that is not an object")
     return parsed
@@ -120,6 +120,10 @@ def _retry(send: Callable[[], dict]) -> dict:
         _sleep(exc.wait)
     return send()
 
+def _fields(data: dict, key: str | None) -> str:
+    # Names only: a value can hold the applicant's text or an echoed key.
+    return _redact(f"Its top-level fields are {', '.join(sorted(data)) or 'none'}.", key)
+
 def _bearer(key: str | None) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"} if key else {}
 
@@ -140,13 +144,20 @@ class HttpModel:
             # The server named the token limit it was sent, so it did not process the request.
             other = "max_tokens" if self._limit == "max_completion_tokens" else "max_completion_tokens"
             body = {**{k: v for k, v in body.items() if k != self._limit}, other: max_tokens}
-            data = _retry(lambda: _send(url, headers, body, self._key))
+            try:
+                data = _retry(lambda: _send(url, headers, body, self._key))
+            except ModelError as again:
+                # The first 400 named what was wrong, and a second one most likely refuses only the other name.
+                if again.status != 400:
+                    raise
+                raise exc from None
         try:
             done = read(self, data)
             # Any JSON passes the readers, and the log stores the model as text and each count as a whole number.
             return replace(done, model=done.model if isinstance(done.model, str) and done.model else self.name, input_tokens=done.input_tokens if type(done.input_tokens) is int else 0, output_tokens=done.output_tokens if type(done.output_tokens) is int else 0)
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
-            raise ModelError(f"The reply from {self.host} was not in the form Grant Matcher reads: {exc!r}") from None
+            unread = repr(exc)
+        raise ModelError(f"The reply from {self.host} was not in the form Grant Matcher reads: {unread}. {_fields(data, self._key)}")
 
 def _anthropic_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:
     # fallbacks sends a request that a safety classifier declines on to the model Anthropic recommends, so a declined biology grant can still get an answer.
@@ -172,7 +183,7 @@ def _openai_reply(m: HttpModel, data: dict) -> Completion:
     if message.get("content") is None and choice.get("finish_reason") == "length":
         return Completion("", data.get("model") or m.name, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, True)
     if not isinstance(text := message.get("content"), str):
-        raise ModelError(f"The reply from {m.host} had no text.")
+        raise ModelError(f"The reply from {m.host} had no text. {_fields(data, m._key)}")
     return Completion(text, data.get("model") or m.name, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, choice.get("finish_reason") == "length")
 
 def _gemini_request(m: HttpModel, system: str, user: str, max_tokens: int) -> tuple[str, dict[str, str], dict[str, Any]]:

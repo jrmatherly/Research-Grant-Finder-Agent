@@ -27,7 +27,10 @@ def get(provider: Provider, data_dir: Path) -> str | None:
             text = Path(path).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             raise UnreadableKey(f"{provider.key_env}_FILE names {path}, which Grant Matcher cannot read: {exc.strerror or exc}.") from None
-        return _checked(text, f"{path}, the file that {provider.key_env}_FILE names")
+        # An empty file would otherwise read as no key and still win over a saved one.
+        if (found := _checked(text, f"{path}, the file that {provider.key_env}_FILE names")) is None:
+            raise UnreadableKey(f"{provider.key_env}_FILE names {path}, which is empty. Put the key in that file, or unset {provider.key_env}_FILE to use a saved key.")
+        return found
     slot = _slot(provider, data_dir)
     if slot not in _cache:
         try:

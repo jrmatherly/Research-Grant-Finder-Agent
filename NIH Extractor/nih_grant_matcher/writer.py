@@ -316,6 +316,8 @@ class Workspace:
         if (model := next((r for r in revisions if r.call_id == call_id), None)) is not None:
             # The applicant's edit was written with the model's text and carries its time.
             done = next((r for r in revisions if r.parent_id == model.id and r.author == "applicant" and r.created_at == model.created_at), model)
+            if head(revisions, call.section).id != done.id:
+                raise WorkspaceError(f"Proposal {call_id} was accepted earlier as revision {done.id}, and the section has changed since.")
             # Edits that differ from what the first accept wrote would otherwise be dropped with a success.
             if edited is not None and edited != done.text:
                 raise StaleEdit(head(revisions, call.section))
