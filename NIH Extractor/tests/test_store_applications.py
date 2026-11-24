@@ -93,7 +93,7 @@ def test_a_read_only_database_from_an_earlier_version_reads_as_empty(tmp_path) -
     try:
         store = OpportunityStore(path)
         try:
-            assert store.applications() == store.facts(1) == store.requirements(1) == store.calls(1) == store.revisions(1) == store.signoffs(1) == []
+            assert store.applications() == store.facts(1) == store.requirements(1) == store.calls(1) == store.revisions(1) == store.signoffs(1) == store.reviews(1) == []
             assert store.application(1) is None and store.announcement("PAR-1") is None and store.setting("deleting") is None
             with pytest.raises(ReadOnlyDatabase, match="read-only"):
                 store.add_application(opportunity_number="PAR-1", grant_type="NIH:R21", title="t", resubmission=False)
@@ -127,6 +127,7 @@ def test_the_deleting_setting_is_the_store_s_own(store) -> None:
 
 def test_deleting_an_application_removes_every_kind_of_row(store) -> None:
     from nih_grant_matcher.announcement import Requirement
+    from nih_grant_matcher.models import Review
     keep, gone = _app(store), store.add_application(opportunity_number="PAR-2", grant_type="NIH:R21", title="t", resubmission=False).id
     for app in (keep, gone):
         call = store.add_call(app, "specific-aims", "draft", "anthropic", "claude-opus-5-5", "s", "p", "r")
@@ -136,10 +137,12 @@ def test_deleting_an_application_removes_every_kind_of_row(store) -> None:
         store.replace_requirements(app, "model", (Requirement("must", "Name a mentor.", "q", "model", call_id=call.id),), call_id=call.id)
         store.add_fact(app, "aim", "Aim one.")
         store.add_call(app, "specific-aims", "polish", "anthropic", "claude-opus-5-5", "s", "p", "r", parent_id=child.id)
-    before = (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep))
+        reviewed = store.add_call(app, "specific-aims", "review", "anthropic", "claude-opus-5-5", "s", "p", "r", parent_id=child.id)
+        store.add_review(app, child.id, reviewed.id, Review(child.id, {"importance": 3}, (), "claude-opus-5-5"))
+    before = (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep), store.reviews(keep))
     store.delete_application(gone)
-    assert (store.calls(gone), store.revisions(gone), store.signoffs(gone), store.requirements(gone), store.facts(gone)) == ([], [], [], [], [])
-    assert store.application(gone) is None and (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep)) == before
+    assert (store.calls(gone), store.revisions(gone), store.signoffs(gone), store.requirements(gone), store.facts(gone), store.reviews(gone)) == ([], [], [], [], [], [])
+    assert store.application(gone) is None and (store.calls(keep), store.revisions(keep), store.signoffs(keep), store.requirements(keep), store.facts(keep), store.reviews(keep)) == before
     assert store.setting("deleting") is None
 
 def test_a_delete_that_fails_part_way_leaves_the_log_locked(store) -> None:
@@ -209,3 +212,18 @@ def test_deleting_an_application_removes_its_discarded_proposals(store) -> None:
         store.set_setting(f"discarded:{call.id}", "2026-11-23T00:00:00")
     store.delete_application(app)
     assert store.setting(f"discarded:{gone.id}") is None and store.setting(f"discarded:{kept.id}") is not None
+
+def test_a_review_is_append_only_and_names_a_review_call_of_the_revision_it_read(store) -> None:
+    from nih_grant_matcher.models import Review, ReviewPoint
+    app = _app(store)
+    revision = store.add_revision(app, "specific-aims", None, "applicant", "write", "mine", call_id=None)
+    polish = store.add_call(app, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", parent_id=revision.id)
+    review = Review(revision.id, {"importance": 3, "expertise": "No team is named."}, (ReviewPoint("importance", "strength", "Clear.", "mine"),), "fake-1", 2)
+    with pytest.raises(ValueError, match="not a review"):
+        store.add_review(app, revision.id, polish.id, review)
+    call = store.add_call(app, "specific-aims", "review", "fake", "fake-1", "s", "p", "r", parent_id=revision.id)
+    store.add_review(app, revision.id, call.id, review)
+    assert store.reviews(app) == [review]
+    for statement in ("UPDATE reviews SET review_json = '{}'", "DELETE FROM reviews"):
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            store.conn.execute(statement)

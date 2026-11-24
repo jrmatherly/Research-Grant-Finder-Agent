@@ -14,7 +14,7 @@ from .rules import FACT_KINDS
 from .scoring import document_frequencies
 from .store import OpportunityStore, ReadOnlyProfile
 from .workflow import fetch_score_opportunities, rescore_saved
-from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe, read_summary
+from .writer import DECISIONS, DROPPED, NO_SECTION_IV, ORIGINS, STALE_PROPOSAL, NotReady, StaleEdit, Workspace, describe, dropped_points, read_summary, score_line
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Find and rank NIH grant opportunities with an applicant profile.")
@@ -78,7 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     polish = apply.add_parser("polish", help="Ask the model you chose to polish the newest revision of a section. Nothing changes until you accept.")
     revise = apply.add_parser("revise", help="Ask the model you chose to revise the newest revision of a section. Nothing changes until you accept.")
     draft = apply.add_parser("draft", help="Ask the model you chose to draft a section from your inputs. Nothing changes until you accept.")
-    for asked in (polish, revise, draft):
+    review = apply.add_parser("review", help="Ask the model you chose to score the newest revision of a section against NIH's review factors. It sees only the section and the review criteria you confirmed.")
+    for asked in (polish, revise, draft, review):
         asked.add_argument("id", type=int)
         asked.add_argument("section")
     revise.add_argument("--instruction", required=True, help="What to change.")
@@ -271,7 +272,7 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         print(f"Application {ws.application_id} is {args.number} as {args.type}{', a resubmission' if args.resubmission else ''}.")
         return 0
     ws = Workspace(store, args.id)
-    if args.action in ("extract", "polish", "revise", "draft"):
+    if args.action in ("extract", "polish", "revise", "draft", "review"):
         ws.model = connect(store)
         if ws.model is None:
             raise NotReady(f"{missing(store)} Set up the model with the models command, starting with models --provider.")
@@ -328,6 +329,15 @@ def _apply_action(store: OpportunityStore, args: argparse.Namespace) -> int:
         for finding in proposal.findings:
             print(f"  {finding.severity}  {finding.code}  {finding.message}")
         print(f"Accept it with apply accept {args.id} {proposal.call_id}, or discard it with apply discard {args.id} {proposal.call_id}.")
+    elif args.action == "review":
+        review = ws.review(args.section)
+        print(f"The model's review of revision {review.revision_id} of {args.section}. It saw only the section and the review criteria you confirmed.")
+        for factor in ws.view().grant_type.factors:
+            print(f"  {score_line(factor, review.scores[factor.key])}")
+        for point in review.points:
+            print(f"  {point.kind}{f'  {point.factor}' if point.factor else ''}  {point.text}\n    \"{point.quote}\"")
+        if review.dropped:
+            print(dropped_points(review))
     elif args.action == "accept":
         try:
             revision = ws.accept(args.call)

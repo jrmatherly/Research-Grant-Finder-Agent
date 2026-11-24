@@ -1265,6 +1265,28 @@ def test_draft_waits_for_the_inputs_and_then_proposes_a_section(tmp_path, monkey
     assert not app.exception and app.text_area(key="apply_text_1_specific-aims").value == "Aim 1 tests whether drug X lowers pressure."
 
 
+def test_a_review_shows_each_score_as_the_model_s_estimate_and_each_point_with_its_quote(tmp_path, monkeypatch, post) -> None:
+    import json
+    from nih_grant_matcher import keys
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    path = _r21_database(tmp_path, start=True)
+    _with_model(path)
+    app = _apply_view(tmp_path, monkeypatch)
+    assert not app.exception and app.button(key="apply_review_button").disabled
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells in failing hearts.")
+    finally:
+        store.close()
+    app.run(timeout=30)
+    point = {"factor": "rigor", "kind": "weakness", "text": "No sample size.", "quote": "We study heart cells in failing hearts."}
+    post.reply(_openai_reply(json.dumps({"scores": {"importance": 2, "rigor": 5, "expertise": "No cardiologist is named."}, "points": [point, {**point, "quote": "Not in the section at all."}]})))
+    app.button(key="apply_review_button").click().run(timeout=30)
+    page = _page_text(app)
+    assert not app.exception and post.calls == 1 and "We study heart cells in failing hearts." in post.body["messages"][1]["content"]
+    assert page.count("the model's estimate, not NIH's") == 3 and "5 on NIH's scale" in page and "Not yet appropriate. No cardiologist is named." in page
+    assert "No sample size." in page and "dropped 1 point" in page and "We study heart cells in failing hearts." in [t.value for t in app.text]
+
 def test_the_model_reads_the_announcement_and_says_what_it_dropped(tmp_path, monkeypatch, post) -> None:
     import json
     from nih_grant_matcher import keys

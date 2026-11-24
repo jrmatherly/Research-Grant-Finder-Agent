@@ -548,6 +548,29 @@ def test_apply_extract_lists_what_the_model_read_and_draft_proposes_a_section(tm
     assert "Aim 1 tests drug X." in out and "apply accept 1 3" in out
 
 
+def test_apply_review_prints_each_score_as_the_model_s_estimate_and_each_point_with_its_quote(tmp_path, monkeypatch, capsys) -> None:
+    import json
+    from helpers import FakeModel
+    from nih_grant_matcher.store import OpportunityStore
+    point = {"factor": "rigor", "kind": "weakness", "text": "No sample size.", "quote": "We study heart cells in failing hearts."}
+    model = FakeModel(json.dumps({"scores": {"importance": 2, "rigor": 5, "expertise": "appropriate"}, "points": [point, {**point, "quote": "Not in the section."}]}))
+    db = _apply_db(tmp_path)
+    monkeypatch.setattr(cli, "connect", lambda store: model)
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    store = OpportunityStore(db)
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    store.close()
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "review", "1", "specific-aims"]) == 1
+    assert "no text to review" in capsys.readouterr().err and model.seen == []
+    (tmp_path / "aims.txt").write_text("We study heart cells in failing hearts.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(tmp_path / "aims.txt")])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "review", "1", "specific-aims"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("the model's estimate, not NIH's") == 3 and "Rigor and Feasibility, the model's estimate, not NIH's. 5 on NIH's scale" in out and "Expertise and Resources, the model's estimate, not NIH's. Appropriate." in out
+    assert "No sample size." in out and "We study heart cells in failing hearts." in out and "dropped 1 point" in out
+
 def test_apply_extract_shows_each_limit_and_counts_only_what_this_read_added(tmp_path, monkeypatch, capsys) -> None:
     import json
     from helpers import FakeModel

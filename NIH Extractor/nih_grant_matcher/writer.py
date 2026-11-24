@@ -9,10 +9,10 @@ from .announcement import GRANTS_FAILED, Announcement, Requirement, fetch_announ
 from .checks import check_section
 from .clients import ApiError
 from .llm import ModelError
-from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Revision, Signoff
+from .models import Application, Attribution, Completion, Fact, Finding, Model, ModelCall, Opportunity, Review, Revision, Signoff
 from .profile import BUILTIN_PROFILE, Profile, ProfileError
 from .provenance import PROPOSALS, attribution, disclosure_statement, head, percent, section_state, share
-from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, SectionRule, describe, grant_types_for
+from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, ReviewFactor, SectionRule, describe, grant_types_for
 from .store import OpportunityStore
 
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
@@ -20,6 +20,8 @@ ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
 STALE_PROPOSAL = "The section changed after the model read it, so this proposal no longer fits. Ask the model again."
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
 DROPPED = "It drops an item whose quote is not in the announcement or holds fewer than 20 letters and digits, a limit whose number does not stand on its own in its quote and in the announcement or that names no section, and an item that is not in the form asked for."
+ESTIMATE = "the model's estimate, not NIH's"
+REVIEW_DROPPED = "It drops a point whose quote is not in the section or holds fewer than 20 letters and digits, and a point that is not in the form asked for."
 
 class WorkspaceError(ValueError):
     pass
@@ -53,6 +55,7 @@ class SectionView:
     gaps: tuple[str, ...]
     findings: tuple[Finding, ...]
     attribution: Attribution
+    review: Review | None
 
 @dataclass(frozen=True)
 class ApplicationView:
@@ -74,6 +77,12 @@ class ApplicationView:
             if s.rule.key == key:
                 return s
         raise WorkspaceError(f"This application has no section {key}. Its sections are {', '.join(s.rule.key for s in self.sections)}.")
+
+def score_line(factor: ReviewFactor, score: int | str) -> str:
+    return f"{factor.title}, {ESTIMATE}. " + (f"{score} on NIH's scale from 1, exceptional, to 9, poor." if factor.scale == "1-9" else "Appropriate." if score == "appropriate" else f"Not yet appropriate. {score}")
+
+def dropped_points(review: Review) -> str:
+    return f"Grant Matcher dropped {review.dropped} point{'' if review.dropped == 1 else 's'} of the reply. {REVIEW_DROPPED}"
 
 def _profile(store: OpportunityStore) -> Profile:
     # The dashboard already says that the saved profile cannot be read, and an application can still be started and checked without it.
@@ -160,7 +169,7 @@ class Workspace:
         app, store = self._application(), self.store
         grant_type, announcement = GRANT_TYPES[app.grant_type], store.announcement(app.opportunity_number)
         requirements, facts = tuple(store.requirements(app.id)), tuple(f for f in store.facts(app.id) if f.retired_at is None)
-        revisions, signoffs, profile = store.revisions(app.id), store.signoffs(app.id), _profile(store)
+        revisions, signoffs, profile, reviews = store.revisions(app.id), store.signoffs(app.id), _profile(store), store.reviews(app.id)
         grounding = _grounding(facts, profile, revisions, announcement)
         notices, kinds, sections = [], {f.kind for f in facts}, []
         for rule in _rules(app):
@@ -176,7 +185,9 @@ class Workspace:
             if state == "final" and any(f.severity == "error" for f in findings):
                 state = "draft"
                 notices.append(f"The {rule.title} is a draft again, because an error has appeared since you signed off revision {current.id}. The sign-off stays in the log.")
-            sections.append(SectionView(rule, limit, text, current.id if current else None, state, tuple(k for k in rule.needs if k not in kinds), findings, share(words)))
+            # A review is of one revision, so an older one stays in the log and is not shown as current.
+            review = next((r for r in reversed(reviews) if current and r.revision_id == current.id), None)
+            sections.append(SectionView(rule, limit, text, current.id if current else None, state, tuple(k for k in rule.needs if k not in kinds), findings, share(words), review))
         year = datetime.now(timezone.utc).year
         if app.created_at.year == year and (n := sum(a.created_at.year == year and a.id <= app.id for a in store.applications())) >= 6:
             notices.append(f"This is application {n} that Grant Matcher has started in {year}. NIH accepts six per investigator per calendar year (NOT-OD-25-132). Grant Matcher counts only its own.")
@@ -340,6 +351,21 @@ class Workspace:
             prompt = prompts.polish(current.text, rule) if action == "polish" else prompts.revise(current.text, instruction.strip(), rule, live)
         call, _ = self._ask(section, action, prompt, getattr(current, "id", None))
         return self._proposal(call)
+
+    def review(self, section: str) -> Review:
+        rule = self._rule(section)
+        current = head(self.store.revisions(self.application_id), section)
+        if current is None or not current.text.strip():
+            raise NotReady(f"The {rule.title} has no text to review yet. Write it and save it first.")
+        factors = GRANT_TYPES[self._application().grant_type].factors
+        # The reviewer reads the section alone, so its read is independent of the inputs and prompts that wrote it.
+        call, done = self._ask(section, "review", prompts.review(current.text, rule, factors, self.store.requirements(self.application_id)), current.id)
+        try:
+            review = replace(prompts.parse_review(done.text, current.text, factors), revision_id=current.id, model=done.model)
+        except ModelError as exc:
+            raise ModelError(f"{exc} Grant Matcher could not read the review and saved nothing, and the call is in the log.") from None
+        self.store.add_review(self.application_id, current.id, call.id, review)
+        return review
 
     def _proposal(self, call: ModelCall) -> Proposal:
         app, store = self._application(), self.store
