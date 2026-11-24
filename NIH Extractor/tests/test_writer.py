@@ -1,5 +1,5 @@
 import json, sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 import pytest
 from helpers import FakeModel, Grants, Guide, error_with_unreadable_body, model, start
@@ -117,10 +117,10 @@ def test_a_retired_reference_is_not_a_known_citation(tmp_path) -> None:
     assert ws.view().facts == () and "unknown-citation" in {f.code for f in ws.view().section("specific-aims").findings}
 
 class Index:
-    def __init__(self, titles: dict[str, str], fail_on: str = "") -> None: self.titles, self.fail_on, self.asked = titles, fail_on, []
+    def __init__(self, titles: dict[str, str], fail_on: str | tuple[str, ...] = ()) -> None: self.titles, self.fail_on, self.asked = titles, (fail_on,) if isinstance(fail_on, str) else fail_on, []
     def lookup(self, pmid: str = "", doi: str = "") -> str:
         self.asked.append((pmid, doi))
-        if (pmid or doi) == self.fail_on:
+        if (pmid or doi) in self.fail_on:
             raise ApiError("Checking it failed: HTTP Error 503")
         return self.titles.get(pmid or doi, "")
 
@@ -139,7 +139,7 @@ def test_verify_records_what_each_index_holds_and_warns_on_what_it_does_not(tmp_
     assert index.asked == [("123", "10.1038/smith"), ("", "10.9999/none")]
     lookups = {f.label: f.detail.get("lookup") for f in ws.view().facts}
     assert {k: (v["service"], v["id"], v["title"]) for k, v in lookups.items() if v} == {"known": ("PubMed", "PMID 123", "Heart cells."), "unknown": ("Crossref", "DOI 10.9999/none", "")}
-    assert lookups["bare"] is None and lookups["known"]["on"] == datetime.now(timezone.utc).date().isoformat()
+    assert lookups["bare"] is None and lookups["known"]["on"] == date.today().isoformat()
     assert [f.excerpt for f in ws.view().section("specific-aims").findings if f.code == "unverified-reference"] == ["[@unknown]", "[@bare]"]
     assert ws.store.facts(ws.application_id)[0].text == REFERENCES["known"]
 
@@ -148,11 +148,86 @@ def test_an_unverified_reference_does_not_block_sign_off(tmp_path) -> None:
     s = ws.view().section("specific-aims")
     assert ws.sign("specific-aims", "A. Applicant", s.revision_id).findings.count("unverified-reference") == 1
 
-def test_a_failed_lookup_keeps_earlier_results_and_records_nothing_for_the_rest(tmp_path) -> None:
+def test_a_failed_lookup_keeps_earlier_results_and_records_nothing_for_it(tmp_path) -> None:
     ws = _with_references(tmp_path)
-    with pytest.raises(ApiError, match="checked 1 reference before"):
+    with pytest.raises(ApiError, match=r"^Grant Matcher could not check 1 reference\. \[@unknown\]: Checking it failed: HTTP Error 503\. It checked 1 reference and saved what it found\."):
         ws.verify_references(Index({"123": "Heart cells."}, fail_on="10.9999/none"))
     assert [bool(f.detail.get("lookup")) for f in ws.view().facts] == [True, False, False]
+
+def _three(tmp_path) -> Workspace:
+    ws = start(tmp_path)
+    for label, text in (("mine", "Mine A. 2021. PMID: 0033611339"), ("smith", "Smith J. 2020. PMID: 111"), ("lee", "Lee K. 2019. doi:10.1000/x")):
+        ws.add_fact("reference", text, label=label)
+    return ws
+
+def test_a_reference_that_fails_every_time_does_not_block_the_ones_after_it(tmp_path) -> None:
+    from nih_grant_matcher.writer import lookup_line
+    ws, index = _three(tmp_path), Index({"111": "Smith title.", "10.1000/x": "Lee title."}, fail_on="33611339")
+    with pytest.raises(ApiError) as failed:
+        ws.verify_references(index)
+    said = str(failed.value)
+    assert index.asked == [("33611339", ""), ("111", ""), ("", "10.1000/x")]
+    assert said.startswith("Grant Matcher could not check 1 reference. [@mine]: Checking it failed: HTTP Error 503. It checked 2 references and saved what it found.") and "Try again later. For a reference that fails every time, correct its identifier or retire it." in said
+    lines = {f.label: lookup_line(f) for f in ws.view().facts}
+    assert lines["mine"] == "Not checked yet." and lines["smith"].endswith("PubMed holds PMID 111 as: Smith title.") and lines["lee"].endswith("Crossref holds DOI 10.1000/x as: Lee title.")
+
+def test_two_failed_lookups_in_a_row_stop_the_check_and_say_so(tmp_path) -> None:
+    ws, index = _three(tmp_path), Index({"10.1000/x": "Lee title."}, fail_on=("33611339", "111"))
+    with pytest.raises(ApiError) as failed:
+        ws.verify_references(index)
+    said = str(failed.value)
+    assert index.asked == [("33611339", ""), ("111", "")] and "could not check 2 references. [@mine]: Checking it failed: HTTP Error 503. [@smith]: Checking it failed: HTTP Error 503. It checked 0 references" in said
+    assert "Two lookups in a row failed, so the index is most likely not answering, and Grant Matcher did not try the 1 reference after them." in said
+    assert not any(f.detail.get("lookup") for f in ws.view().facts)
+
+def test_a_zero_padded_pmid_finds_the_record_ncbi_keys_without_the_zeros(tmp_path, monkeypatch) -> None:
+    import io
+    from nih_grant_matcher import clients
+    from nih_grant_matcher.writer import lookup_line
+    asked = []
+    def ncbi(request, timeout):
+        asked.append(pmid := request.full_url.split("id=")[1].split("&")[0])
+        return io.BytesIO(json.dumps({"header": {}, "result": {"uids": [pmid.lstrip("0")], pmid.lstrip("0"): {"uid": pmid.lstrip("0"), "title": "The role of m6A."}}}).encode())
+    monkeypatch.setattr(clients.urllib.request, "urlopen", ncbi)
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    ws = start(tmp_path)
+    ws.add_fact("reference", "Mine A. 2021. PMID: 0033611339", label="mine")
+    assert ws.verify_references() == 1 and asked == ["33611339"]
+    assert lookup_line(ws.view().facts[0]).endswith("PubMed holds PMID 33611339 as: The role of m6A.")
+
+def test_the_check_is_dated_by_this_computer_s_clock(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import writer
+    class Day(date):
+        @classmethod
+        def today(cls): return date(2026, 11, 23)
+    class Now(datetime):
+        @classmethod
+        def now(cls, tz=None): return datetime(2026, 11, 24, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(writer, "date", Day)
+    monkeypatch.setattr(writer, "datetime", Now)
+    ws = _with_references(tmp_path)
+    ws.verify_references(Index({"123": "Heart cells."}))
+    assert ws.view().facts[0].detail["lookup"]["on"] == "2026-11-23"
+
+def test_a_save_that_fails_after_a_lookup_says_what_was_sent(tmp_path, monkeypatch) -> None:
+    ws = _with_references(tmp_path)
+    def locked(*args, **kwargs): raise sqlite3.OperationalError("attempt to write a readonly database")
+    monkeypatch.setattr(ws.store, "set_fact_detail", locked)
+    with pytest.raises(WorkspaceError, match=r"^Grant Matcher sent PMID 123 to PubMed, but could not save what it found \(attempt to write a readonly database\)\. It checked 0 references before it\.") as failed:
+        ws.verify_references(Index({"123": "Heart cells."}))
+    assert isinstance(failed.value, ValueError)
+
+@pytest.mark.parametrize("found, said, gone", [({"service": "Crossref", "id": "DOI 10.48550/arXiv.1706.03762"}, "Crossref holds no record for DOI 10.48550/arXiv.1706.03762. A DOI registered elsewhere, such as an arXiv or Zenodo DOI, which DataCite registers, is not in Crossref. Check the identifier.", "exist"), ({"service": "PubMed", "id": "PMID 999"}, "PubMed has no record of PMID 999.", "DataCite")], ids=["doi", "pmid"])
+def test_a_doi_crossref_does_not_hold_is_not_said_to_be_missing_from_the_world(found, said, gone) -> None:
+    from nih_grant_matcher.checks import check_section
+    from nih_grant_matcher.models import Fact
+    from nih_grant_matcher.rules import GRANT_TYPES, Limit
+    from nih_grant_matcher.writer import lookup_line
+    fact = Fact(1, "reference", "Vaswani A. 2017. PMID: 999 doi:10.48550/arXiv.1706.03762", label="v", detail={"lookup": {**found, "on": "2026-11-23", "title": ""}})
+    assert lookup_line(fact) == f"Checked on 2026-11-23. {said}"
+    r21 = GRANT_TYPES["NIH:R21"]
+    warning = next(f.message for f in check_section("As shown [@v].", r21.sections[0], Limit(1, "pages"), r21.page, (fact,), "", ()) if f.code == "unverified-reference")
+    assert said[:30] in warning and gone not in warning
 
 def test_a_second_run_looks_every_live_reference_up_again(tmp_path) -> None:
     ws = _with_references(tmp_path)

@@ -263,3 +263,19 @@ def test_lookups_pause_under_three_requests_a_second(monkeypatch) -> None:
     client = clients.ReferenceClient()
     client.lookup(doi="10.1/a"), client.lookup(doi="10.1/b")
     assert len(slept) == 2 and min(slept) >= 1 / 3
+
+
+@pytest.mark.parametrize("outcomes", [[_http_error(503)] * 3, [TimeoutError("timed out")] * 3], ids=["503", "timeout"])
+def test_a_crossref_that_does_not_answer_is_an_api_error_naming_crossref(monkeypatch, outcomes) -> None:
+    _replies(monkeypatch, *outcomes)
+    with pytest.raises(clients.ApiError, match="with Crossref failed"):
+        clients.ReferenceClient().lookup(doi="10.1/x")
+
+
+def test_a_lookup_waits_ten_seconds_for_an_answer(monkeypatch) -> None:
+    import io, json
+    waited = []
+    monkeypatch.setattr(clients.urllib.request, "urlopen", lambda request, timeout: waited.append(timeout) or io.BytesIO(json.dumps({"message": {"title": ["A"]}}).encode()))
+    monkeypatch.setattr(clients.time, "sleep", lambda seconds: None)
+    clients.ReferenceClient().lookup(doi="10.1/a")
+    assert waited == [10]

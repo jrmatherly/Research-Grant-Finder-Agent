@@ -59,10 +59,17 @@ def identifiers(reference: Fact) -> tuple[str, str]:
     # The profile's prior work keeps the PMID and DOI in detail, and a reference typed under Your inputs keeps them in its text.
     pmid = re.findall(r"\d+", str(reference.detail.get("pmid", ""))) or _PMID.findall(reference.text)
     doi = _DOI.findall(f"{reference.detail.get('doi', '')} {reference.text}")
-    return (pmid[0] if pmid else "", doi[0].rstrip(".,;:)]") if doi else "")
+    # NCBI keys its record by the PMID without leading zeros, so a padded one would never be found.
+    return (pmid[0].lstrip("0") if pmid else "", doi[0].rstrip(".,;:)]") if doi else "")
+
+def not_in_crossref(doi_id: str) -> str:
+    # Crossref answers 404 for a real work that another agency registered, so its silence does not mean the work does not exist.
+    return f"Crossref holds no record for {doi_id}. A DOI registered elsewhere, such as an arXiv or Zenodo DOI, which DataCite registers, is not in Crossref. Check the identifier."
 
 def _unverified(reference: Fact) -> str:
     key, lookup = f"[@{reference.label}]", reference.detail.get("lookup")
+    if lookup and lookup.get("service") == "Crossref":
+        return f"{not_in_crossref(lookup.get('id'))[:-1]} that the reference {key} gives, or remove the citation."
     if lookup:
         return f"{lookup.get('service')} has no record of {lookup.get('id')}, which the reference {key} gives. Check the identifier and that the work exists, or remove the citation."
     if not any(identifiers(reference)):
