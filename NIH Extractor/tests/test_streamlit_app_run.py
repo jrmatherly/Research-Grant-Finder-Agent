@@ -1740,3 +1740,44 @@ def test_a_provider_that_could_not_be_saved_is_not_left_chosen(tmp_path, monkeyp
         assert app.selectbox(key="apply_llm_provider").value is None
     finally:
         (tmp_path / "data").chmod(0o755)
+
+
+def test_a_home_folder_sign_in_the_database_path_means_the_home_folder(tmp_path, monkeypatch) -> None:
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.text_input[0].set_value("~/grants.sqlite3")
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    assert not app.exception
+    assert (tmp_path / "home" / "grants.sqlite3").exists() and not (tmp_path / "~").exists()
+    assert f"These settings are saved in `{tmp_path / 'home' / 'grants.sqlite3'}`, the file named under Database in the sidebar." in [c.value for c in app.caption]
+
+
+@pytest.mark.parametrize("view", ["Settings", "Apply"])
+def test_a_file_that_is_not_a_database_is_named_with_what_to_do(tmp_path, monkeypatch, view) -> None:
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "grants.sqlite3").write_text("not a database" * 100, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.sidebar.radio[0].set_value(view).run(timeout=30)
+    assert not app.exception
+    # The page escapes the message, so a path cannot draw as Markdown.
+    assert [e.value.replace("\\", "") for e in app.error] == ["Could not read the database at data/grants.sqlite3: file is not a database. Check the Database path in the sidebar."]
+
+
+def test_the_table_highlight_is_on_the_row_details_shows(tmp_path, monkeypatch) -> None:
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(1, "Machine learning for imaging")), MLRelevanceScorer().score(_opp(2, "Mitochondria in cardiac muscle"))])
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert app.session_state["find_table"]["selection"]["cells"] == [(0, "Title")]
+    app.selectbox(key="find_opportunity").set_value("PA-2 | Mitochondria in cardiac muscle").run(timeout=30)
+    assert app.session_state["find_table"]["selection"]["cells"] == [(1, "Title")]
+    app.text_input(key="find_filter").set_value("imaging").run(timeout=30)
+    assert app.selectbox(key="find_opportunity").value == "PA-1 | Machine learning for imaging"
+    app.run(timeout=30)
+    assert app.session_state["find_table"]["selection"]["cells"] == [(0, "Title")]

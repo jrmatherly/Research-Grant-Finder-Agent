@@ -88,7 +88,7 @@ An opportunity whose date has passed is left out of the dashboard, the digest, a
 
 The table lists the visible rows, highest score first. Select a column heading to sort by that column. Scroll right for the remaining columns.
 
-Select any cell of a row to choose that row for the **Details** tab.
+Select any cell of a row to choose that row for the **Details** tab. The highlighted cell marks the row that Details shows, and it moves with that row when you filter or sort.
 
 | Column | Contents |
 | --- | --- |

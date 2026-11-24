@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 import sqlite3
 import warnings
@@ -14,7 +15,7 @@ from nih_grant_matcher.profile import ProfileError, ranks_like_builtin
 from nih_grant_matcher.rules import GRANT_TYPES, grant_types_for, why_not_covered
 from nih_grant_matcher.scoring import score_bin
 from nih_grant_matcher.ui.apply_page import apply_page, show_notices, start_application
-from nih_grant_matcher.ui.find_page import picked_option
+from nih_grant_matcher.ui.find_page import picked_option, selection_for
 from nih_grant_matcher.ui.markdown import escape_markdown
 from nih_grant_matcher.ui.profile_page import profile_page, profile_sentence, saved_profile, show_unreadable
 from nih_grant_matcher.ui.settings_page import settings_page
@@ -113,7 +114,8 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
-    db_path = st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings.")
+    # A path is read as typed everywhere below, and without this a ~ would become a folder of that name.
+    db_path = os.path.expanduser(st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings."))
     if view == "Find":
         st.header("Run Search")
         source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session", help="nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number.")
@@ -230,6 +232,10 @@ def _pick_row(options: list[str] = options) -> None:
     picked = picked_option(st.session_state.get("find_table"), options)
     if picked is not None:
         st.session_state["find_opportunity"] = picked
+
+# Streamlit keeps a selected cell by its place in the table and reports only a change, so after a filter the highlight would sit on another row, and a click on it would do nothing.
+if (moved := selection_for(st.session_state.get("find_table"), options, st.session_state.get("find_opportunity"))) is not None:
+    st.session_state["find_table"] = moved
 
 tab_results, tab_visuals, tab_detail = st.tabs(["Results", "Visuals", "Details"], key="find_tabs")
 

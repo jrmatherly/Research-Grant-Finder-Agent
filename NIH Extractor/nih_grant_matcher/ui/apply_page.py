@@ -191,11 +191,16 @@ def apply_page(db_path: str) -> None:
     try:
         store = OpportunityStore(db_path)
         _page(store, db_path)
-    except (sqlite3.Error, ValueError) as exc:
+    except (sqlite3.Error, OSError) as exc:
+        st.error(database_error(db_path, exc))
+    except ValueError as exc:
         st.error(escape_markdown(str(exc)))
     finally:
         if store is not None:
             store.close()
+
+def database_error(db_path: str, exc: Exception) -> str:
+    return escape_markdown(f"Could not read the database at {db_path}: {exc}. Check the Database path in the sidebar.")
 
 def _page(store: OpportunityStore, db_path: str) -> None:
     apps = store.applications()

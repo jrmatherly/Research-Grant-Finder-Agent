@@ -41,7 +41,7 @@ def test_show_me_around_starts_the_tour_once_for_each_press(tmp_path, monkeypatc
     assert not app.exception
     assert app.session_state["tour_nonce"] == 1
     sent = json.loads(app.get("bidi_component")[0].proto.json)
-    assert sent["nonce"] == 1 and [step["key"] for step in sent["steps"]] == [key for key, _, _ in tour.TOUR_STEPS]
+    assert sent["nonce"] == f"{app.session_state['tour_session']}:1" and [step["key"] for step in sent["steps"]] == [key for key, _, _ in tour.TOUR_STEPS]
     app.sidebar.button(key="tour_start").click().run(timeout=30)
     assert app.session_state["tour_nonce"] == 2
 
