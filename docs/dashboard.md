@@ -8,7 +8,7 @@ To start the dashboard, see the [README](../README.md#getting-started) for a loc
 
 ## The layout
 
-- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**, and the **Database** path. In the Find view it holds **Show me around**, the **Keyword** box and **Run Search**, and three sections that open when selected: **Source and rows**, **Display**, and **Export**. A section closes again when you leave the view, and its values are kept.
+- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**. In the Find view it holds **Show me around**, the **Keyword** box and **Run Search**, and three sections that open when selected: **Source and rows**, **Display**, and **Export**. A section closes again when you leave the view, and its values are kept.
 - **The filter row** at the top of the page narrows the results that are already loaded.
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
@@ -30,7 +30,6 @@ A green message reports how many records the search fetched and how many it save
 | **Source** | `nih-guide` searches the NIH Guide for Grants and Contracts. `grants.gov` searches Grants.gov for NIH opportunities. `both` searches the two and keeps one row for each opportunity number. When both sources hold the same number, the NIH Guide record is kept. |
 | **Keyword** | The words are sent to the source's own search. With a keyword, the NIH Guide returns the best matches first. Without one, it returns the newest notices first. On 2026-11-22, an empty search returned 371 notices and "machine learning" returned 91. |
 | **Rows per source** | The most rows to fetch from each source, from 25 to 1000. The default is 500. |
-| **Database** | The file that holds your saved results, your profile, your applications and your settings. A leading `~` means your home folder. Leave the default, `data/grants.sqlite3`, unless you keep separate result sets. |
 
 If a yellow message says that a source reached the row limit, the source holds more rows than you asked for. Raise **Rows per source** and search again.
 
@@ -134,6 +133,12 @@ The export holds the visible rows. It also writes the file to the path in **Exce
 The database keeps every opportunity that a search saved. Each time the dashboard reads the database, it scores the saved rows again with the current rules, the current profile, and today's date, and it leaves out the rows that have expired.
 
 To refresh the list, select **Run Search** with an empty keyword. The NIH Guide publishes new notices through the week, so search again whenever you want the current list.
+
+## Use another database
+
+The **Database** box is the first control under **Settings**. It names the file that holds your saved results, your profile, your applications and your settings. A leading `~` means your home folder. The default is `data/grants.sqlite3`. Change it only if you keep separate result sets.
+
+When another database is open, the sidebar names it in every other view. Reloading the page returns to the default database.
 
 ## Set your profile
 
@@ -250,7 +255,7 @@ Add `--help` to a command to see its options. To use another database, put `--db
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | "Run a search or load saved results to populate the dashboard. New here? Select Show me around in the sidebar." | The database is empty or is not at the **Database** path. | Select **Run Search**. |
-| A red "Could not open the database at ..." message in the Settings or Apply view | The file at the **Database** path is not a Grant Matcher database, another program has it open, or the file or its folder cannot be opened or made. | Correct the **Database** path in the sidebar, close the other program, or check the permissions of the file and its folder. |
+| A red "Could not open the database at ..." message in the Settings or Apply view | The file at the **Database** path is not a Grant Matcher database, another program has it open, or the file or its folder cannot be opened or made. | Correct the **Database** path under **Settings**, close the other program, or check the permissions of the file and its folder. |
 | A red "Search failed" message with a web address | The named service did not answer, or it sent a reply that the tool cannot read. | Check the internet connection and search again. |
 | A message that names `SSL_CERT_FILE`, in the macOS app at version 0.1.1, 0.2.0 or 0.3.0 | Those versions look for their trusted certificates in a file that macOS does not ship. No proxy is involved. | In 0.2.0 or 0.3.0, choose `Check for Updates…` in the `Grant Matcher` menu, and install version 0.3.1 or later. Install over 0.1.1 by hand, as [the macOS app page](macos-app.md#download) says. |
 | A message that says Python found no CA certificates | The file that the message names does not exist, so the tool trusts no server. No proxy is involved. | If you set `SSL_CERT_FILE`, correct its path or remove it. Otherwise install the tool again. |

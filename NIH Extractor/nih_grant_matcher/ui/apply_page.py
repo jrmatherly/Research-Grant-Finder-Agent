@@ -201,7 +201,7 @@ def apply_page(db_path: str) -> None:
             store.close()
 
 def database_error(db_path: str, exc: Exception) -> str:
-    return escape_markdown(f"Could not open the database at {db_path}: {exc}. Check the Database path in the sidebar, and that no other program has the file open.")
+    return escape_markdown(f"Could not open the database at {db_path}: {exc}. Check the Database path under Settings, and that no other program has the file open.")
 
 def _page(store: OpportunityStore, db_path: str) -> None:
     apps = store.applications()

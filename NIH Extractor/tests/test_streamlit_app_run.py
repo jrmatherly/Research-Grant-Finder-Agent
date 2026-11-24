@@ -296,7 +296,8 @@ def test_a_database_path_that_is_not_a_database_gives_a_message(tmp_path, monkey
     make(tmp_path / "notes.txt")
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.text_input[0].set_value("notes.txt").run(timeout=30)
+    app.session_state["db_path"] = "notes.txt"
+    app.run(timeout=30)
     assert not app.exception
     assert app.warning
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
@@ -1687,7 +1688,7 @@ def test_settings_says_so_when_the_database_folder_cannot_be_made(tmp_path, monk
     monkeypatch.chdir(tmp_path)
     (tmp_path / "notes.txt").write_text("x")
     app = AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.text_input[0].set_value("notes.txt/sub/grants.sqlite3")
+    app.session_state["db_path"] = "notes.txt/sub/grants.sqlite3"
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert not app.exception
     assert "Not a directory" in " ".join(e.value for e in app.error)
@@ -1706,14 +1707,15 @@ def test_the_find_controls_explain_themselves(tmp_path, monkeypatch) -> None:
     assert app.sidebar.selectbox(key="find_source").help == "nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number."
     assert app.sidebar.slider(key="find_min_score").help == "Hides the rows that score lower. It changes what is shown, not what is saved."
     assert app.sidebar.slider(key="find_max_saved").help == "The most saved rows read from the database, when the page opens and when you select Load Saved Results."
-    assert app.sidebar.text_input[0].help == "The file that holds your results, your profile, your applications and your settings."
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    assert app.text_input(key="db_path").help == "The file that holds your results, your profile, your applications and your settings."
 
 def test_the_provider_box_follows_the_database_that_is_open(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
-    app.sidebar.text_input[0].set_value("data/second.sqlite3").run(timeout=30)
+    app.text_input(key="db_path").set_value("data/second.sqlite3").run(timeout=30)
     assert not app.exception
     assert app.selectbox(key="apply_llm_provider").value is None
     assert not [t for t in app.text_input if t.key == "apply_llm_base_url"]
@@ -1723,7 +1725,7 @@ def test_the_provider_box_follows_the_database_that_is_open(tmp_path, monkeypatc
         assert store.setting("llm.provider") == "compatible"
     finally:
         store.close()
-    app.sidebar.text_input[0].set_value("data/grants.sqlite3").run(timeout=30)
+    app.text_input(key="db_path").set_value("data/grants.sqlite3").run(timeout=30)
     assert app.selectbox(key="apply_llm_provider").value == "compatible"
 
 
@@ -1747,11 +1749,11 @@ def test_a_home_folder_sign_in_the_database_path_means_the_home_folder(tmp_path,
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.text_input[0].set_value("~/grants.sqlite3")
+    app.session_state["db_path"] = "~/grants.sqlite3"
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert not app.exception
     assert (tmp_path / "home" / "grants.sqlite3").exists() and not (tmp_path / "~").exists()
-    assert f"These settings, except the API key, are saved in `{tmp_path / 'home' / 'grants.sqlite3'}`, the file named under Database in the sidebar." in [c.value for c in app.caption]
+    assert f"These settings, except the API key, are saved in `{tmp_path / 'home' / 'grants.sqlite3'}`, the file named under Database above." in [c.value for c in app.caption]
 
 
 @pytest.mark.parametrize("view", ["Settings", "Apply"])
@@ -1763,7 +1765,7 @@ def test_a_file_that_is_not_a_database_is_named_with_what_to_do(tmp_path, monkey
     app.sidebar.radio[0].set_value(view).run(timeout=30)
     assert not app.exception
     # The page escapes the message, so a path cannot draw as Markdown.
-    assert [e.value.replace("\\", "") for e in app.error] == ["Could not open the database at data/grants.sqlite3: file is not a database. Check the Database path in the sidebar, and that no other program has the file open."]
+    assert [e.value.replace("\\", "") for e in app.error] == ["Could not open the database at data/grants.sqlite3: file is not a database. Check the Database path under Settings, and that no other program has the file open."]
 
 
 def test_the_table_highlight_is_on_the_row_details_shows(tmp_path, monkeypatch) -> None:
@@ -1786,7 +1788,7 @@ def test_the_table_highlight_is_on_the_row_details_shows(tmp_path, monkeypatch) 
 def test_a_database_name_too_long_for_a_file_gives_a_message_in_every_view(tmp_path, monkeypatch, view) -> None:
     monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP)).run(timeout=30)
-    app.sidebar.text_input[0].set_value("x" * 300 + ".sqlite3")
+    app.session_state["db_path"] = "x" * 300 + ".sqlite3"
     app.sidebar.radio[0].set_value(view).run(timeout=30)
     # Path.exists raises for such a name, and no file can have it, so every view treats it as a database that is not there yet.
     assert not app.exception
@@ -1802,6 +1804,36 @@ def _model(path, **settings):
         store.close()
 
 
+def _rows(path, *titles):
+    store = OpportunityStore(path)
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(n, title)) for n, title in enumerate(titles, 1)])
+    finally:
+        store.close()
+
+
+def test_the_database_box_is_under_settings_and_every_view_reads_it(tmp_path, monkeypatch) -> None:
+    _rows(tmp_path / "data" / "grants.sqlite3", "Machine learning for imaging")
+    _rows(tmp_path / "data" / "second.sqlite3", "Mitochondria in cardiac muscle")
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    assert not [t for t in app.sidebar.text_input if t.label == "Database"]
+    assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
+    assert app.selectbox(key="find_opportunity").value == "PA-1 | Machine learning for imaging"
+    # Decision 1: no view names the default database, and Settings never draws the line, since the box is on the page.
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
+    app.sidebar.radio[0].set_value("Settings").run(timeout=30)
+    app.text_input(key="db_path").set_value("data/second.sqlite3").run(timeout=30)
+    assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
+    assert "These settings, except the API key, are saved in `data/second.sqlite3`, the file named under Database above." in [c.value for c in app.caption]
+    app.sidebar.radio[0].set_value("Find").run(timeout=30)
+    assert not app.exception
+    # The rows of the first database must not stay on the page once another is open.
+    assert app.selectbox(key="find_opportunity").value == "PA-1 | Mitochondria in cardiac muscle"
+    assert "Database: `data/second.sqlite3`. Change it under Settings." in [c.value for c in app.sidebar.caption]
+
+
 def test_the_model_boxes_follow_the_database_that_is_open(tmp_path, monkeypatch) -> None:
     _model(tmp_path / "data" / "grants.sqlite3", **{"llm.provider": "compatible", "llm.base_url": "http://localhost:11434/v1", "llm.model": "first-model"})
     _model(tmp_path / "data" / "second.sqlite3", **{"llm.provider": "compatible", "llm.base_url": "http://127.0.0.1:8080/v1", "llm.model": "second-model"})
@@ -1809,9 +1841,10 @@ def test_the_model_boxes_follow_the_database_that_is_open(tmp_path, monkeypatch)
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert (app.text_input(key="apply_llm_base_url").value, app.selectbox(key="apply_llm_model").value) == ("http://localhost:11434/v1", "first-model")
-    # The Database is changed in a view that does not draw the boxes, and they still start again.
+    # The Database is changed in a run that does not draw the boxes, and they still start again.
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
-    app.sidebar.text_input[0].set_value("data/second.sqlite3").run(timeout=30)
+    app.session_state["db_path"] = "data/second.sqlite3"
+    app.run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert not app.exception
     assert (app.text_input(key="apply_llm_base_url").value, app.selectbox(key="apply_llm_model").value) == ("http://127.0.0.1:8080/v1", "second-model")
@@ -1825,7 +1858,7 @@ def test_the_workspace_id_of_one_database_is_not_shown_for_another(tmp_path, mon
     app = AppTest.from_file(str(APP)).run(timeout=30)
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     assert app.text_input(key="apply_llm_workspace").value == "wrkspc_01AAAAAAAAAAAAAAAAAAAAAA"
-    app.sidebar.text_input[0].set_value("data/second.sqlite3").run(timeout=30)
+    app.text_input(key="db_path").set_value("data/second.sqlite3").run(timeout=30)
     assert not app.text_input(key="apply_llm_workspace").value
 
 
