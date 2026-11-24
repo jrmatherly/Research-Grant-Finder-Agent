@@ -126,7 +126,7 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     # Redacted before it is cut, so that a cut cannot leave part of the key.
     message = str(error.get("message") or _redact(raw, key).strip()[:300] or exc.reason)
     # A free-tier quota of zero for a model reads limit: 0 in the message, and waiting does not raise it.
-    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and (re.search(r"quota|credit|spend|usage_limit", names, re.I) or re.search(r"\blimit: 0\b", message)) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
+    kind: Kind = "auth" if status in (401, 403) else "quota" if status == 402 or status == 429 and (re.search(r"quota|credit|spend|usage_limit", names, re.I) or re.search(r"\blimit: 0(?![.\d])", message)) else "rate" if status == 429 else "overload" if status in (500, 503, 529) else "other"
     try:
         wait = float((exc.headers or {}).get("retry-after") or 2)
     except ValueError:
@@ -136,7 +136,7 @@ def _http_error(exc: urllib.error.HTTPError, host: str, key: str | None) -> Mode
     # A model list names no model, so its 404 gets the provider's words alone.
     listing = (exc.url or "").split("?")[0].endswith("/models")
     # Anthropic's pages give these for a workspace ID that is missing, not an ID, or not one the key can use.
-    hint = WORKSPACE_HINT if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message) else HINTS.get("missing" if status == 404 and not listing else kind, "")
+    hint = WORKSPACE_HINT if host == host_of(PROVIDERS["claude"].base_url) and status in (400, 404) and re.search(r"anthropic-workspace-id|^Workspace `", message) else HINTS.get("missing" if status == 404 and not listing and error else kind, "")
     # Added after the redaction, which would otherwise mangle a word of the hint that a short key matches.
     said = _redact(f"{host} answered {status}: {message}", key)
     return ModelError(f"{said.rstrip('. ')}. {hint}" if hint else said, kind, status, wait)

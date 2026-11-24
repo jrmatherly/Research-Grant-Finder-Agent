@@ -136,7 +136,7 @@ To refresh the list, select **Run Search** with an empty keyword. The NIH Guide 
 
 ## Use another database
 
-The **Database** box is the first control under **Settings**. It names the file that holds your saved results, your profile, your applications and your settings. A leading `~` means your home folder. The default is `data/grants.sqlite3`. Change it only if you keep separate result sets.
+The **Database** box is the first control under **Settings**. It names the file that holds your saved results, your profile, your applications and your settings. A leading `~` means your home folder. The default is `data/grants.sqlite3`. Change it only if you keep separate result sets. If the file or its folder does not exist, Grant Matcher creates it at the path you enter, so check the path before you leave the box.
 
 When another database is open, the sidebar names it in every other view. Reloading the page returns to the default database.
 
