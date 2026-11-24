@@ -1,10 +1,13 @@
 from __future__ import annotations
 import argparse, json, sqlite3, sys
+from datetime import datetime, timezone
 from pathlib import Path
+from . import keys
 from .agents import DigestAgent, NihContextAgent
 from .clients import ApiError, NihGuideClient, NihReporterClient
 from .config import TERM_RARITY_PATH, MatcherConfig
 from .excel import write_excel
+from .llm import PROVIDERS, cautions, checked_base_url, chosen, host_of, list_models
 from .normalizer import normalize_nih_guide
 from .profile import ProfileError, from_export, to_export
 from .rules import FACT_KINDS
@@ -75,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
     delete = apply.add_parser("delete", help="Delete an application and everything logged for it.")
     delete.add_argument("id", type=int)
     delete.add_argument("--yes", action="store_true", help="Confirm the delete.")
+    models = sub.add_parser("models", help="Choose the model that helps you write, list the provider's models, or agree to send your text to its host.")
+    models.add_argument("--provider", choices=tuple(PROVIDERS))
+    models.add_argument("--model", help="A name from the list that this command prints.")
+    models.add_argument("--base-url", help="The server's address, for the compatible provider. For example http://localhost:11434/v1.")
+    models.add_argument("--consent", action="store_true", help="Agree to send your text to the provider's host.")
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except ProfileError as exc:
         print(exc if isinstance(exc, ReadOnlyProfile) else f"Profile not valid: {exc}", file=sys.stderr)
+        return 1
+    except keys.KeychainError as exc:
+        print(exc, file=sys.stderr)
         return 1
     except (OSError, UnicodeDecodeError) as exc:
         print(f"File error: {exc}", file=sys.stderr)
@@ -115,7 +126,46 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _profile(args)
     if args.command == "apply":
         return _apply(args)
+    if args.command == "models":
+        return _models(args)
     raise ValueError(args.command)
+
+def _models(args: argparse.Namespace) -> int:
+    try:
+        base_url = checked_base_url(args.base_url) if args.base_url else None
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    store = OpportunityStore(args.db)
+    try:
+        if args.provider:
+            store.set_setting("llm.provider", args.provider)
+        # A new provider starts from its own default, not from the last provider's model.
+        if args.provider or args.model:
+            store.set_setting("llm.model", args.model or "")
+        if base_url:
+            store.set_setting("llm.base_url", base_url)
+        picked = chosen(store)
+        if picked is None:
+            print(f"No provider is chosen. Choose one with models --provider and one of {', '.join(PROVIDERS)}.", file=sys.stderr)
+            return 1
+        provider, name, base_url = picked
+        host = host_of(base_url)
+        if args.consent:
+            store.set_setting(f"consent:{host}", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
+        print(f"Provider {provider.name}. Model {name or 'not chosen'}. Your text goes to {host}" + (". You agreed to that." if store.setting(f"consent:{host}") else ", once you agree with models --consent."))
+        for caution in cautions(provider, base_url):
+            print(caution)
+        key = keys.get(provider, store.db_path.parent)
+        if provider.needs_key and not key:
+            print(f"No key. Set {provider.key_env}, or {provider.key_env}_FILE to a file that holds it, or save one in the dashboard.")
+            return 1
+        print(f"Key: {keys.where(provider, store.db_path.parent)}." if key else "No key, which this provider does not need.")
+        for listed in list_models(provider, base_url, key):
+            print(listed)
+    finally:
+        store.close()
+    return 0
 
 def _run(args: argparse.Namespace) -> int:
     config = MatcherConfig(agencies=tuple(args.agency or ("HHS-NIH11",)), statuses=tuple(args.status or ("posted", "forecasted")), rows=args.limit, min_digest_score=args.min_score, db_path=args.db)

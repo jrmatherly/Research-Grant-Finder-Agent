@@ -1,0 +1,7 @@
+{
+  "_source": "https://ai.google.dev/gemini-api/docs/api-errors, read on 2026-11-23. The page's example under Standard HTTP requests.",
+  "error": {
+    "code": "invalid_request",
+    "message": "The value 'invalid_tool_type_xyz' is not supported for 'type' at 'tools[0]'."
+  }
+}

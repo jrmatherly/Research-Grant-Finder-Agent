@@ -394,3 +394,32 @@ def test_apply_export_prints_the_absolute_folder(tmp_path, monkeypatch, capsys) 
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "export", "1", "--out", "out"]) == 0
     assert f"Wrote the application to {(tmp_path / 'out').resolve()}." in capsys.readouterr().out
+
+
+def test_models_records_the_choice_and_the_consent_and_lists_the_models(tmp_path, monkeypatch, capsys, post) -> None:
+    monkeypatch.delenv("GRANT_MATCHER_LLM_KEY", raising=False)
+    monkeypatch.delenv("GRANT_MATCHER_LLM_KEY_FILE", raising=False)
+    monkeypatch.setattr("nih_grant_matcher.keys.PLATFORM", "linux")
+    db = tmp_path / "g.sqlite3"
+    post.reply({"object": "list", "data": [{"id": "llama9", "object": "model"}]})
+    assert cli.main(["--db", str(db), "models", "--provider", "compatible", "--model", "llama9", "--base-url", "http://gpu.example:8000/v1", "--consent"]) == 0
+    printed = capsys.readouterr().out
+    assert "Model llama9. Your text goes to gpu.example. You agreed to that." in printed and "unencrypted" in printed and printed.endswith("llama9\n")
+    assert post.url == "http://gpu.example:8000/v1/models"
+    from nih_grant_matcher.store import OpportunityStore
+    store = OpportunityStore(db)
+    assert store.setting("consent:gpu.example") and (store.setting("llm.provider"), store.setting("llm.model")) == ("compatible", "llama9")
+    store.close()
+
+
+def test_models_without_a_key_says_where_to_put_one(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY_FILE", raising=False)
+    monkeypatch.setattr("nih_grant_matcher.keys.PLATFORM", "linux")
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "openai"]) == 1
+    assert "No key. Set OPENAI_API_KEY" in capsys.readouterr().out
+
+
+def test_models_refuses_a_base_url_that_is_not_an_address(tmp_path, capsys) -> None:
+    assert cli.main(["--db", str(tmp_path / "g.sqlite3"), "models", "--provider", "compatible", "--base-url", "localhost:11434"]) == 1
+    assert "is not a server address" in capsys.readouterr().err and not (tmp_path / "g.sqlite3").exists()

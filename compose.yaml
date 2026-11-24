@@ -13,4 +13,14 @@ services:
       - ./NIH Extractor/data:/app/data
       - ./NIH Extractor/outputs:/app/outputs
       - ./NIH Extractor/digests:/app/digests
+    # Optional keys for the model that helps write, passed on from your shell when set. A Compose secret is safer: see docs/docker.md.
+    environment:
+      - ANTHROPIC_API_KEY
+      - ANTHROPIC_API_KEY_FILE
+      - OPENAI_API_KEY
+      - OPENAI_API_KEY_FILE
+      - GEMINI_API_KEY
+      - GEMINI_API_KEY_FILE
+      - GRANT_MATCHER_LLM_KEY
+      - GRANT_MATCHER_LLM_KEY_FILE
     restart: unless-stopped
