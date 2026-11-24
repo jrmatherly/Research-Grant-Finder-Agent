@@ -90,8 +90,8 @@ def test_the_sixth_application_of_the_year_carries_the_notice(tmp_path) -> None:
 def test_restoring_an_old_revision_brings_back_its_text(tmp_path) -> None:
     ws = start(tmp_path)
     first = ws.write("specific-aims", "Aim 1.", parent=None)
-    ws.write("specific-aims", "Aim 1, changed.", parent=first.id)
-    restored = ws.restore("specific-aims", first.id)
+    second = ws.write("specific-aims", "Aim 1, changed.", parent=first.id)
+    restored = ws.restore("specific-aims", first.id, parent=second.id)
     assert (restored.parent_id, restored.author, ws.view().section("specific-aims").text) == (first.id, "applicant", "Aim 1.")
 
 def test_the_prior_work_of_the_profile_becomes_reference_facts(tmp_path) -> None:
@@ -372,7 +372,19 @@ def test_the_export_holds_the_rules_the_decisions_the_log_and_the_text(tmp_path)
     assert f"- Revision {revision.id}. Specific Aims. applicant write, parent none, at " in (out / "provenance-log.md").read_text(encoding="utf-8")
     assert (out / "DRAFT-specific-aims.md").read_text(encoding="utf-8") == "# Specific Aims\n\nAim 1 maps heart cells.\n"
 
-def test_a_restore_after_a_save_from_another_tab_is_refused(tmp_path, monkeypatch) -> None:
+def test_a_restore_after_a_save_from_another_tab_is_refused(tmp_path) -> None:
+    from nih_grant_matcher.store import OpportunityStore
+    ws = start(tmp_path)
+    first = ws.write("specific-aims", "Aim 1.", parent=None)
+    second = ws.write("specific-aims", "Aim 1, changed.", parent=first.id)
+    other = Workspace(OpportunityStore(ws.store.db_path), ws.application_id)
+    other.write("specific-aims", "Tab two.", parent=second.id)
+    with pytest.raises(StaleEdit) as stale:
+        ws.restore("specific-aims", first.id, parent=second.id)
+    assert stale.value.head.text == "Tab two." and ws.view().section("specific-aims").text == "Tab two."
+    other.store.close()
+
+def test_a_restore_is_refused_when_another_tab_saves_during_the_call(tmp_path, monkeypatch) -> None:
     from nih_grant_matcher.store import OpportunityStore
     ws = start(tmp_path)
     first = ws.write("specific-aims", "Aim 1.", parent=None)
@@ -386,7 +398,7 @@ def test_a_restore_after_a_save_from_another_tab_is_refused(tmp_path, monkeypatc
         return found
     monkeypatch.setattr(ws.store, "revisions", read_then_other_tab_saves)
     with pytest.raises(StaleEdit) as stale:
-        ws.restore("specific-aims", first.id)
+        ws.restore("specific-aims", first.id, parent=second.id)
     assert stale.value.head.text == "Tab two." and [r.text for r in ws.view().log] == ["Aim 1.", "Aim 1, changed.", "Tab two."]
     other.store.close()
 
@@ -456,6 +468,13 @@ def test_only_a_proposal_can_be_accepted_and_only_on_the_text_it_read(tmp_path) 
     with pytest.raises(ValueError):
         ws.accept(other.id)
 
+def test_a_draft_call_can_be_accepted(tmp_path) -> None:
+    ws = start(tmp_path)
+    mine = ws.write("specific-aims", "Aim 1.", parent=None)
+    drafted = ws.store.add_call(ws.application_id, "specific-aims", "draft", "fake", "fake-1", "s", "p", "Aim 1 maps heart cells.", 1, 1, parent_id=mine.id)
+    accepted = ws.accept(drafted.id)
+    assert (accepted.author, accepted.action, accepted.call_id, ws.view().section("specific-aims").text) == ("model", "draft", drafted.id, "Aim 1 maps heart cells.")
+
 def test_no_text_is_sent_without_consent_for_the_host(tmp_path) -> None:
     model = FakeModel("We study cardiac muscle cells.")
     ws = start(tmp_path, model=model, consent=False)
@@ -523,7 +542,7 @@ def test_a_second_accept_with_edits_returns_the_first_result(tmp_path) -> None:
     assert ws.accept(call_id, edited="Something else.") == first and first.author == "applicant"
     with pytest.raises(WorkspaceError, match="accepted"):
         ws.discard(call_id)
-    assert "I edited Specific Aims after I accepted model text." in ws.view().disclosure
+    assert "I edited the Specific Aims after I accepted model text." in ws.view().disclosure
 
 def test_a_workspace_mistake_is_a_workspace_error(tmp_path) -> None:
     ws = start(tmp_path)

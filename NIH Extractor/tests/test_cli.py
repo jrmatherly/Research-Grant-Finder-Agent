@@ -473,3 +473,23 @@ def test_apply_polishes_accepts_discards_and_turns_the_statement_off(tmp_path, m
     assert not (tmp_path / "out" / "ai-use-statement.md").exists()
     with pytest.raises(SystemExit):
         cli.main(["--db", db, "apply", "disclosure", "1"])
+
+
+def test_accepting_a_stale_proposal_asks_for_a_new_one(tmp_path, monkeypatch, capsys) -> None:
+    from helpers import FakeModel
+    from nih_grant_matcher.store import OpportunityStore
+    db, text = _apply_db(tmp_path), tmp_path / "aims.txt"
+    monkeypatch.setattr(cli, "connect", lambda store: FakeModel("We study cardiac muscle cells."))
+    cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
+    store = OpportunityStore(db)
+    store.set_setting("consent:example.test", "2026-11-23T00:00:00")
+    store.close()
+    text.write_text("We study heart cells.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(text)])
+    assert cli.main(["--db", db, "apply", "polish", "1", "specific-aims"]) == 0
+    text.write_text("We study heart cells in mice.", encoding="utf-8")
+    cli.main(["--db", db, "apply", "write", "1", "specific-aims", "--file", str(text)])
+    capsys.readouterr()
+    assert cli.main(["--db", db, "apply", "accept", "1", "1"]) == 1
+    err = capsys.readouterr().err
+    assert "The section changed after the model read it, so this proposal no longer fits. Ask the model again." in err and "Read it before" not in err

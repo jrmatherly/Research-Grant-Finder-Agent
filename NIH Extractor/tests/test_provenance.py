@@ -69,11 +69,11 @@ def test_the_statement_has_a_sentence_for_each_thing_the_log_holds() -> None:
     statement = disclosure_statement(app, GRANT_TYPES["NIH:R21"], log, calls, signed, (Fact(1, "hypothesis", "h"), Fact(2, "reference", "r"), Fact(3, "aim", "a")), ())
     assert statement.startswith("AI use in this application, from the record that Grant Matcher ") and statement.endswith("This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere.")
     for sentence in ("I entered the aims, hypotheses and references of this application myself.", "I used fake-1 (fake) to polish the Specific Aims.", "I used other-2 (fake) to revise the Research Strategy.",
-                     "I edited Specific Aims after I accepted model text.", "By the tool's word-level record, 0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and 29 percent from a model's polish of my own text.",
+                     "I edited the Specific Aims after I accepted model text.", "By the tool's word-level record, 0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and 29 percent from a model's polish of my own text.",
                      "100 percent of the Research Strategy text came from a model's draft or revision", "The Project Summary/Abstract and Project Narrative were written without a model.",
-                     "I also sent text to fake-1 to read the funding announcement's requirements, review drafts against NIH's review criteria and produce suggestions that I did not use (2).", "I read and signed off Project Narrative."):
+                     "I also sent text to fake-1 to read the funding announcement's requirements, review drafts against NIH's review criteria and produce suggestions that I did not use (2).", "I read and signed off the Project Narrative."):
         assert sentence in statement, sentence
-    assert "No AI model" not in statement and "signed off Specific Aims" not in statement
+    assert "No AI model" not in statement and "signed off the Specific Aims" not in statement
 
 def test_a_statement_with_no_model_call_says_so_and_ends() -> None:
     from nih_grant_matcher.models import Application, Fact
@@ -89,3 +89,23 @@ def test_a_proposal_still_waiting_is_not_counted() -> None:
     waiting = ModelCall(8, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1)
     statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], LOG[:1], (waiting,), (), (), (8,))
     assert "No AI model" not in statement and "I also sent" not in statement and "The Specific Aims was written without a model." in statement
+
+def test_a_share_above_zero_that_rounds_to_zero_reads_less_than_one_percent() -> None:
+    from nih_grant_matcher.models import Application, ModelCall
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    words = [f"w{n}" for n in range(300)]
+    log = (_rev(1, None, "applicant", " ".join(words)), _rev(2, 1, "model", " ".join(["polished", *words[1:]]), call=7))
+    polish = ModelCall(7, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1)
+    statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], log, (polish,), (), (), ())
+    assert "0 percent of the Specific Aims text came from a model's draft or revision that I accepted, and less than 1 percent from a model's polish of my own text." in statement
+
+def test_a_section_restored_to_text_from_before_a_model_says_no_model_text_remains() -> None:
+    from nih_grant_matcher.models import Application, ModelCall
+    from nih_grant_matcher.provenance import disclosure_statement
+    from nih_grant_matcher.rules import GRANT_TYPES
+    log = (*LOG[:2], _rev(3, 1, "applicant", "We study heart cells."), Revision(4, "project-narrative", None, "applicant", "write", "One.", None, NOW))
+    polish = ModelCall(7, "specific-aims", "polish", "fake", "fake-1", "s", "p", "r", 1, 1, NOW, 1)
+    statement = disclosure_statement(Application(1, "PAR-1", "NIH:R21", "t", False, True, NOW), GRANT_TYPES["NIH:R21"], log, (polish,), (), (), ())
+    assert "I used fake-1 (fake) to polish the Specific Aims." in statement and "No model text remains in the Specific Aims." in statement
+    assert "The Project Narrative was written without a model." in statement and "Specific Aims was written without a model" not in statement

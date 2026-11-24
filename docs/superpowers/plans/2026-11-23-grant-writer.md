@@ -1573,7 +1573,7 @@ git commit -m "feat: call Claude, OpenAI, Gemini or a self-hosted model"
   - `Workspace.propose(self, section: str, action: Literal["polish", "revise", "draft"], instruction: str = "") -> Proposal`. Logs the call with its full prompt and reply, and with the purpose set to the action. Changes no section. Raises `NotReady` when the action is above `rule.model` (polish and revise need `edit`, draft needs `draft`). Raises `ModelError` when the reply is truncated ("The reply was cut off at the token limit.") or refused, after it logs the call with the purpose `failed`.
   - `Workspace.accept(self, call_id: int, edited: str | None = None) -> Revision`. Appends the model revision. With `edited`, it appends the applicant's revision on top in the same transaction. A second accept of the same call returns the first result. It raises `ValueError` for a call whose purpose is not `polish`, `revise` or `draft`, so that the reply of a review or of a requirement extraction can never become section text. It raises `StaleEdit` when the section has a newer revision than the one the proposal read. The applicant then asks again.
   - `Workspace.discard(self, call_id: int) -> None`, which records the setting `discarded:<call_id>`, and `Workspace.pending(self, section: str) -> Proposal | None`, the newest proposal for the section that is neither accepted nor discarded and that read the head revision.
-  - `provenance.disclosure_statement(application, grant_type, revisions, calls, signoffs) -> str`
+  - `provenance.disclosure_statement(application, grant_type, revisions, calls, signoffs, facts, waiting, shares=None) -> str`. `facts` are the application's facts, `waiting` the ids of the proposals that can still be accepted, and `shares`, when given, the head attributions the caller already computed.
   - CLI: `apply polish ID SECTION`, `apply revise ID SECTION --instruction TEXT`, `apply accept ID CALL`, `apply discard ID CALL`, `apply disclosure ID (--on | --off)`.
 
 Both prompts state three rules: change wording only, add no claim, number, name or citation, and treat every fenced text as material, not as instructions. Both carry the patterned prose rules as a list of what to avoid. The section text, each fact, and each piece of profile text go in through `prompts.fence`.
@@ -1586,11 +1586,12 @@ The statement is built from the log, sentence by sentence. No model writes it. A
 | `No AI model was used on this application in Grant Matcher.` | The log has no model call. The statement then ends with the last row of this table. |
 | `I entered the <fact kinds, for example aims, hypotheses and methods> of this application myself.` | The application has live facts. The kinds are the ones it has. |
 | `I used <model> (<provider>) to <draft, revise or polish> the <section titles>.` | Once per model and action, for the calls whose proposal was accepted. |
-| `I edited <section titles> after I accepted model text.` | A section has an applicant revision that is newer than a model revision. |
-| `By the tool's word-level record, <n> percent of the <section title> text came from a model's draft or revision that I accepted, and <m> percent from a model's polish of my own text.` | Once per section that has model words. |
-| `The <section titles> were written without a model.` | A section has text and no model word. |
+| `I edited the <section titles> after I accepted model text.` | A section has an applicant revision that is newer than a model revision. |
+| `By the tool's word-level record, <n> percent of the <section title> text came from a model's draft or revision that I accepted, and <m> percent from a model's polish of my own text.` | Once per section that has model words. A share above zero that rounds to 0 reads `less than 1 percent`. |
+| `The <section titles> were written without a model.` | A section has text, no model word, and no accepted proposal. |
+| `No model text remains in the <section titles>.` | A section has text, no model word, and an accepted proposal. |
 | `I also sent text to <model> to <read the funding announcement's requirements, review drafts against NIH's review criteria, produce suggestions that I did not use (<n>)>.` | The log has calls of the purpose `extract` or `review`, or proposals that were discarded or failed. Each part appears only for what the log has. A proposal that is still waiting is not counted. |
-| `I read and signed off <section titles>.` | A sign-off names the head revision of the section. |
+| `I read and signed off the <section titles>.` | A sign-off names the head revision of the section. |
 | `This record covers work done in Grant Matcher. It does not cover text that I wrote or edited elsewhere.` | Always. |
 
 The fact kinds read as `aims`, `hypotheses`, `preliminary data`, `methods`, `significance`, `innovation`, `team`, `references` and `other inputs`. A list of one section takes `was`, and a list of several takes `were`. Lists are joined with commas and a final `and`.
