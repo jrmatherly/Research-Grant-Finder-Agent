@@ -150,6 +150,20 @@ def test_doctext_takes_the_text_only_of_the_document_asked_for(monkeypatch, docn
     assert clients.NihGuideClient().doctext("PAR-27-090") == expected
 
 
+def test_the_notice_page_is_read_from_its_address_in_the_guide(monkeypatch) -> None:
+    sent = []
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: sent.append((request.full_url, request.get_header("User-agent"))) or "<p>NEI’s text</p>".encode())
+    assert clients.NihGuideClient().page("RFA-NS-28-010") == "<p>NEI’s text</p>"
+    assert sent == [("https://grants.nih.gov/grants/guide/rfa-files/RFA-NS-28-010.html", "nih-grant-matcher/0.1")]
+
+
+def test_a_notice_number_that_could_leave_the_guide_folder_sends_no_request(monkeypatch) -> None:
+    def no_network(request, timeout, attempts=3): raise AssertionError("no request may be sent")
+    monkeypatch.setattr(clients, "_read", no_network)
+    with pytest.raises(clients.ApiError, match="not a notice number"):
+        clients.NihGuideClient().page("../PAR-27-090")
+
+
 @pytest.mark.parametrize("file_name, expected", [("PAR-27-090-Full-Announcement.html", "<p>Full</p>"), ("PAR-27-090-Notice.pdf", "")], ids=["full", "none"])
 def test_full_announcement_downloads_only_the_full_announcement_attachment(monkeypatch, file_name, expected) -> None:
     import json

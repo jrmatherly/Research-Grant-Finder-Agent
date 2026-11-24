@@ -16,7 +16,7 @@ from .rules import FACT_KINDS, GRANT_TYPES, GrantType, Limit, ReviewFactor, Sect
 from .store import OpportunityStore
 
 DECISIONS = {None: "not yet decided", True: "confirmed", False: "rejected"}
-ORIGINS = {"nih-guide": "the NIH Guide", "grants.gov": "Grants.gov"}
+ORIGINS = {"nih-guide": "the NIH Guide's search service", "nih-guide-page": "the NIH Guide", "grants.gov": "Grants.gov"}
 STALE_PROPOSAL = "The section changed after the model read it, so this proposal no longer fits. Ask the model again."
 NO_SECTION_IV = "Grant Matcher found no Section IV in this text and read no requirement from it. The standing rules apply."
 DROPPED = "It drops an item whose quote is not in the announcement or holds fewer than 20 letters and digits, a limit whose number does not stand on its own in its quote and in the announcement or that names no section, and an item that is not in the form asked for."
@@ -211,7 +211,7 @@ class Workspace:
         opportunity = self.opportunity or Opportunity("", app.opportunity_number, app.title, "", "", "")
         announcement = fetch_announcement(opportunity, guide, grants)
         # Grants.gov is the official source, and the Guide can serve an older text when Grants.gov does not answer.
-        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "grants.gov" and announcement.origin == "nih-guide":
+        if (saved := self.store.announcement(app.opportunity_number)) is not None and saved.origin == "grants.gov" and announcement.origin != "grants.gov":
             raise ApiError(f"{announcement.grants_says} Grant Matcher kept the copy it saved from Grants.gov on {saved.fetched_at:%Y-%m-%d}, because the NIH Guide's text can be older.")
         self.store.save_announcement(announcement)
         # The announcement is saved once for its number, so every application for that number reads it again.

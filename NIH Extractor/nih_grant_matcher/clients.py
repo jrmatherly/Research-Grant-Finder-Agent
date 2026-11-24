@@ -1,9 +1,10 @@
 from __future__ import annotations
-import http.client, json, ssl, time, urllib.error, urllib.parse, urllib.request
+import http.client, json, re, ssl, time, urllib.error, urllib.parse, urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from .config import CROSSREF_WORKS_URL, GRANTSGOV_ATTACHMENT_URL, GRANTSGOV_FETCH_URL, GRANTSGOV_SEARCH_URL, NIH_GUIDE_API_URL, NIH_GUIDE_DOCTEXT_URL, NIH_REPORTER_SEARCH_URL, PUBMED_SUMMARY_URL
+from .normalizer import _nih_guide_url
 
 class ApiError(RuntimeError):
     pass
@@ -147,6 +148,11 @@ class NihGuideClient:
         if source is None:
             return "", ""
         return str(source.get("doctext") or ""), str(source.get("ggid") or "")
+    def page(self, docnum: str) -> str:
+        # The number goes into the URL path, so only letters, digits and hyphens may reach it.
+        if not re.fullmatch(r"[A-Za-z0-9-]+", docnum):
+            raise ApiError(f"{docnum!r} is not a notice number")
+        return _read(urllib.request.Request(_nih_guide_url(docnum), headers={"User-Agent": "nih-grant-matcher/0.1"}), 30).decode("utf-8", errors="replace")
 
 def _guide_request(url: str, perpage: int, sort: str, offset: int, types: str, keyword: str) -> urllib.request.Request:
     params = {

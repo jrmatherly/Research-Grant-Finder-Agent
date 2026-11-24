@@ -352,6 +352,8 @@ def test_apply_verify_prints_what_each_index_holds(tmp_path, monkeypatch, capsys
 def test_apply_fetch_and_requirements_say_when_the_text_has_no_section_iv(tmp_path, monkeypatch, capsys, text, said) -> None:
     from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     db = _apply_db(tmp_path)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
@@ -366,6 +368,8 @@ def test_apply_fetch_names_a_decision_it_dropped(tmp_path, monkeypatch, capsys) 
     from nih_grant_matcher.store import OpportunityStore
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (FOUR_PAGES, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     db = _apply_db(tmp_path)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
     cli.main(["--db", db, "apply", "fetch", "1"])
@@ -375,6 +379,8 @@ def test_apply_fetch_names_a_decision_it_dropped(tmp_path, monkeypatch, capsys) 
     finally:
         store.close()
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (FOUR_PAGES.replace("4 pages", "5 pages"), "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     capsys.readouterr()
     assert cli.main(["--db", db, "apply", "fetch", "1"]) == 0
     assert "Your decision on \"Research Strategy: at most 4 pages.\" was dropped, because the new text no longer has the sentence it came from." in capsys.readouterr().out
@@ -541,6 +547,8 @@ def test_apply_extract_lists_what_the_model_read_and_draft_proposes_a_section(tm
     reply = json.dumps([{"kind": "must", "section": "specific-aims", "text": "State one hypothesis.", "quote": "The Specific Aims must state one hypothesis.", "limit": None}, {"kind": "must", "section": "", "text": "Invented.", "quote": "Not there.", "limit": None}])
     db, model = _apply_db(tmp_path), FakeModel(reply, "[]", "Aim 1 tests drug X.")
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     monkeypatch.setattr(cli, "connect", lambda store: model)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])
@@ -613,6 +621,8 @@ def test_apply_extract_shows_each_limit_and_counts_only_what_this_read_added(tmp
     first = json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis."), item("limit", "research-strategy", "Keep it short.", "The Research Strategy is limited to 6 pages.", {"amount": 6, "unit": "pages"})])
     db, model = _apply_db(tmp_path), FakeModel(first, "[]", json.dumps([item("must", "specific-aims", "State one hypothesis.", "The Specific Aims must state one hypothesis.")]), "[]")
     monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    from helpers import no_page
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
     monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
     monkeypatch.setattr(cli, "connect", lambda store: model)
     cli.main(["--db", db, "apply", "start", "PAR-1", "--type", "R21"])

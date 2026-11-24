@@ -316,7 +316,7 @@ def _announcement_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     if a is None:
         st.info("The announcement has not been fetched yet. The standing rules of the grant type apply until it is.")
     else:
-        st.caption(f"Fetched from {ORIGINS[a.origin]} on {a.fetched_at:%Y-%m-%d}.")
+        st.caption(f"Fetched from {ORIGINS[a.origin]} on {a.fetched_at:%Y-%m-%d}." + (" That service drops some brackets and spaces of the notice and joins a heading to the next word, so read a quote against the announcement. Fetch again for the notice's own text." if a.origin == "nih-guide" else ""))
         st.link_button("Open the announcement", a.url, key="apply_announcement_button")
         if view.no_section_iv:
             st.info(NO_SECTION_IV)

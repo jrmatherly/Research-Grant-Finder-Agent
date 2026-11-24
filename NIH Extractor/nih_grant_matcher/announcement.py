@@ -25,7 +25,8 @@ _SENTENCE_END = re.compile(r"(?<!\d)\.|\.(?!\d)")
 class Announcement:
     opportunity_number: str
     text: str
-    origin: Literal["nih-guide", "grants.gov"]
+    # "nih-guide" is the text of the Guide's search service, the only Guide source before the notice's page, so copies saved earlier keep a true name.
+    origin: Literal["nih-guide", "nih-guide-page", "grants.gov"]
     url: str
     sha256: str
     fetched_at: datetime
@@ -95,7 +96,7 @@ def html_to_text(html: str) -> str:
     parser.close()
     return re.sub(r"\s+", " ", "".join(parser.parts)).strip()
 
-def _announcement(opportunity: Opportunity, text: str, origin: Literal["nih-guide", "grants.gov"], url: str) -> Announcement:
+def _announcement(opportunity: Opportunity, text: str, origin: Literal["nih-guide", "nih-guide-page", "grants.gov"], url: str) -> Announcement:
     return Announcement(opportunity.opportunity_number, text, origin, url, hashlib.sha256(text.encode("utf-8")).hexdigest(), datetime.now(timezone.utc).replace(tzinfo=None))
 
 def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = None, grants: GrantsGovClient | None = None) -> Announcement:
@@ -119,16 +120,24 @@ def fetch_announcement(opportunity: Opportunity, guide: NihGuideClient | None = 
         return _announcement(opportunity, official, "grants.gov", f"https://www.grants.gov/search-results-detail/{ggid}")
     if page:
         grants_says = "Grants.gov has only a link to the announcement."
+    # The search service's text drops opening brackets, the break after a heading and spaces that the notice's page keeps.
+    try:
+        notice, page_says = html_to_text(guide.page(number)), "The notice's page in the NIH Guide does not hold its text."
+    except ApiError as exc:
+        notice, page_says = "", f"The request for the notice's page in the NIH Guide failed ({exc})."
+    # A notice from fiscal 2026 on has no page in the Guide, and a page that does not name the notice is another page.
+    if len(notice) >= _SHORTEST_ANNOUNCEMENT and number in notice:
+        return replace(_announcement(opportunity, notice, "nih-guide-page", _nih_guide_url(number)), grants_says=grants_says)
     if len(text.strip()) >= _SHORTEST_ANNOUNCEMENT:
         return replace(_announcement(opportunity, text, "nih-guide", _nih_guide_url(number)), grants_says=grants_says)
     if text.strip():
         guide_says = f"The NIH Guide answered with only {len(text.strip())} characters, too few to be the announcement."
-    raise ApiError(f"No announcement text for {number}. {guide_says} {grants_says}")
+    raise ApiError(f"No announcement text for {number}. {guide_says} {page_says} {grants_says}")
 
 def letters(text: str) -> str:
     return re.sub(r"[\W_]", "", text)
 
-# The Guide text drops spaces, opening brackets and curly quotes that the Grants.gov text keeps.
+# Copies saved from the Guide's search service lack opening brackets and spaces that the notice's page and Grants.gov keep, so a quote is compared on letters and digits.
 def quoted_in(quote: str, text: str) -> bool:
     return letters(quote) in letters(text)
 
