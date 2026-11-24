@@ -58,6 +58,8 @@ def test_the_find_sidebar_keeps_keyword_and_run_search_in_view_and_tucks_the_res
     app = AppTest.from_file(str(APP)).run(timeout=30)
     assert [(e.label, e.proto.expanded) for e in app.sidebar.expander] == [("Source and rows", False), ("Display", False), ("Export", False)]
     assert [b.label for b in app.sidebar.button][:2] == ["Show me around", "Run Search"]
+    # `app.sidebar.button` also lists a button inside a section, so this is what keeps Keyword and Run Search out of one.
+    assert ([b.label for e in app.sidebar.expander for b in e.button], [t.label for e in app.sidebar.expander for t in e.text_input]) == (["Load Saved Results", "Export Current View"], ["Excel output"])
     # A collapsed section still runs its controls, so a search and the load on opening have their values.
     assert (app.sidebar.selectbox(key="find_source").value, app.sidebar.slider(key="find_rows").value, app.sidebar.slider(key="find_max_saved").value) == ("nih-guide", 500, 500)
 
@@ -68,6 +70,8 @@ def test_the_sidebar_says_which_scores_are_shown_while_a_minimum_is_set(tmp_path
     assert not [c for c in app.sidebar.caption if "Showing scores" in c.value]
     app.sidebar.slider(key="find_min_score").set_value(35.0).run(timeout=30)
     assert "Showing scores of 35 and up." in [c.value for c in app.sidebar.caption]
+    # The line is outside the sections, so a collapsed Display does not hide it.
+    assert not [c for e in app.sidebar.expander for c in e.caption]
     app.sidebar.radio[0].set_value("Profile").run(timeout=30)
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     assert "Showing scores of 35 and up." in [c.value for c in app.sidebar.caption]
@@ -82,7 +86,7 @@ Expected: 2 failed. The first fails on the empty list of sections.
 
 The diff that ran is in `docs/superpowers/specs/2026-11-24-first-use-polish/0.3.3-sidebar.md` under "Diff of the prototype against HEAD". Take its `streamlit_app.py` hunk for the sections and the tour button, and leave its Database lines for Task 2.
 
-- In the Find view, call `tour_button()` first, directly under the View radio. Remove the call and the divider at the bottom.
+- In the Find view, call `tour_button()` first, under the View radio and above the Database box, which Task 2 removes. Remove the call and the divider at the bottom.
 - Keep `st.header("Run Search")`, the Keyword box and the Run Search button outside any section, in that order with the section between them: Keyword, then `with st.expander("Source and rows", key="find_source_rows"):` holding Source and Rows per source, then the button.
 - Replace the Display header and divider with `with st.expander("Display", key="find_display"):` around its two sliders and Load Saved Results. Do the same for Export with `key="find_export"`.
 - Under the Display section, outside it, draw `st.caption(f"Showing scores of {min_score:g} and up.")` when `min_score > 0`.
@@ -100,6 +104,7 @@ Expected: every test passes. The static test asserts the "Rows per source" line 
 - Line 16: **Show me around** is at the top of the sidebar, under **View**.
 - Line 22: say that **Source** is under **Source and rows**.
 - Lines 39, 57 and 65: say once that **Load Saved Results** and the two sliders are under **Display**.
+- Line 64, the **Minimum score shown** row: add that while a minimum is set, the sidebar says `Showing scores of 35 and up.` under **Display**.
 - Line 127: say that **Export Current View** is under **Export**.
 - Add one sentence: a section closes again when you leave the view, and its values are kept.
 
@@ -140,8 +145,12 @@ def test_the_database_box_is_under_settings_and_every_view_reads_it(tmp_path, mo
     assert not [t for t in app.sidebar.text_input if t.label == "Database"]
     assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
     assert app.selectbox(key="find_opportunity").value == "PA-1 | Machine learning for imaging"
+    # Decision 1: no view names the default database, and Settings never draws the line, since the box is on the page.
+    app.sidebar.radio[0].set_value("Profile").run(timeout=30)
+    assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
     app.sidebar.radio[0].set_value("Settings").run(timeout=30)
     app.text_input(key="db_path").set_value("data/second.sqlite3").run(timeout=30)
+    assert not [c for c in app.sidebar.caption if c.value.startswith("Database:")]
     assert "These settings, except the API key, are saved in `data/second.sqlite3`, the file named under Database above." in [c.value for c in app.caption]
     app.sidebar.radio[0].set_value("Find").run(timeout=30)
     assert not app.exception
@@ -167,7 +176,13 @@ Take the `settings_page.py`, `apply_page.py` and Database hunks of the diff in `
 
 - [ ] **Step 4: Clear loaded rows when the database changes**
 
-Where the script first sets `st.session_state["scored_items"]`, compare `db_path` with `st.session_state.get("find_db", db_path)`. When they differ, set the rows to an empty list, so the load on opening reads the new database. Then store `db_path` under `find_db`.
+Directly after the `if "scored_items" not in st.session_state:` block at module level (lines 141 and 142 at HEAD), add the lines below. With the rows empty, the load on opening reads the new database.
+
+```python
+if st.session_state.get("find_db", db_path) != db_path:
+    st.session_state["scored_items"] = []
+st.session_state["find_db"] = db_path
+```
 
 - [ ] **Step 5: Move the nine tests that reach the box by position**
 
@@ -185,10 +200,12 @@ Expected: every test passes. Run `grep -n "sidebar.text_input\[0\]" tests/*.py` 
 
 - [ ] **Step 7: Update `docs/dashboard.md`**
 
+The line numbers are those of HEAD, and Task 1 Step 5 has added lines since. Find each line by its text.
+
 - Line 11: the sidebar no longer holds the Database path.
-- Line 33: move the **Database** row out of the Run Search table into the section on Settings, with the sentence that a leading `~` means the home folder.
+- Line 33: delete the **Database** row from the Run a search table. The page has no section on Settings, so add `## Use another database` after `## Come back later`. It says that the **Database** box is the first control under **Settings**, what the file holds, that a leading `~` means the home folder, and that the default is `data/grants.sqlite3`.
 - Line 253: "Correct the **Database** path under **Settings**".
-- Add: when another database is open, the sidebar names it. Reloading the page returns to the default database.
+- In the new section, add: when another database is open, the sidebar names it. Reloading the page returns to the default database.
 
 - [ ] **Step 8: Commit**
 
@@ -210,7 +227,7 @@ git commit -m "feat: move the Database path into Settings and name another datab
 - Produces: `TOUR_STEPS: tuple[tuple[str, str, str, str], ...]`, each `(key, part, title, text)`. `part` is a CSS selector inside the keyed container, and `""` for a step that lights the whole container.
 - Produces: `THEME: str`, the stylesheet rules that `styles()` appends.
 
-- [ ] **Step 1: Change the tests that unpack three fields, and add four assertions**
+- [ ] **Step 1: Change the tests that unpack three fields, and add five tests**
 
 In `tests/test_tour.py`, three tests unpack `(key, title, text)`: `test_every_step_points_at_a_key_the_find_view_draws`, `test_show_me_around_starts_the_tour_once_for_each_press` and `test_the_tour_waits_for_a_press_and_is_sent_its_words`. Give each the fourth field, and compare `(s["key"], s["part"], s["title"], s["text"])` in the last. Then add:
 
@@ -230,18 +247,21 @@ def test_the_popover_takes_the_colours_of_the_app() -> None:
     assert "setProperty('--gm-tour-bg', c.backgroundColor)" in tour.script()
 
 def test_a_click_outside_the_popover_still_closes_the_tour() -> None:
-    # The owner chose to keep driver.js's default.
-    assert "overlayClickBehavior" not in tour.script()
+    # The owner chose to keep driver.js's default. The vendored file names the option too, so the glue is what is searched.
+    assert "overlayClickBehavior" not in tour.GLUE and "overlayClickBehavior:`close`" in tour.script()
+
+def test_the_run_search_step_names_the_section_that_holds_source() -> None:
+    assert "under Source and rows." in tour.TOUR_STEPS[1][3]
 ```
 
 - [ ] **Step 2: Run them and see them fail**
 
 Run: `uv run --locked pytest -q tests/test_tour.py`
-Expected: the three changed tests fail on the unpacking, and the first three new tests fail.
+Expected: the three changed tests fail on the unpacking, and the first three new tests and the last fail. The overlay test passes now, because 0.3.2 does not set the option. It is there to fail if the option is added.
 
 - [ ] **Step 3: Change `tour.py`**
 
-Take the diff at the end of `docs/superpowers/specs/2026-11-24-first-use-polish/0.3.3-tour.md`, with one change: leave `overlayClickBehavior` out of the `lib.driver` call.
+Take the diff at the end of `docs/superpowers/specs/2026-11-24-first-use-polish/0.3.3-tour.md`, with two changes: leave `overlayClickBehavior: 'none', ` out of the `lib.driver` call, and give step 2 the text below, since the diff keeps the old sentence. Cut out of the file, the diff applies to HEAD with `git apply`.
 
 - `TOUR_STEPS` gains the `part` field. Only the `find_tabs` step has one, `[role="tablist"]`.
 - Step 2's text becomes: "Run Search fetches and ranks the opportunities of the source chosen under Source and rows. A keyword narrows the search, and an empty keyword fetches everything that is open."
@@ -256,18 +276,18 @@ Take the diff at the end of `docs/superpowers/specs/2026-11-24-first-use-polish/
 Run: `uv run --locked pytest -q -W error::DeprecationWarning`
 Expected: every test passes, and the checksum test still passes because the vendored files did not change.
 
-- [ ] **Step 5: Check it in Chrome and in a WebKit window**
+- [ ] **Step 5: Check it in Chrome, then count the alert path in a WebKit window**
 
-Serve the dashboard from a scratch folder, press Run Search once, and confirm each line:
+Serve the dashboard from a scratch folder. Take the tour once before any search, press Run Search, and confirm each line:
 
 - The tour shows three steps before a search and six after.
 - Step 5 lights the tab bar alone, and its popover is below the tabs and clear of the sidebar.
 - Escape, ArrowLeft and ArrowRight still drive the tour.
-- After the tour ends by Done, the close button, Escape and a click on the overlay, a probe `keydown` for Escape comes back with `defaultPrevented` false. The overlay route is new to check, since the owner keeps it.
+- After the tour ends by Done, the close button, Escape and a click on the overlay, a probe `keydown` for Escape comes back with `defaultPrevented` false. The overlay route is new to check, since the owner keeps it. The probe is `const e = new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}); window.dispatchEvent(e); e.defaultPrevented`. Without `cancelable` it is always false. Run it once while the tour is open and see `true`, so that the probe is known to work.
 - In the dark theme and the light theme the popover has the app's colours.
 - The console shows no error.
 
-Then run the check script in the appendix of `0.3.3-tour.md` in both modes with the project's Python. It opens a pywebview window for about 25 seconds and shows a `python3.13` icon in the Dock, so tell the owner first. Expected: `noResponderFor= 1` for each key in the `naked` mode, and `0` in the `quiet` mode.
+Then save the check script in the appendix of `0.3.3-tour.md` to a scratch folder as `check.py`. From `NIH Extractor/`, run `uv run --locked --group macos python -I <scratch>/check.py nih_grant_matcher/ui/vendor naked`, and again with `quiet`. pywebview is in the `macos` group only. Each run opens a pywebview window for about 25 seconds and shows a `python3.13` icon in the Dock, so tell the owner first. Expected, in the JSON line each run prints: `"noResponderFor": 1` for each of the four keys in the `naked` mode, and `0` in the `quiet` mode. The last entry, `after_end_ArrowRight`, is `1` in both modes, which shows that the listener was removed.
 
 - [ ] **Step 6: Commit**
 
@@ -284,17 +304,17 @@ git commit -m "fix: stop the tour's keys from sounding the alert, light the tab 
 - Modify: `NIH Extractor/nih_grant_matcher/llm.py` (`Provider`, `PROVIDERS`, `list_models`, a new `writes_text`)
 - Modify: `NIH Extractor/nih_grant_matcher/ui/apply_page.py` (`model_settings`, `_list_models`)
 - Test: `NIH Extractor/tests/test_llm.py`, `NIH Extractor/tests/test_streamlit_app_run.py`
-- Modify: `docs/dashboard.md` (the "Choose a model" section, lines 206 to 210)
+- Modify: `docs/dashboard.md` (the three paragraphs under `### Choose a model`)
 
 **Interfaces:**
 - Produces: `Provider` gains three fields after `default_model`: `key_page: str = ""`, `key_url: str = ""`, `key_note: str = ""`.
 - Produces: `writes_text(provider: Provider, names: list[str]) -> list[str]` in `llm.py`. It returns `names` without those that `NOT_TEXT[provider.name]` matches, and all of them for a provider with no pattern.
 - Produces: `NOT_TEXT: dict[str, str]`, a regular expression for `openai` and one for `gemini`.
-- `list_models` keeps its signature and still returns every model the provider lists. The command line keeps the full list.
+- `list_models` keeps its signature. It leaves out a Claude model that is not `active`, sorts the OpenAI wire newest first, and applies no name pattern. The command line prints that list.
 
 - [ ] **Step 1: Confirm the three key pages and the two default models before writing them**
 
-Open each provider's own page and confirm the address and the model id on the day you build. The values below were read by a research agent on 2026-11-24 and not opened by the author of this plan.
+Confirm each address and each model id on the provider's public documentation on the day you build. The key pages themselves sit behind a sign-in. Do not sign in. The values below were read by a research agent on 2026-11-24 and not opened by the author of this plan.
 
 | Provider | `key_page` | `key_url` | `default_model` |
 | --- | --- | --- | --- |
@@ -307,7 +327,7 @@ If a page has moved, use the address you opened. If you cannot confirm a default
 
 - [ ] **Step 2: Write the failing tests**
 
-In `tests/test_llm.py`:
+In `tests/test_llm.py`, add `writes_text` to the import from `nih_grant_matcher.llm` on line 5, then add:
 
 ```python
 @pytest.mark.parametrize("name, reply, names", [
@@ -341,6 +361,8 @@ def test_the_model_section_links_the_key_page_and_says_how_many_models_it_left_o
     post.reply({"models": [{"name": "models/gemini-4-hydrogen", "supportedGenerationMethods": ["generateContent"]}, {"name": "models/gemini-2.5-flash-preview-tts", "supportedGenerationMethods": ["generateContent"]}]})
     app.button(key="apply_llm_list_button").click().run(timeout=30)
     assert any("lists 1 model that writes text and 1 that does not, which is left out." in s.value.replace("\\", "") for s in app.success)
+    # The count alone would pass a build that stores the whole list.
+    assert app.selectbox(key="apply_llm_model").options == ["gemini-4-hydrogen"]
     app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
     assert any("needs no key" in c.value for c in app.caption)
 ```
@@ -348,7 +370,7 @@ def test_the_model_section_links_the_key_page_and_says_how_many_models_it_left_o
 - [ ] **Step 3: Run them and see them fail**
 
 Run: `uv run --locked pytest -q tests/test_llm.py tests/test_streamlit_app_run.py -k "deprecated_model or write_text or key_page"`
-Expected: the `writes_text` tests fail on the import, and the others on their first assertion.
+Expected: pytest stops at a collection error for `tests/test_llm.py`, because `writes_text` cannot be imported, and runs nothing. To see the other two fail on their own, run them before adding the import: the list test fails on its assertion for both cases, and the dashboard test fails with `AssertionError: claude`.
 
 - [ ] **Step 4: Change `llm.py`**
 
@@ -371,7 +393,7 @@ Expected: every test passes. `tests/test_llm.py` holds a list sample for Claude 
 
 - [ ] **Step 7: Update `docs/dashboard.md`**
 
-In "Choose a model", say that the section links to the page where the provider gives out a key, that the list holds the models that write text and says how many it left out, and that `python -m nih_grant_matcher models` prints every model.
+In "Choose a model", say that the section links to the page where the provider gives out a key, that the list holds the models that write text and says how many it left out, and that `uv run python -m nih_grant_matcher models` prints the list without the name filter.
 
 - [ ] **Step 8: Commit**
 
@@ -392,13 +414,13 @@ git commit -m "feat: link each provider's key page and list the models that writ
 - Modify: `docs/dashboard.md` (the "Choose a model" section)
 
 **Interfaces:**
-- Consumes: nothing from Task 4.
+- Consumes: the Gemini `default_model` of Task 4. Only the dashboard test depends on it.
 - Produces: `complete(self, system: str, user: str, max_tokens: int = 16000, probe: bool = False) -> Completion` on `HttpModel` and on the `Model` protocol. A probe makes one try with a 60 second socket timeout and does not retry.
 - Produces: `HINTS: dict[str, str]` in `llm.py`, with the keys `auth`, `quota`, `rate`, `overload` and `missing`.
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/test_llm.py`, take two tests of section E of `0.3.3-models.md` as they are: `test_a_failed_test_says_what_it_means_for_the_key` (five cases) and `test_a_429_with_a_limit_above_zero_is_still_a_rate_limit`. Add the test below for Review Focus 4. In `tests/test_streamlit_app_run.py`, add the dashboard test that follows it.
+In `tests/test_llm.py`, take two tests of section E of `0.3.3-models.md`: `test_a_failed_test_says_what_it_means_for_the_key` (five cases) and `test_a_429_with_a_limit_above_zero_is_still_a_rate_limit`. Two of the five expected phrases change with the sentences of Step 3: "did not accept the key" becomes "refused this request", and "does not offer this model" becomes "did not find this model". The first block below is the dashboard test, for `tests/test_streamlit_app_run.py`. The second holds the Review Focus 4 test and the test of a failed model list, for `tests/test_llm.py`.
 
 ```python
 def test_test_connection_makes_one_try_and_explains_a_busy_provider(tmp_path, monkeypatch, post) -> None:
@@ -417,7 +439,7 @@ def test_test_connection_makes_one_try_and_explains_a_busy_provider(tmp_path, mo
     assert any("says nothing about your key" in e.value for e in app.error)
 ```
 
-This test needs a model to be chosen. Task 4 gives Gemini a default. If Task 4 left that default empty, set `llm.model` in the test's database first.
+This test needs a model to be chosen. Task 4 gives Gemini a default. If Task 4 left that default empty, set the model after the provider is chosen, because choosing a provider clears `llm.model`: after the `apply_llm_provider` line, open `OpportunityStore(tmp_path / "data" / "grants.sqlite3")`, call `set_setting("llm.model", "gemini-4-hydrogen")`, close it, and call `app.run(timeout=30)`.
 
 ```python
 def test_a_draft_does_not_wait_and_retry_a_quota_of_zero(post) -> None:
@@ -425,19 +447,26 @@ def test_a_draft_does_not_wait_and_retry_a_quota_of_zero(post) -> None:
     with pytest.raises(ModelError) as failed:
         model("gemini").complete("s", "u")
     assert (failed.value.kind, post.calls, post.slept) == ("quota", 1, [])
+
+def test_a_model_list_that_fails_is_not_told_to_list_the_models(post) -> None:
+    post.fail(404, {"error": {"message": "Not Found"}})
+    with pytest.raises(ModelError) as failed:
+        list_models(PROVIDERS["compatible"], "http://localhost:11434", None)
+    assert "did not find this model" not in str(failed.value)
 ```
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `uv run --locked pytest -q tests/test_llm.py -k "what_it_means or limit_above_zero or quota_of_zero"`
-Expected: the cases fail on the missing `probe` argument or the missing sentence. The quota test fails with a kind of `rate` and two calls.
+Run: `uv run --locked pytest -q tests/test_llm.py tests/test_streamlit_app_run.py -k "what_it_means or limit_above_zero or quota_of_zero or one_try or fails_is_not_told"`
+Expected: the five `what_it_means` cases fail with a TypeError on `probe`. The quota test fails with `('other', 2, [2.0])`: the kind was `rate`, and the retry found the fake's queue empty. The dashboard test fails with `post.calls == 2`. `limit_above_zero` and the model list test pass now and must still pass after. The model list test is there to fail if the 404 sentence reaches a list.
 
 - [ ] **Step 3: Change `llm.py` and `models.py`**
 
 The code that ran is in sections D and E of `0.3.3-models.md`.
 
-- `HINTS` takes the five sentences of section D as written.
-- In `_http_error`, a 429 whose message holds `limit: 0` as whole words is a quota error. A 404 takes the `missing` sentence, unless the Claude workspace hint applies. The sentence is added after `_redact`, joined to the provider's words with a period. Added before, a short key would be redacted out of the sentence's own words, which the prototype found.
+- `HINTS` takes the five sentences of section D, with two changes (decision 15). The first sentence of `auth` becomes "The provider refused this request, most often because of the key." The first sentence of `missing` becomes "The provider did not find this model. Its name may be wrong or retired, or this key may not be allowed to use it."
+- In `_http_error`, move the `message =` line above the `kind` line first, since the quota test below reads the message. A 429 whose message holds `limit: 0` as whole words is a quota error. A 404 takes the `missing` sentence, unless the Claude workspace hint applies.
+- The `missing` sentence is for a request that names a model. `_http_error` skips it when `(exc.url or "").split("?")[0].endswith("/models")`, so a failed model list gets the provider's words alone. The sentence is added after `_redact`, joined to the provider's words with a period. Added before, a short key would be redacted out of the sentence's own words, which the prototype found.
 - `HttpModel.complete` gains `probe`. A probe sends once with a timeout of 60. Anything else retries as today, including the second attempt in the 400 branch.
 - The `Model` protocol gains the same argument.
 
@@ -457,7 +486,7 @@ The code that ran is in sections D and E of `0.3.3-models.md`.
 - [ ] **Step 5: Run the suite**
 
 Run: `uv run --locked pytest -q -W error::DeprecationWarning`
-Expected: every test passes. The retry tests in `tests/test_llm.py` keep their waits, because only a probe skips the retry. The fake models in `tests/helpers.py` and `tests/conftest.py` may need the `probe` argument.
+Expected: every test passes. The retry tests in `tests/test_llm.py` keep their waits, because only a probe skips the retry. No fake needs the `probe` argument for the suite to pass. To keep them in step with the protocol, add `probe: bool = False` to `FakeModel.complete` at `tests/helpers.py:98` and `probe=False` to `SavedMeanwhile.complete` at `tests/test_streamlit_app_run.py:1576`.
 
 - [ ] **Step 6: Update `docs/dashboard.md`**
 
@@ -491,14 +520,21 @@ def test_a_launch_check_that_fails_leaves_the_app_open_and_the_menu_item_working
     launcher = _load(monkeypatch)
     def offline():
         raise RuntimeError("no network")
-    controller = types.SimpleNamespace(updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: True, checkForUpdatesInBackground=offline))
+    checks = []
+    controller = types.SimpleNamespace(checkForUpdates_=checks.append, updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: True, checkForUpdatesInBackground=offline))
     monkeypatch.setattr(launcher, "sparkle_class", lambda framework: types.SimpleNamespace(alloc=lambda: types.SimpleNamespace(initWithStartingUpdater_updaterDelegate_userDriverDelegate_=lambda *args: controller)))
+    tools = types.ModuleType("PyObjCTools")
+    tools.AppHelper = types.SimpleNamespace(callAfter=lambda function, *args: function(*args))
+    monkeypatch.setitem(sys.modules, "PyObjCTools", tools)
+    monkeypatch.setattr(launcher, "alert", lambda message: pytest.fail(message))
     log = tmp_path / "server.log"
     launcher.start_updater(tmp_path / "Sparkle.framework", log)
-    assert launcher.UPDATER == [controller] and "no network" in log.read_text()
+    # The menu item is pressed, since keeping the controller is only the means.
+    launcher.check_for_updates()
+    assert launcher.UPDATER == [controller] and checks == [None] and "no network" in log.read_text()
 ```
 
-Give the fake controller of the existing test near line 340 an updater whose automatic checks are off: `updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: False)`. Without it that test would write to the log and still pass.
+Give the fake controller of the existing test at line 340 an updater whose automatic checks are off: `updater=lambda: types.SimpleNamespace(automaticallyChecksForUpdates=lambda: False)`. Without it that test would write to the log and still pass. Add `and not (tmp_path / "server.log").exists()` to its assertion, so that a start with no check is pinned to write nothing.
 
 - [ ] **Step 2: Run them and see them fail**
 
@@ -507,7 +543,7 @@ Expected: the case with automatic checks on fails with an empty list, and the se
 
 - [ ] **Step 3: Add the check to `start_updater`**
 
-After the controller is appended to `UPDATER`, and inside the same `try`: take `UPDATER[0].updater()`, and call its `checkForUpdatesInBackground()` when its `automaticallyChecksForUpdates()` is true. Sparkle's header allows this call right after the updater starts and only while automatic checks are on. The controller is kept first, so the menu item works when the check raises.
+After the controller is appended to `UPDATER`, and inside the same `try`: take `UPDATER[0].updater()`, and call its `checkForUpdatesInBackground()` when its `automaticallyChecksForUpdates()` is true. Sparkle's header allows this call right after the updater starts and only while automatic checks are on. The controller is kept first, so the menu item works when the check raises. A check that raises is logged under the same heading as a failed start, "updater did not start". The traceback names `checkForUpdatesInBackground`, which tells the two apart. A second `try` for a truer heading is more code than the case earns.
 
 - [ ] **Step 4: Run the suite**
 
@@ -536,12 +572,12 @@ git commit -m "feat: check for an update each time the app opens"
 - Modify: `docs/macos-app.md` (lines 75 and 119), `AGENTS.md` (the CI section's line on `macos-release.yml`)
 
 **Interfaces:**
-- Produces: `make-appcast.sh` reads the notes from the file named by `RELEASE_NOTES`, or from `macos/release-notes/<version>.md` beside the script. It exits 1 before it signs when the file is missing or empty.
-- Produces: the folder `NIH Extractor/macos/release-notes/`. Task 8 adds its first file.
+- Produces: `make-appcast.sh` reads the notes from the file named by `RELEASE_NOTES`, or from `macos/release-notes/<version>.md` beside the script. It exits 1 before it signs when the file is missing or zero bytes long. A file of blank lines passes the script, and Task 8's test is what refuses it for a released version.
+- Produces: the path `NIH Extractor/macos/release-notes/<version>.md` that the script reads. Git keeps no empty folder, so Task 8 creates the folder with its first file.
 
 - [ ] **Step 1: Give the test helper notes, and write the failing tests**
 
-`_run` in `tests/test_macos_appcast.py` gains `notes: str = "- A fix."`. It writes the text to `tmp_path / "notes.md"` and sets `RELEASE_NOTES` to that path in the script's environment. Every one of the six existing tests runs the script, so each would fail without it. Then add the two tests of section E of `0.3.3-updates.md` as they are: `test_appcast_carries_the_release_notes_exactly` and `test_no_appcast_without_release_notes`.
+`_run` in `tests/test_macos_appcast.py` gains `notes: str = "- A fix."`. It writes the text to `tmp_path / "notes.md"` and sets `RELEASE_NOTES` to that path in the script's environment. Four of the six existing tests need a feed and would fail without it. The two that test a missing key and a missing disk image stop earlier and would still pass. Then add the two tests of section E of `0.3.3-updates.md` as they are: `test_appcast_carries_the_release_notes_exactly` and `test_no_appcast_without_release_notes`.
 
 - [ ] **Step 2: Run them and see them fail**
 
@@ -552,13 +588,14 @@ Expected: the two new tests fail. The six existing tests pass, since the script 
 
 Take the script lines of section D of `0.3.3-updates.md`.
 
-- After the check that `sign_update` exists, resolve the notes file, fail with a message that names it when it is missing or empty, and read it.
+- After the check that `sign_update` exists, resolve the notes file as `${RELEASE_NOTES:-$(dirname "$0")/release-notes/$version.md}`, test it with `[ -s ]`, fail with a message that names its path when the test fails, and read it. The new test asserts that the path is in the message.
+- Keep `sparkle:format="markdown"` on `<description>`. Start `$notes` right after `<![CDATA[` with no indent, and put the blank line and the link line at column 0 inside the heredoc. Section D shows the two fragments with an elision between them.
 - Split any `]]>` in the notes across two CDATA sections with `notes=${notes//]]>/]]]]><![CDATA[>}`. Nothing else needs escaping inside CDATA.
 - The description holds the notes, a blank line, and the line `[This release on GitHub](https://github.com/jrmatherly/Research-Grant-Finder-Agent/releases/tag/v$version)`. That line keeps `test_appcast_links_the_release_notes` passing.
 
 - [ ] **Step 4: Keep the rehearsal script working**
 
-`rehearse-update.sh` calls `make-appcast.sh` at line 73 and would now fail there. Before that line, write a short notes file into its work folder, and pass its path as `RELEASE_NOTES` on line 73. Change the instruction at line 98, since the update window now opens without the menu item. Do not run the script.
+`rehearse-update.sh` calls `make-appcast.sh` at line 73 and would now fail there. Before that line, write a short notes file into its work folder, and pass its path as `RELEASE_NOTES` on line 73. Change the instruction at line 98: the update window now opens by itself when the feed offers 0.0.2, so say "If no window opens, choose Check for Updates…". The `--stop-feed` mode still needs the menu item, because a failed launch check shows nothing. Do not run the script.
 
 - [ ] **Step 5: Run the suite and check the scripts**
 
@@ -571,7 +608,8 @@ Expected: no output.
 - [ ] **Step 6: Update the docs**
 
 - `docs/macos-app.md:119`, the release steps: add that the pull request which sets the version also adds `NIH Extractor/macos/release-notes/X.Y.Z.md`, the text that the update window shows, written for a researcher, with headings, lists, bold and links only.
-- `docs/macos-app.md:75`: the rehearsal no longer needs someone to choose `Check for Updates…`.
+- `docs/macos-app.md:75`: the update window opens by itself. `Check for Updates…` is needed only when no window opens, as in `--stop-feed`.
+- `docs/macos-app.md:104`: add that the workflow also stops before it builds when `NIH Extractor/macos/release-notes/<version>.md` is missing, because the test suite runs first.
 - `AGENTS.md`, the `macos-release.yml` line: a release needs `NIH Extractor/macos/release-notes/<version>.md`, and a test fails without it.
 
 - [ ] **Step 7: Commit**
@@ -696,6 +734,7 @@ Passed in the same test: Next, Previous, Done, the close button, a click on the 
 | 12 | The hint sentences are added where the error is built, so a draft gets them too. | Author | The same failure reads the same everywhere. |
 | 13 | The popover takes the app's colours, and step 5 lights the tab bar. | Author | Seen in the owner's screenshots. He did not object when shown. |
 | 14 | The GitHub release body stays generated. | Author | It serves developers, and the window serves researchers. |
+| 15 | Two hint sentences are hedged, and a failed model list gets no hint. A 403 reads "refused this request, most often because of the key", and a 404 reads "did not find this model. Its name may be wrong or retired, or this key may not be allowed to use it". | Author | Found in the review of 2026-11-24. A 403 can be a region and a 404 can be a retired model, so the research's sentences stated one cause as fact. The second also claimed to know what a key is allowed, which the Global Constraints rule out. |
 
 The owner can still veto the author's decisions.
 
@@ -733,3 +772,17 @@ Each line was run by a research agent on a scratch copy of `38e9439`. The findin
 - In the dark theme the popover's arrow is faint against the overlay.
 - The table's hover toolbar sits inside the lit tab bar on step 5.
 - With Remind Me Later, the update window returns at each launch until the user installs or skips.
+- An empty Database box makes the sidebar say "Database: ``. Change it under Settings." Settings shows the error that the database could not be opened.
+- The name patterns match anywhere in a model's id, so an id that holds a dropped word, such as `live`, is left out. The count in the message is how a user can tell, and it goes at the next rerun.
+- The command line's list leaves out a deprecated Claude model, as the dashboard's does.
+
+### Review of 2026-11-24
+
+Four agents each built one area in a scratch copy of `805a64d`, from the findings diffs and this plan, and ran the suite. The plan then went green in every area but the tour, where one test could never pass. The corrections are in the tasks above. What the review measured, beyond the lines under "What was measured":
+
+- Tasks 1 and 2 pass on Streamlit 1.67.0 and on 1.59.0 (914 tests), Python side only.
+- Tasks 4 and 5 pass together (926 tests). Tasks 6, 7 and 8 pass together (917 tests). No run held all eight tasks.
+- `macos-release.yml` needs no change. It runs `macos/make-appcast.sh` from `NIH Extractor/`, and the default notes path resolved there in the scratch copy.
+- The app and the Docker image do not ship the notes folder.
+
+Written in the review and not run: the hedged hint sentences and the `/models` skip of Task 5, the menu item press in Task 6's test, and the step 2 test of Task 3.
