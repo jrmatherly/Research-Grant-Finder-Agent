@@ -114,10 +114,12 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists, except the table, whose selection is set on every run.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
+    # The Database box is drawn under Settings only and its value persists, so every view reads it here. A path is read as typed everywhere below, and without expanduser a ~ would become a folder of that name.
+    db_path = os.path.expanduser(st.session_state.get("db_path", DEFAULT_DB))
     if view == "Find":
         tour_button()
-    # A path is read as typed everywhere below, and without this a ~ would become a folder of that name.
-    db_path = os.path.expanduser(st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings."))
+    if view != "Settings" and st.session_state.get("db_path", DEFAULT_DB) != DEFAULT_DB:
+        st.caption(f"Database: {f'`{db_path}`' if '`' not in db_path else escape_markdown(db_path)}. Change it under Settings.")
     if view == "Find":
         st.header("Run Search")
         keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword", persist_state="session")
@@ -138,6 +140,9 @@ with st.sidebar:
 
 if "scored_items" not in st.session_state:
     st.session_state["scored_items"] = []
+if st.session_state.get("find_db", db_path) != db_path:
+    st.session_state["scored_items"] = []
+st.session_state["find_db"] = db_path
 if "items" in st.session_state:
     del st.session_state["items"]
 if "last_run" not in st.session_state:
@@ -159,7 +164,7 @@ if view == "Apply":
     apply_page(db_path)
     st.stop()
 if view == "Settings":
-    settings_page(db_path)
+    settings_page(db_path, DEFAULT_DB)
     st.stop()
 if db_error:
     st.warning(f"Could not open the database, so ranking uses the built-in profile. {db_error}")
