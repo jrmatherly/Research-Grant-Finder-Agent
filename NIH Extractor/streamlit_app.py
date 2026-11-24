@@ -112,18 +112,18 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget persists.
 with st.sidebar:
     view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
-    db_path = st.text_input("Database", value=DEFAULT_DB)
+    db_path = st.text_input("Database", value=DEFAULT_DB, help="The file that holds your results, your profile, your applications and your settings.")
     if view == "Find":
         st.header("Run Search")
-        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session")
+        source = st.selectbox("Source", ["nih-guide", "both", "grants.gov"], key="find_source", persist_state="session", help="nih-guide searches the NIH Guide. grants.gov searches Grants.gov for NIH opportunities, one request for each row. both searches the two and keeps one row for each opportunity number.")
         keyword = st.text_input("Keyword", placeholder="AI, machine learning, imaging...", key="find_keyword", persist_state="session")
         limit = st.slider("Rows per source", min_value=25, max_value=1000, value=500, step=25, key="find_rows", persist_state="session")
-        run_clicked = st.button("Run Search", type="primary", width="stretch")
+        run_clicked = st.button("Run Search", type="primary", width="stretch", key="find_run")
 
         st.divider()
         st.header("Display")
-        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session")
-        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session")
+        min_score = st.slider("Minimum score shown", 0.0, 100.0, step=5.0, key="find_min_score", persist_state="session", help="Hides the rows that score lower. It changes what is shown, not what is saved.")
+        max_saved = st.slider("Saved rows to load", 50, 1000, 500, step=50, key="find_max_saved", persist_state="session", help="The most saved rows that Load Saved Results reads from the database.")
         load_clicked = st.button("Load Saved Results", width="stretch")
 
         st.divider()
