@@ -264,6 +264,7 @@ def _model_settings(store: OpportunityStore, db_path: str) -> None:
         if keys.PLATFORM == "win32":
             st.caption("On Windows the key file is protected by your user account only.")
         with st.form("apply_llm_key_form"):
+            # The key does not persist, because Save clears it and a persisted value would send the secret back to the browser.
             st.text_input("API key", type="password", key="apply_llm_key", help=f"Saved in the macOS Keychain on a Mac, and in a file beside the database elsewhere. {provider.key_env} or {provider.key_env}_FILE, when set, wins over a saved key.")
             st.form_submit_button("Save key", key="apply_llm_save_key_button", on_click=_act, args=(db_path, _save_key))
         if key and where.startswith("Saved"):
@@ -370,7 +371,7 @@ def _inputs_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
                 text.caption(escape_markdown(lookup_line(f)))
             retire.button("Retire", key=f"apply_retire_{f.id}_button", on_click=_on, args=(db_path, app_id, lambda w, fid=f.id: w.retire_fact(fid)))
         if kind == "reference" and facts:
-            st.caption("A model can invent a reference. This check sends the PMID of each reference to NCBI (PubMed), or its DOI to Crossref when it has no PMID. Nothing else leaves this computer, and no model is involved. Compare the title each index holds with the reference you typed.")
+            st.caption("A model can invent a reference. This check sends the PMID of each reference to NCBI (PubMed), or its DOI to Crossref when it has no PMID. The request carries that identifier and this tool's name, and none of your text. No model is involved. Compare the title each index holds with the reference you typed.")
             st.button("Check that each reference exists", key="apply_verify_button", on_click=_on, args=(db_path, app_id, _verify))
     with st.form("apply_fact_form"):
         st.selectbox("Kind", FACT_KINDS, key="apply_fact_kind", persist_state="session")
@@ -401,7 +402,7 @@ def _sections_tab(view: ApplicationView, ws: Workspace, db_path: str, app_id: in
         yours.text(st.session_state[text_key])
         st.button("Load the newest revision", key="apply_load_newest_button", on_click=_load_newest, args=(text_key, base_key, s.text, s.revision_id))
     with st.form("apply_section_form"):
-        # A widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Apply widget persists.
+        # A widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so each Apply widget that holds typed or chosen state persists, except the API key and the consent box.
         st.text_area(s.rule.title, key=text_key, height=360, persist_state="session")
         st.form_submit_button("Save", key="apply_save_button", type="primary", on_click=_on, args=(db_path, app_id, lambda w, key=key, title=s.rule.title: _save(w, key, title)))
         if "apply_signer" not in st.session_state:
@@ -493,7 +494,7 @@ def _log_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
     st.button("Export", key="apply_export_button", on_click=_on, args=(db_path, app_id, lambda w, export_key=export_key: f"Wrote the application to {escape_markdown(str(w.export(Path(st.session_state[export_key]))))}."))
     st.subheader("Delete this application")
     number = view.application.opportunity_number
-    st.caption("Delete removes this application with its text, its inputs, its sign-offs and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
+    st.caption("Delete removes this application with its text, its inputs, its sign-offs, its reviews and every model call logged for it. It cannot be undone. Files you exported stay where you exported them.")
     typed = st.text_input(f"Type {escape_markdown(number)} to confirm", key=f"apply_delete_{app_id}", persist_state="session")
     st.button("Delete this application", key="apply_delete_button", disabled=typed.strip() != number, on_click=_on, args=(db_path, app_id, lambda w, number=number: _delete(w, number)))
 

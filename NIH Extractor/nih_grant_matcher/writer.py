@@ -198,7 +198,7 @@ class Workspace:
             if state == "final" and any(f.severity == "error" for f in findings):
                 state = "draft"
                 notices.append(f"The {rule.title} is a draft again, because an error has appeared since you signed off revision {current.id}. The sign-off stays in the log.")
-            # A review is of one revision, so an older one stays in the log and is not shown as current.
+            # A review is of one revision, so an older one stays in the reviews table and the export, and is not shown as current.
             review = next((r for r in reversed(reviews) if current and r.revision_id == current.id), None)
             sections.append(SectionView(rule, limit, text, current.id if current else None, state, tuple(k for k in rule.needs if k not in kinds), findings, share(words), review))
         year = datetime.now(timezone.utc).year
@@ -405,7 +405,7 @@ class Workspace:
         if current is None or not current.text.strip():
             raise NotReady(f"The {rule.title} has no text to review yet. Write it and save it first.")
         factors = GRANT_TYPES[self._application().grant_type].factors
-        # A database that cannot hold the review would waste the call, so it is refused before the text leaves.
+        # A database with no reviews table would waste the call, so it is refused before the text leaves.
         self.store.writable("reviews")
         # The reviewer reads the section alone, so its read is independent of the inputs and prompts that wrote it.
         call, done = self._ask(section, "review", prompts.review(current.text, rule, factors, self.store.requirements(self.application_id)), current.id)
