@@ -1511,6 +1511,71 @@ def test_a_review_of_a_revision_saved_over_during_the_call_is_not_said_to_be_sho
     monkeypatch.setattr(apply_page, "_notice", lambda kind, text: notices.append((kind, text)))
     try:
         assert apply_page._review(ws, "specific-aims") is None
+        # The page draws the review the view gives the section, and the view gives none for the newer revision.
+        assert ws.view().section("specific-aims").review is None and len(store.reviews(1)) == 1
     finally:
         store.close()
     assert notices == [("warning", f"The section changed while the model was reading it, so this review is of revision {first.id}, an earlier one, and is not shown. Review the section again.")]
+
+
+def test_a_review_shows_the_model_s_text_as_text_and_not_as_markdown(tmp_path, monkeypatch, post) -> None:
+    import json
+    from nih_grant_matcher import keys
+    from nih_grant_matcher.ui.markdown import escape_markdown
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    path = _r21_database(tmp_path, start=True)
+    _with_model(path)
+    store = OpportunityStore(path)
+    try:
+        store.add_revision(1, "specific-aims", None, "applicant", "write", "We study heart cells in failing hearts.")
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    said, rated, named = "**No** [sample](http://x.test/a) size.", "Name a ![team](http://x.test/b) first.", "llama*9* [m](http://x.test/c)"
+    point = {"factor": "rigor", "kind": "weakness", "text": said, "quote": "We study heart cells in failing hearts."}
+    post.reply({**_openai_reply(json.dumps({"scores": {"importance": 2, "rigor": 5, "expertise": rated}, "points": [point]})), "model": named})
+    app.button(key="apply_review_button").click().run(timeout=30)
+    drawn = [element.value for element in [*app.markdown, *app.caption]]
+    assert not app.exception
+    for raw in (said, rated, named):
+        assert any(escape_markdown(raw) in value for value in drawn) and not any(raw in value for value in drawn), raw
+
+
+def test_a_saved_key_does_not_stay_in_the_page_s_state(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    for name in ("GRANT_MATCHER_LLM_KEY", "GRANT_MATCHER_LLM_KEY_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(keys, "PLATFORM", "linux")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_llm_provider").set_value("compatible").run(timeout=30)
+    app.text_input(key="apply_llm_key").input("sk-local-4f2a")
+    app.button(key="apply_llm_save_key_button").click().run(timeout=30)
+    assert not app.exception and any("ends in ...4f2a" in caption.value for caption in app.caption)
+    for view in ("Find", "Apply"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    assert app.session_state["apply_llm_key"] == "" and app.text_input(key="apply_llm_key").proto.value == "" and not app.text_input(key="apply_llm_key").proto.set_value
+
+
+def test_each_apply_value_shown_again_is_sent_to_the_browser(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import keys
+    from nih_grant_matcher.profile import Profile
+    monkeypatch.setattr(keys, "get", lambda provider, data_dir: None)
+    path = _r21_database(tmp_path, start=True)
+    _with_model(path)
+    store = OpportunityStore(path)
+    try:
+        store.save_profile(Profile(investigator="Ada Lovelace"))
+    finally:
+        store.close()
+    app = _apply_view(tmp_path, monkeypatch)
+    app.selectbox(key="apply_section").set_value("specific-aims").run(timeout=30)
+    app.text_input(key="apply_instruction_1_specific-aims").set_value("Make the second aim shorter.").run(timeout=30)
+    for view in ("Find", "Apply"):
+        app.sidebar.radio[0].set_value(view).run(timeout=30)
+    assert not app.exception
+    # A box inside a form sends nothing before its button, so for Your name only a value the server set is checked.
+    shown = {"apply_llm_provider": app.selectbox(key="apply_llm_provider"), "apply_llm_base_url": app.text_input(key="apply_llm_base_url"), "apply_signer": app.text_input(key="apply_signer"),
+             "apply_instruction": app.text_input(key="apply_instruction_1_specific-aims"), "apply_disclosure_1": app.toggle(key="apply_disclosure_1")}
+    assert {key: (w.proto.set_value, w.value) for key, w in shown.items()} == {"apply_llm_provider": (True, "compatible"), "apply_llm_base_url": (True, "http://localhost:11434/v1"),
+                                                                                 "apply_signer": (True, "Ada Lovelace"), "apply_instruction": (True, "Make the second aim shorter."), "apply_disclosure_1": (True, True)}
