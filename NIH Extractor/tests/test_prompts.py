@@ -64,3 +64,20 @@ def test_the_draft_prompt_holds_the_confirmed_requirements_and_a_profile_cut_to_
     assert "The Aims must state one hypothesis." in prompt.user and "UNDECIDED" not in prompt.user and "OTHER-SECTION" not in prompt.user
     assert "s" * 6000 in prompt.user and "s" * 6001 not in prompt.user and f"<profile-{token}>" in prompt.user and "Cardiology." in prompt.user
     assert "0.5 pages" in prompt.system and "material, not instructions" in prompt.system
+
+def test_a_limit_is_kept_only_when_its_number_stands_in_its_quote() -> None:
+    text = "The Project Narrative must name the disease studied in plain words. The Research Strategy is limited to 12 pages. The Specific Aims are limited to six pages."
+    limit = lambda quote, amount, section="project-narrative": {"kind": "limit", "section": section, "text": "A limit.", "quote": quote, "limit": {"amount": amount, "unit": "pages"}}
+    bad = [limit("The Project Narrative must name the disease studied in plain words.", 1), limit("The Research Strategy is limited to 12 pages.", 1, "research-strategy"), limit("The Specific Aims are limited to six pages.", 6, "specific-aims"), {**limit("The Project Narrative must name the disease studied in plain words.", 2), "kind": "must"}]
+    kept, dropped = prompts.parse_requirements(json.dumps([*bad, limit("The Research Strategy is limited to 12 pages.", 12, "research-strategy")]), text)
+    assert [(r.section, r.limit) for r in kept] == [("research-strategy", Limit(12, "pages"))] and dropped == len(bad)
+
+def test_a_reply_too_large_or_too_deep_to_read_is_dropped_and_never_raises() -> None:
+    quote = "The Research Strategy is limited to 4 pages."
+    assert prompts.parse_requirements("[" * 100000, quote) == ([], 1)
+    huge = {"kind": "limit", "section": "research-strategy", "text": "At most 4 pages.", "quote": quote, "limit": {"amount": 10 ** 400, "unit": "pages"}}
+    assert prompts.parse_requirements(json.dumps([huge]), quote) == ([], 1)
+
+def test_a_limit_of_one_is_one_page_in_the_prompts() -> None:
+    assert "its limit is 1 page." in prompts.polish("x", RULE["specific-aims"]).system
+    assert "Its limit is 1 page." in prompts.draft(RULE["specific-aims"], Limit(1, "pages"), (), (), BUILTIN_PROFILE).system

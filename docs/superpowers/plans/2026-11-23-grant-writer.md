@@ -1006,7 +1006,7 @@ The patterns that these findings rest on, so that two implementers write the sam
 - **A figure marker** is `![`, `<img`, or a line that starts with `Figure` or `Table` and a number.
 - **A citation-like string** is a DOI (`10\.\d{4,9}/\S+`), a PMID (`PMID:?\s*\d+`), or an author and year (`[A-Z][a-z]+ et al\.?,? \(?\d{4}\)?`).
 - **A number** is compared with its surrounding punctuation removed, so `412,` and `(412)` are `412`. Attribution is by whitespace-separated word, and a model that adds a comma after the applicant's number makes that word the model's. The number is still in `grounding`, so it is not flagged.
-- **`grounding`** is what the applicant supplied or the funder published. `Workspace.view` builds it from the text of every live fact, the profile's research summary, expertise and resources, every revision of the application that the applicant wrote, and the announcement text.
+- **`grounding`** is what the applicant supplied or the funder published. `Workspace.view` builds it from the text of every live fact, the profile's research summary, expertise and resources, every revision that the applicant wrote before a model's revision of the same section, and the announcement text. (Changed in Stage 4.)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1804,6 +1804,8 @@ Run: `uv run --locked pytest -q -W error::DeprecationWarning`
 git add "NIH Extractor"
 git commit -m "feat: draft a section from the applicant's inputs"
 ```
+
+Changed in Stage 4: `grounding` takes an applicant's revision only when no model revision of the same section comes before it. An applicant's revision made on top of a model's draft holds the model's words, so counting it let one saved edit clear `number-not-in-inputs` for a number the model invented. A number the applicant types later is still never flagged, because the check reads only words a model wrote.
 
 ---
 
