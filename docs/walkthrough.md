@@ -96,21 +96,26 @@ Select **Next**. With the aims box empty, a red message said `Write three to six
 
 ### Step 3. Your terms
 
-The wizard proposes terms from the text of step 2. Do not accept the list as it comes. For the example it proposed 25 single words, each with a weight from 10 to 15:
+The wizard proposes terms from the text of step 2. Read the list before you accept it. For the example it proposed 25 terms, each with a weight from 6 to 15:
 
 ```text
-diary, interference, reaches, telephone, video, surveys, energy, reduces, live, participatory, fatigue, reported, far, find, limiting, clinics, improves, keep, workers, member, symptom, facilitators, we, specialty, adapt
+self, chronic, rural, chronic illness, self-management, fatigue, adults, peer, peer facilitators, specialty, rural adults, energy, surveys, pain, participatory, limiting, reported, clinics, member, people, workers, symptom, delivered, diary, interference
 ```
 
-![The table of proposed terms, which starts with diary, interference, reaches, telephone and video](../images/walkthrough/03-profile-terms-proposed.png)
+![The table of proposed terms, which starts with self, chronic, rural, chronic illness and self-management](../images/walkthrough/03-profile-terms-proposed.png)
 
-Some of these name the field, such as "fatigue" and "symptom". Many do not, such as "reaches", "live", "far", "find", "keep", and "we". The words that name the field best were missing. The list had no "chronic", "pain", "rural", or "self-management", and it had no phrase at all.
+Most of the list names the field. It has "chronic", "rural", "fatigue", "pain", "symptom", and "participatory". It has four phrases, "chronic illness", "self-management", "peer facilitators", and "rural adults". The list still needed a hand in four places:
 
-An opportunity gains the weight of each term that its title or text holds. A general word such as "live" would add points to opportunities that have nothing to do with chronic illness. So the example changed the list in three ways:
+- Six terms are one part of a phrase in the text. "self" comes from "self-management", "energy" and "limiting" from "energy-limiting", "reported" from "patient-reported", "workers" from "community health workers", and "interference" from "pain interference".
+- Some words are general, such as "adults", "people", "member", and "delivered".
+- Some phrases of the field are missing. The list has no "chronic pain", and it has no phrase of three words, such as "multiple chronic conditions".
+- The weights do not follow what matters most to the work. "energy" and "surveys" had 15. "self-management" and "chronic illness" had 9, and "chronic" had 6.
 
-- It kept five terms: "diary", "participatory", "fatigue", "symptom", and "facilitators". It raised "fatigue" from 13 to 18, because fatigue is central to the work.
-- It typed a phrase over each of ten general words. To change a term, select its cell, press Enter, type, and press Enter again.
-- It deleted the ten words that were left: "find", "limiting", "clinics", "improves", "keep", "workers", "member", "we", "specialty", and "adapt". To delete a row, select a cell in it, press Shift and Space to select the row, and press Delete.
+An opportunity gains the weight of each term that its title or text holds. A general word such as "people" says little about the work, and it adds points wherever it appears. So the example changed the list in three ways:
+
+- It kept seven terms: "self-management", "chronic illness", "fatigue", "rural", "participatory", "symptom", and "diary". It raised four of their weights. "self-management" went from 9 to 20, "chronic illness" from 9 to 18, "fatigue" from 13 to 18, and "rural" from 10 to 12.
+- It typed a phrase over each of seven terms, and it set their weights to the ones in the table below. "chronic" became "multiple chronic conditions", "pain" became "chronic pain", "peer" became "peer support", "workers" became "community health workers", "reported" became "patient-reported outcomes", "clinics" became "access to care", and "interference" became "pain interference". It also shortened "peer facilitators" to "facilitators", and step 4 shows what that shorter term costs. To change a term or a weight, select its cell, press Enter, type, and press Enter again.
+- It deleted the ten terms that were left: "self", "adults", "specialty", "rural adults", "energy", "surveys", "limiting", "member", "people", and "delivered". To delete a row, select a cell in it, press Shift and Space to select the row, and press Delete.
 
 The table then held 15 terms:
 
@@ -132,7 +137,7 @@ The table then held 15 terms:
 | facilitators | 11 |
 | diary | 10 |
 
-![The table after the changes, which starts with diary, pain interference, self-management, chronic illness and chronic pain](../images/walkthrough/04-profile-terms-edited.png)
+![The table after the changes, which starts with multiple chronic conditions, rural, chronic illness, self-management and fatigue](../images/walkthrough/04-profile-terms-edited.png)
 
 Below the table, **Your NIH institutes** gives 8 points to a record that one of your institutes issued. The example left it empty. The help says "Leave it empty when you are not sure, and no record gets the bonus."
 
@@ -516,7 +521,7 @@ project-narrative  final  56 words
 ## Use it well
 
 - **The score is a first look.** The three highest scores in the example were awards that Lanternwell could not apply for, and the announcement it chose had a score of 21.6 at the Watchlist level. Sort and filter with the score. Decide by reading.
-- **The proposed terms need your hand.** The wizard proposed "we", "live", and "far", and it proposed no phrase. The ranking is only as good as the terms you keep.
+- **The proposed terms need your hand.** The wizard proposed the field's own words and four phrases. It also proposed "self" and "people", it left out "chronic pain", and it gave "self-management" a weight of 9. The ranking is only as good as the terms and weights you keep.
 - **A common word as a keyword may not narrow anything.** `pain` fetched 341 of the 369 open notices. Use a phrase such as `chronic pain`, or **Filter within results**.
 - **Eligibility is yours to check.** Grant Matcher shows Sections I, IV, and V. Read Section III on NIH's page, and start the registrations early.
 - **A model can invent, and it can shift a claim.** In the example it left a placeholder where it had no fact, which is what it is told to do. It also turned "people in rural areas" into "rural adults" in a polish. The checks catch a made-up citation or number. Only you catch a change of meaning.
