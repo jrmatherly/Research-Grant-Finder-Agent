@@ -99,23 +99,23 @@ Select **Next**. With the aims box empty, a red message said `Write three to six
 The wizard proposes terms from the text of step 2. Read the list before you accept it. For the example it proposed 25 terms, each with a weight from 6 to 15:
 
 ```text
-self, chronic, rural, chronic illness, self-management, fatigue, adults, peer, peer facilitators, specialty, rural adults, energy, surveys, pain, participatory, limiting, reported, clinics, member, people, workers, symptom, delivered, diary, interference
+chronic, rural, chronic illness, self-management, fatigue, adults, peer facilitators, specialty, rural adults, energy-limiting, surveys, pain, participatory, patient-reported, clinics, member, people, workers, symptom, delivered, diary, interference, telephone, video, acceptability
 ```
 
-![The table of proposed terms, which starts with self, chronic, rural, chronic illness and self-management](../images/walkthrough/03-profile-terms-proposed.png)
+![The table of proposed terms, which starts with chronic, rural, chronic illness, self-management and fatigue](../images/walkthrough/03-profile-terms-proposed.png)
 
-Most of the list names the field. It has "chronic", "rural", "fatigue", "pain", "symptom", and "participatory". It has four phrases, "chronic illness", "self-management", "peer facilitators", and "rural adults". The list still needed a hand in four places:
+Most of the list names the field. It has "chronic", "rural", "fatigue", "pain", "symptom", and "participatory". It has six phrases, "chronic illness", "self-management", "peer facilitators", "rural adults", "energy-limiting", and "patient-reported". A word that the text holds only inside a hyphenated word, such as "self" or "energy", is proposed inside it and not by itself. The list still needed a hand in four places:
 
-- Six terms are one part of a phrase in the text. "self" comes from "self-management", "energy" and "limiting" from "energy-limiting", "reported" from "patient-reported", "workers" from "community health workers", and "interference" from "pain interference".
+- Three terms are one part of a longer phrase in the text. "workers" comes from "community health workers", "interference" from "pain interference", and "patient-reported" from "patient-reported outcomes".
 - Some words are general, such as "adults", "people", "member", and "delivered".
 - Some phrases of the field are missing. The list has no "chronic pain", and it has no phrase of three words, such as "multiple chronic conditions".
-- The weights do not follow what matters most to the work. "energy" and "surveys" had 15. "self-management" and "chronic illness" had 9, and "chronic" had 6.
+- The weights do not follow what matters most to the work. "energy-limiting" and "surveys" had 15. "self-management" and "chronic illness" had 9, and "chronic" had 6.
 
 An opportunity gains the weight of each term that its title or text holds. A general word such as "people" says little about the work, and it adds points wherever it appears. So the example changed the list in three ways:
 
 - It kept seven terms: "self-management", "chronic illness", "fatigue", "rural", "participatory", "symptom", and "diary". It raised four of their weights. "self-management" went from 9 to 20, "chronic illness" from 9 to 18, "fatigue" from 13 to 18, and "rural" from 10 to 12.
-- It typed a phrase over each of seven terms, and it set their weights to the ones in the table below. "chronic" became "multiple chronic conditions", "pain" became "chronic pain", "peer" became "peer support", "workers" became "community health workers", "reported" became "patient-reported outcomes", "clinics" became "access to care", and "interference" became "pain interference". It also shortened "peer facilitators" to "facilitators", and step 4 shows what that shorter term costs. To change a term or a weight, select its cell, press Enter, type, and press Enter again.
-- It deleted the ten terms that were left: "self", "adults", "specialty", "rural adults", "energy", "surveys", "limiting", "member", "people", and "delivered". To delete a row, select a cell in it, press Shift and Space to select the row, and press Delete.
+- It typed a phrase over each of seven terms, and it set their weights to the ones in the table below. "chronic" became "multiple chronic conditions", "pain" became "chronic pain", "member" became "peer support", "workers" became "community health workers", "patient-reported" became "patient-reported outcomes", "clinics" became "access to care", and "interference" became "pain interference". It also shortened "peer facilitators" to "facilitators", and step 4 shows what that shorter term costs. To change a term or a weight, select its cell, press Enter, type, and press Enter again.
+- It deleted the ten terms that were left: "adults", "specialty", "rural adults", "energy-limiting", "surveys", "people", "delivered", "telephone", "video", and "acceptability". To delete a row, select a cell in it, press Shift and Space to select the row, and press Delete.
 
 The table then held 15 terms:
 
@@ -261,9 +261,9 @@ The Apply view has five tabs: **Announcement**, **Requirements**, **Your inputs*
 
 On the **Announcement** tab, select **Fetch the full announcement**. A green message said `Saved the announcement from the NIH Guide. Confirm or reject what it adds under Requirements.` A line gave the source and the date, `Fetched from the NIH Guide on 2026-11-24.`
 
-Three panels open when selected. Section I is the description of the opportunity. Section IV is the application and submission information. Section V is the review information. Read all three. Section I of PA-25-302 says that the program supports "discrete, well-defined projects that realistically can be completed in two years".
+Five panels open when selected. Section I is the description of the opportunity. Section II is the award information. Section III is the eligibility information. Section IV is the application and submission information. Section V is the review information. Read all five. Section I of PA-25-302 says that the program supports "discrete, well-defined projects that realistically can be completed in two years".
 
-Grant Matcher does not show Section III, the eligibility information. Select **Open the announcement** to read it on NIH's page. On 2026-11-24, Section III of PA-25-302 listed "Nonprofits with 501(c)(3) IRS Status (Other than Institutions of Higher Education)" among the eligible organizations. The same section lists the registrations that an applicant organization must hold, and it says that registration can take six weeks or more. Start those early. Check Section III of your own announcement, because another announcement can list other organizations.
+Read Section III before you write. Grant Matcher shows it and does not check it. **Open the announcement** shows the same section on NIH's page. On 2026-11-24, Section III of PA-25-302 listed "Nonprofits with 501(c)(3) IRS Status (Other than Institutions of Higher Education)" among the eligible organizations. The same section lists the registrations that an applicant organization must hold, and it says that registration can take six weeks or more. Start those early. Check Section III of your own announcement, because another announcement can list other organizations.
 
 ## Decide the requirements
 
@@ -521,9 +521,9 @@ project-narrative  final  56 words
 ## Use it well
 
 - **The score is a first look.** The three highest scores in the example were awards that Lanternwell could not apply for, and the announcement it chose had a score of 21.6 at the Watchlist level. Sort and filter with the score. Decide by reading.
-- **The proposed terms need your hand.** The wizard proposed the field's own words and four phrases. It also proposed "self" and "people", it left out "chronic pain", and it gave "self-management" a weight of 9. The ranking is only as good as the terms and weights you keep.
+- **The proposed terms need your hand.** The wizard proposed the field's own words and four phrases. It also proposed general words such as "people" and "adults", it left out "chronic pain", and it gave "self-management" a weight of 9. The ranking is only as good as the terms and weights you keep.
 - **A common word as a keyword may not narrow anything.** `pain` fetched 341 of the 369 open notices. Use a phrase such as `chronic pain`, or **Filter within results**.
-- **Eligibility is yours to check.** Grant Matcher shows Sections I, IV, and V. Read Section III on NIH's page, and start the registrations early.
+- **Eligibility is yours to check.** Grant Matcher shows Section III and does not check it. Read it, and start the registrations early.
 - **A model can invent, and it can shift a claim.** In the example it left a placeholder where it had no fact, which is what it is told to do. It also turned "people in rural areas" into "rural adults" in a polish. The checks catch a made-up citation or number. Only you catch a change of meaning.
 - **A model's review is an estimate.** Its scores are not NIH's. Use the points it quotes, and ignore the numbers.
 - **The counts are estimates.** [The dashboard guide](dashboard.md#write-an-application) says that a page or line count is an estimate and that the final PDF decides. The share of words that came from a model is the tool's own word-level record, and its one-half line is the tool's and not NIH's.
