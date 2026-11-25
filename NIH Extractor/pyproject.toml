@@ -1,6 +1,6 @@
 [project]
 name = "nih-grant-matcher"
-version = "0.3.3"
+version = "0.3.4"
 description = "Find NIH/HHS grant opportunities relevant to ML and data analysis expertise."
 requires-python = ">=3.11"
 dependencies = [
