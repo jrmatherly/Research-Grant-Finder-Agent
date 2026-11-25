@@ -1,0 +1,37 @@
+{
+  "format": "grant-matcher-profile/1",
+  "profile": {
+    "career_stage": "",
+    "examples": [
+      "Aim 1 will test whether a peer-led self-management program delivered by telephone and video reduces fatigue and pain interference in rural adults with chronic illness.",
+      "Aim 2 will find the barriers that keep rural adults with multiple chronic conditions from specialty care and from self-management support.",
+      "Aim 3 will adapt a symptom self-monitoring diary with patient-reported outcomes for people with energy-limiting chronic illness and pilot test its feasibility and acceptability.",
+      "Aim 4 will evaluate whether training peer facilitators as community health workers improves engagement and retention in a behavioral intervention."
+    ],
+    "examples_name": "your example sentences",
+    "expertise": "Ten years of peer support groups for adults who live with chronic illness. Ran 2 member surveys on fatigue, pain, and access to care. The team includes a program director with a public health degree, a part-time research lead with a doctorate in health services research, and 22 trained peer facilitators.",
+    "focus": "profile",
+    "institution": "",
+    "investigator": "Lanternwell Chronic Illness Alliance",
+    "keywords": {
+      "multiple chronic conditions": 15,
+      "rural": 12,
+      "chronic illness": 18,
+      "self-management": 20,
+      "fatigue": 18,
+      "facilitators": 11,
+      "chronic pain": 15,
+      "participatory": 14,
+      "patient-reported outcomes": 13,
+      "access to care": 13,
+      "peer support": 15,
+      "community health workers": 14,
+      "pain interference": 12,
+      "symptom": 11,
+      "diary": 10
+    },
+    "prior_work": [],
+    "research_summary": "We study how adults who live with chronic illness manage fatigue, chronic pain, and gaps in access to care in rural communities. We work as a community organization with trained peer facilitators, member surveys, and community-based participatory methods, so that self-management support reaches people who live far from specialty clinics.",
+    "resources": "A member list of 1,400 adults with chronic illness in 14 rural counties. A 2025 member survey with 412 responses. A telephone and video meeting system that the support groups already use. A written agreement with a university partner for human subjects review."
+  }
+}

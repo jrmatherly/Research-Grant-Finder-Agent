@@ -223,3 +223,12 @@ def test_suggested_terms_take_no_ending_after_an_apostrophe_as_a_word(text, prop
     scorer = MLRelevanceScorer()
     terms = set(suggest_terms((text,), scorer.document_frequency, scorer.documents))
     assert proposed <= terms and not absent & terms, terms
+
+def test_the_example_profile_of_the_walkthrough_imports_and_holds_what_the_guide_enters() -> None:
+    from pathlib import Path
+    docs = Path(__file__).resolve().parents[2] / "docs"
+    profile, guide = from_export((docs / "examples" / "lanternwell-profile.json").read_text(encoding="utf-8")), (docs / "walkthrough.md").read_text(encoding="utf-8")
+    assert (profile.investigator, profile.research_summary, profile.examples) == ("Lanternwell Chronic Illness Alliance", WALKTHROUGH_SUMMARY, WALKTHROUGH_AIMS)
+    assert len(profile.keywords) == 15 and all(f"| {term} | {weight} |" in guide for term, weight in profile.keywords.items())
+    assert profile.expertise in guide and profile.resources in guide and "examples/lanternwell-profile.json" in guide
+

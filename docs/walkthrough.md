@@ -62,6 +62,8 @@ Under **View**, select **Profile**, then **Set up my profile**. The wizard has f
 
 The boxes are worded for one investigator. The help says what an organization enters.
 
+To start from the example and not from empty boxes, import [examples/lanternwell-profile.json](examples/lanternwell-profile.json). It holds everything that the five steps below enter. On the **Profile** view, open the file in a text editor, copy all of it, paste it into **Import a profile**, and select **Import profile**. An import replaces the saved profile. Then select **Edit my profile** and put your own name, text and terms in place of the example's, because the organization and its numbers are invented.
+
 ### Step 1. You
 
 ![Step 1 of the wizard, with the help for Institution open](../images/walkthrough/02-profile-you-help.png)
