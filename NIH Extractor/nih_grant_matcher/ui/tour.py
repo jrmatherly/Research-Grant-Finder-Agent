@@ -45,7 +45,7 @@ export default function(component) {
   const target = s => '.st-key-' + s.key + (s.part ? ' ' + s.part : '');
   const shown = step => { const e = document.querySelector(target(step)); return !!e && e.getClientRects().length > 0; };
   const idle = () => { const a = document.querySelector('.stApp'); return !a || a.getAttribute('data-test-script-state') !== 'running'; };
-  // Resolves true as soon as the step's control is on the page, and false once the app has finished a run without it.
+  // Resolves true as soon as the step's control is on the page, and false once the app has finished a run without it or 10 seconds have passed.
   const arrive = (step, least) => new Promise(done => { const began = Date.now(); let calm = 0; const look = () => { const waited = Date.now() - began; if (step && shown(step)) return done(true); calm = idle() ? calm + 1 : 0; if ((calm > 2 && waited >= least) || waited > 10000) return done(false); setTimeout(look, 50); }; look(); });
   const quiet = e => { if (e.key === 'Escape' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault(); };
   // Python sets the view before this run, so the first view's controls are drawn by the time the app is idle.

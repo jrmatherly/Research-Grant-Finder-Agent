@@ -184,7 +184,7 @@ def test_nih_guide_default_run_reads_every_page(monkeypatch) -> None:
     assert offsets == [(0, 100), (100, 100), (200, 100), (300, 100)]
 
 
-@pytest.mark.parametrize("keyword, query, sort", [("chronic pain", '"chronic pain"', "_score"), ("self-management", '"self-management"', "_score"), ("fatigue", '"fatigue"', "_score"), ("AI, machine learning", '"AI" | "machine learning"', "_score"), ('"chronic pain" +opioid', '"chronic pain" +opioid', "_score"), ("chronic | pain", "chronic | pain", "_score"), ("chronic -pain", "chronic -pain", "_score"), ("", "", "reldate:desc")], ids=["words", "hyphen", "word", "commas", "quoted", "or", "not", "empty"])
+@pytest.mark.parametrize("keyword, query, sort", [("chronic pain", '"chronic pain"', "_score"), ("self-management", '"self-management"', "_score"), ("fatigue", '"fatigue"', "_score"), ("AI, machine learning", '"AI" | "machine learning"', "_score"), ('"chronic pain" +opioid', '"chronic pain" +opioid', "_score"), ("chronic | pain", "chronic | pain", "_score"), ("chronic -pain", "chronic -pain", "_score"), ("cancer AND diabetes", '("cancer" + "diabetes")', "_score"), ("chronic pain OR fatigue, sleep", '("chronic pain" | "fatigue") | "sleep"', "_score"), ("cancer NOT clinical trial", '("cancer" + -clinical + -trial)', "_score"), ("research and development", '"research and development"', "_score"), ("", "", "reldate:desc"), (" , ,", "", "reldate:desc")], ids=["words", "hyphen", "word", "commas", "quoted", "or", "not", "AND", "OR", "NOT", "lower-case and", "empty", "only commas"])
 def test_a_plain_nih_guide_keyword_is_sent_as_a_phrase(monkeypatch, keyword, query, sort) -> None:
     import urllib.parse
     sent = []

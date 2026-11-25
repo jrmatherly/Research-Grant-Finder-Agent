@@ -1953,3 +1953,19 @@ def test_every_wizard_input_says_what_it_is_for_and_every_text_box_shows_sample_
         # A table cannot show sample text, so a caption under it gives one worked row.
         assert any("Example row" in c.value for c in app.main.caption) == (step in (2, 4)), step
     assert seen == {"Ranking", "Name", "Institution", "Career stage", "Research summary", "Aims of recent or planned work", "Your NIH institutes", "Expertise", "Resources", "Import a profile"}
+
+
+def test_a_search_that_finds_nothing_says_so_above_the_saved_opportunities(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher import clients
+    store = OpportunityStore(tmp_path / "data" / "grants.sqlite3")
+    try:
+        store.upsert_many([MLRelevanceScorer().score(_opp(1, "Machine learning for imaging"))])
+    finally:
+        store.close()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(clients, "_read", lambda request, timeout, attempts=3: b'{"data": {"hits": {"hits": []}}}')
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.text_input(key="find_keyword").set_value("no such phrase").run(timeout=30)
+    app.button(key="find_run").click().run(timeout=60)
+    assert not app.exception and not app.success
+    assert ["The search found no records" in w.value and "saved by an earlier search" in w.value for w in app.warning] == [True]
