@@ -1,4 +1,5 @@
-import json, pytest
+import json, pytest, re
+from dataclasses import replace
 from datetime import date
 from nih_grant_matcher.config import MatcherConfig
 from nih_grant_matcher.models import Opportunity
@@ -210,6 +211,12 @@ def test_suggested_terms_name_the_field_of_the_walkthrough_text() -> None:
     assert {"chronic", "pain", "rural", "fatigue", "self-management", "chronic illness"} <= set(terms), list(terms)
     assert not {"we", "who", "so", "its", "aim", "4", "find", "keep", "live", "far", "reaches", "reduces"} & set(terms), list(terms)
     assert len(terms) <= 25 and all(4 <= weight <= 18 for weight in terms.values())
+    # A word that the text holds only as half of a hyphenated word is proposed inside it, never by itself.
+    text = " ".join((*WALKTHROUGH_AIMS, WALKTHROUGH_SUMMARY)).lower()
+    assert {"energy-limiting", "patient-reported"} <= set(terms) and not [term for term in terms if not re.search(rf"(?<![\w-]){re.escape(term)}(?![\w-])", text)], list(terms)
+    # A phrase is a term a profile saves and exports.
+    profile = replace(BUILTIN_PROFILE, keywords=terms)
+    assert from_export(to_export(profile)).keywords == terms and profile.matcher_config().keywords == terms
 
 @pytest.mark.parametrize("text, proposed, absent", [("We study Parkinson's tremor and Parkinson's tremor in older adults.", {"parkinson"}, {"s", "s tremor"}), ("Sjögren’s syndrome matters. Sjögren’s syndrome.", {"syndrome"}, {"s", "s syndrome"}), ("We don't know. Patients don't adhere.", {"adhere"}, {"t"}), ("The 'chronic pain' group and the 'chronic pain' clinic.", {"chronic pain"}, set()), ("Vitamin D and vitamin D in T cells and T cells.", {"vitamin d", "t cells"}, set())], ids=["possessive", "curly", "contraction", "quoted", "letters"])
 def test_suggested_terms_take_no_ending_after_an_apostrophe_as_a_word(text, proposed, absent) -> None:

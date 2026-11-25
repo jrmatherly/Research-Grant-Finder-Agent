@@ -1969,3 +1969,25 @@ def test_a_search_that_finds_nothing_says_so_above_the_saved_opportunities(tmp_p
     app.button(key="find_run").click().run(timeout=60)
     assert not app.exception and not app.success
     assert ["The search found no records" in w.value and "saved by an earlier search" in w.value for w in app.warning] == [True]
+
+
+def test_the_announcement_tab_shows_the_award_and_eligibility_sections(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.announcement import SECTION_TITLES
+    from nih_grant_matcher.clients import GrantsGovClient, NihGuideClient
+    from helpers import no_page
+    text = " ".join(f"Section {n}. {title} {'Nonprofits with 501(c)(3) status may apply. ' if n == 'III' else 'Text of this section. '}" * 1 + "More text. " * 30 for n, title in SECTION_TITLES.items())
+    monkeypatch.setattr(NihGuideClient, "doctext", lambda self, number: (text, "1"))
+    monkeypatch.setattr(NihGuideClient, "page", no_page)
+    monkeypatch.setattr(GrantsGovClient, "full_announcement", lambda self, number: "")
+    _r21_database(tmp_path, start=True)
+    app = _apply_view(tmp_path, monkeypatch)
+    app.button(key="apply_fetch_button").click().run(timeout=30)
+    panels = {e.label: " ".join(t.value for t in e.text) for e in app.expander if e.label.startswith("Section")}
+    assert not app.exception and list(panels) == [f"Section {n}. {SECTION_TITLES[n]}" for n in ("I", "II", "III", "IV", "V")]
+    assert "501(c)(3)" in panels["Section III. Eligibility Information"] and "501(c)(3)" not in panels["Section IV. Application and Submission Information"]
+
+
+@pytest.mark.parametrize("old, new, shown", [("We study heart cells.", "We study cardiac cells.", "We study ~~heart~~ **cardiac** cells\\."), ("First ends here.\n\nSecond starts here.", "First stops here.\n\nSecond starts here.\n\nA third.", "First ~~ends~~ **stops** here\\.\n\nSecond starts here\\.\n\n**A third\\.**"), ("One.\n\nTwo.", "One. Two.", "One\\. Two\\."), ("One. Two.", "Three.\n\nFour.", "~~One\\. Two\\.~~ **Three\\.**\n\n**Four\\.**")], ids=["word", "paragraphs", "joined", "rewritten"])
+def test_a_polish_diff_keeps_the_paragraphs_of_the_proposal(old, new, shown) -> None:
+    from nih_grant_matcher.ui.apply_page import _word_diff
+    assert _word_diff(old, new) == shown
