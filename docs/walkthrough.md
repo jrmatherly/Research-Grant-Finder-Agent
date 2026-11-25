@@ -62,7 +62,9 @@ Under **View**, select **Profile**, then **Set up my profile**. The wizard has f
 
 The boxes are worded for one investigator. The help says what an organization enters.
 
-To start from the example and not from empty boxes, import [examples/lanternwell-profile.json](examples/lanternwell-profile.json). It holds everything that the five steps below enter. On the **Profile** view, open the file in a text editor, copy all of it, paste it into **Import a profile**, and select **Import profile**. An import replaces the saved profile. Then select **Edit my profile** and put your own name, text and terms in place of the example's, because the organization and its numbers are invented.
+To start from the example and not from empty boxes, import [examples/lanternwell-profile.json](examples/lanternwell-profile.json). It holds everything that the five steps below enter. Open the file in a text editor and copy all of it. On the **Profile** view, under **Export and import**, paste it into **Import a profile** and select **Import profile**. An import replaces the saved profile.
+
+The organization and its numbers are invented, so make the profile your own. Select **Edit my profile** and put your own name and text in place of the example's. In step 3, delete the example's 15 terms. The wizard keeps the terms a draft already has and adds the ones it proposes from your text. The steps below started from empty boxes, so the numbers that step 4 shows there are not the ones you see after an import.
 
 ### Step 1. You
 
