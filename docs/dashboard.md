@@ -4,16 +4,18 @@ The dashboard searches the NIH Guide and Grants.gov, scores each funding opportu
 
 To start the dashboard, see the [README](../README.md#getting-started) for a local start or [Run NIH Grant Matcher from the published Docker image](docker.md) for Docker. Then open http://localhost:8501.
 
+For one worked example from a fresh install to an exported application, see [Walk through Grant Matcher with a worked example](walkthrough.md).
+
 ![The dashboard with the sidebar, the filters, the four metrics, and the Results table](../images/Dashboard.png)
 
 ## The layout
 
-- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**. In the Find view it holds **Show me around**, the **Keyword** box and **Run Search**, and three sections that open when selected: **Source and rows**, **Display**, and **Export**. A section closes again when you leave the view, and its values are kept.
+- **The sidebar** on the left starts with **View**, which switches between **Find**, **Apply**, **Profile**, and **Settings**. **Show me around** comes next in every view. In the Find view the sidebar then holds the **Keyword** box and **Run Search**, and three sections that open when selected: **Source and rows**, **Display**, and **Export**. A section closes again when you leave the view, and its values are kept.
 - **The filter row** at the top of the page narrows the results that are already loaded.
 - **The four metrics** summarize the rows that the filters leave visible.
 - **The three tabs** show those rows as a table (**Results**), as charts (**Visuals**), and one at a time (**Details**).
 
-**Show me around**, at the top of the sidebar under **View** in the Find view, points at each part of the page in turn. The controls do not respond while it runs. Press Escape to leave it.
+**Show me around**, at the top of the sidebar under **View**, is one tour of the dashboard. It points at each part of the Find view, then at the Profile view and the five steps of its wizard, then at Settings, and it changes the view by itself. The controls do not respond while it runs. It saves nothing. Press Escape to leave it, and it puts you back in the view where you started, with the profile wizard open or closed as it was. Text that you typed into a step of the wizard since you opened the step is lost when the tour starts, and a line under the button says so while a step is open.
 
 When you open the dashboard and saved results exist, the dashboard loads them. You do not have to search first.
 
@@ -142,7 +144,7 @@ When another database is open, the sidebar names it in every other view. Reloadi
 
 ## Set your profile
 
-Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. Once a profile is saved, the button reads **Edit my profile**. The wizard has five steps. Select **Next** and **Back** to move between them.
+Ranking starts from a built-in profile for machine learning and data science. A line under the page title names the profile that ranks. To rank for your own field, select **Profile** under **View**, then select **Set up my profile**. Once a profile is saved, the button reads **Edit my profile**. The wizard has five steps. Select **Next** and **Back** to move between them. Each box has a question mark that says what the box is for and what reads it, and each text box shows sample text until you type. The boxes are worded for one investigator. An organization that applies in its own name enters its name under **Name** and leaves **Career stage** empty.
 
 1. **You.** Choose **Rank with my own research** or **Keep the built-in ranking**, then your name, institution, and career stage. **Keep the built-in ranking** keeps the built-in terms and sentences and skips steps 2 to 4, so you can add your name and background and every score stays as it was. A line under the page title then says that ranking uses the built-in profile, for you.
 2. **Your research.** A summary, then three to six sentences, as a paragraph or one per line, that state the aims of recent or planned work. Ranking compares each opportunity with these sentences.

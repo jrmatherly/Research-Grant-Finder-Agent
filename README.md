@@ -385,6 +385,8 @@ uv run streamlit run streamlit_app.py
 
 The dashboard will open in your browser. To learn the controls, see [Use the NIH Grant Matcher dashboard](docs/dashboard.md).
 
+For one worked example from a fresh install to an exported application, see [Walk through Grant Matcher with a worked example](docs/walkthrough.md).
+
 To start it with a double-click instead, use `launch_ui.command` on macOS, or `launch_ui.bat` on Windows (`launch_ui.vbs` hides the console window). The Windows scripts have not been tested. If macOS refuses to open `launch_ui.command`, which can happen after a ZIP download, right-click it and choose Open.
 
 ### Run with Docker
