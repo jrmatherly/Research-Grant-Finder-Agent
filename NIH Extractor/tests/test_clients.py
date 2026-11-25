@@ -184,6 +184,18 @@ def test_nih_guide_default_run_reads_every_page(monkeypatch) -> None:
     assert offsets == [(0, 100), (100, 100), (200, 100), (300, 100)]
 
 
+@pytest.mark.parametrize("keyword, query, sort", [("chronic pain", '"chronic pain"', "_score"), ("self-management", '"self-management"', "_score"), ("fatigue", '"fatigue"', "_score"), ("AI, machine learning", '"AI" | "machine learning"', "_score"), ('"chronic pain" +opioid', '"chronic pain" +opioid', "_score"), ("chronic | pain", "chronic | pain", "_score"), ("chronic -pain", "chronic -pain", "_score"), ("", "", "reldate:desc")], ids=["words", "hyphen", "word", "commas", "quoted", "or", "not", "empty"])
+def test_a_plain_nih_guide_keyword_is_sent_as_a_phrase(monkeypatch, keyword, query, sort) -> None:
+    import urllib.parse
+    sent = []
+    def fake_read(request, timeout, attempts=3):
+        sent.append(urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query, keep_blank_values=True))
+        return b'{"data": {"hits": {"hits": []}}}'
+    monkeypatch.setattr(clients, "_read", fake_read)
+    clients.NihGuideClient().search(rows=1, keyword=keyword)
+    assert [(s["query"], s["sort"]) for s in sent] == [([query], [sort])]
+
+
 @pytest.mark.parametrize("docnum, expected", [("PAR-27-090", ("Body", "360675")), ("PAR-27-091", ("", ""))], ids=["same", "other"])
 def test_doctext_takes_the_text_only_of_the_document_asked_for(monkeypatch, docnum, expected) -> None:
     import json, urllib.parse
