@@ -351,10 +351,12 @@ The checks run on every save. To show them, the example saved a Project Summary/
 We will survey rural adults with multiple chronic conditions about the barriers that keep them from specialty care and from self-management support [@smith2020]. Interviews with 30 respondents and 10 peer facilitators will explain how fatigue and pain interference shape those barriers.
 ```
 
-Two red messages followed:
+Two messages followed. The first is an error and the second is a warning:
 
 - `The citation [@smith2020] names no reference you listed. Add the reference to your inputs or remove the citation.`
 - `Project Summary/Abstract is written in the third person. Rewrite each sentence that uses I, we, my or our.`
+
+An error blocks a sign-off. A warning does not.
 
 **Sign off** then answered that the section `cannot be signed off while an error stands.` The example changed "We will survey" to "This project will survey", removed the citation, and saved again. The checks found nothing to fix.
 
