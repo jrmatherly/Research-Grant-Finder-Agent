@@ -14,6 +14,7 @@ TEXT_FIELDS = ("investigator", "institution", "career_stage", "research_summary"
 TEXT_LIMITS = {"investigator": 200, "institution": 200, "career_stage": 200, "research_summary": 6000, "expertise": 6000, "resources": 6000}
 MAX_KEYWORD, MAX_SENTENCE, MAX_REFERENCES, MAX_CITATION, MAX_INSTITUTES = 80, 600, 100, 1000, 3
 # Words that say what a study does and not what it is about. As suggested terms they matched the most records ("Matched profile terms: test, how").
+HYPHENATED_RE = re.compile(r"(?<![\w'’-])[a-z0-9]+(?:-[a-z0-9]+)+(?![\w-])")
 ACTION_WORDS = frozenset("""test tests define defines determine determines whether how identify identifies evaluate evaluates
 map maps after two three examine examines assess assesses investigate investigates characterize characterizes understand
 establish compare explore quantify measure reveal demonstrate among during between within which what why""".split())
@@ -139,14 +140,17 @@ def suggest_terms(sentences: tuple[str, ...], document_frequency: dict[str, int]
         # The letters after an apostrophe ("parkinson's", "don't") are an ending, not a word, and would pair with the next word as "s tremor".
         found = [match for match in TOKEN_RE.finditer(text) if not match.group().isdigit() and not (match.start() > 1 and text[match.start() - 1] in "'’" and text[match.start() - 2].isalnum())]
         counts.update(match.group() for match in found)
-        # A phrase is two words that a space or a hyphen joins, in the form the applicant wrote. shortcut: no phrase of three words, add one when a list shows the need.
-        pairs.update(text[left.start():right.end()] for left, right in zip(found, found[1:]) if text[left.end():right.start()] in (" ", "-") and not {left.group(), right.group()} & skip)
-    # The applicant's own repetition marks a phrase. Of two repeated phrases that share a word ("self-management", "management support"), the more frequent one stays.
-    # A hyphen marks one by itself, and always stays. Its halves ("self", "energy" of "energy-limiting") would match every word that starts with them.
-    repeated = {phrase: count for phrase, count in pairs.items() if (count >= 2 or "-" in phrase) and any(weight(word) for word in TOKEN_RE.findall(phrase))}
+        # A phrase is two words that a space joins, or a hyphenated word whole ("state-of-the-art"), in the form the applicant wrote. shortcut: no phrase of three words with spaces, add one when a list shows the need.
+        pairs.update(text[left.start():right.end()] for left, right in zip(found, found[1:]) if text[left.end():right.start()] == " " and not skip & {left.group(), right.group()})
+        pairs.update(match.group() for match in HYPHENATED_RE.finditer(text))
+    def words(phrase: str) -> list[str]:
+        return [word for word in TOKEN_RE.findall(phrase) if not word.isdigit() and word not in skip]
+    # The applicant's own repetition marks a phrase. Of two repeated phrases that share a word ("chronic illness", "chronic pain"), the more frequent one stays.
+    # A hyphen marks one by itself, and always stays. Its parts ("self", "energy" of "energy-limiting") would match every word that starts with them.
+    repeated = {phrase: count for phrase, count in pairs.items() if (count >= 2 or "-" in phrase) and len(phrase) <= MAX_KEYWORD and any(weight(word) for word in words(phrase))}
     phrases = {phrase: count for phrase, count in repeated.items() if "-" in phrase or not any(other != phrase and more > count and set(TOKEN_RE.findall(other)) & set(TOKEN_RE.findall(phrase)) for other, more in repeated.items())}
     inside = Counter(word for phrase, count in phrases.items() for word in TOKEN_RE.findall(phrase) for _ in range(count))
     # A word that occurs only inside a proposed phrase is not proposed again by itself.
-    found = {**{phrase: (count, max(weight(word) for word in TOKEN_RE.findall(phrase))) for phrase, count in phrases.items()}, **{word: (count, weight(word)) for word, count in counts.items() if word not in skip and weight(word) and count > inside[word]}}
+    found = {**{phrase: (count, max(weight(word) for word in words(phrase))) for phrase, count in phrases.items()}, **{word: (count, weight(word)) for word, count in counts.items() if word not in skip and len(word) <= MAX_KEYWORD and weight(word) and count > inside[word]}}
     # Rarity alone put the general words first and cut the field's own words ("chronic" is in 118 of 3,000 records), so the words the applicant repeats come first.
     return {term: found[term][1] for term in sorted(found, key=lambda term: (-found[term][0] * found[term][1], term))[:limit]}

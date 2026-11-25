@@ -106,7 +106,7 @@ chronic, rural, chronic illness, self-management, fatigue, adults, peer facilita
 
 Most of the list names the field. It has "chronic", "rural", "fatigue", "pain", "symptom", and "participatory". It has six phrases, "chronic illness", "self-management", "peer facilitators", "rural adults", "energy-limiting", and "patient-reported". A word that the text holds only inside a hyphenated word, such as "self" or "energy", is proposed inside it and not by itself. The list still needed a hand in four places:
 
-- Three terms are one part of a longer phrase in the text. "workers" comes from "community health workers", "interference" from "pain interference", and "patient-reported" from "patient-reported outcomes".
+- Some terms are one part of a longer phrase in the text. For example, "workers" comes from "community health workers", "interference" from "pain interference", and "patient-reported" from "patient-reported outcomes".
 - Some words are general, such as "adults", "people", "member", and "delivered".
 - Some phrases of the field are missing. The list has no "chronic pain", and it has no phrase of three words, such as "multiple chronic conditions".
 - The weights do not follow what matters most to the work. "energy-limiting" and "surveys" had 15. "self-management" and "chronic illness" had 9, and "chronic" had 6.
@@ -521,7 +521,7 @@ project-narrative  final  56 words
 ## Use it well
 
 - **The score is a first look.** The three highest scores in the example were awards that Lanternwell could not apply for, and the announcement it chose had a score of 21.6 at the Watchlist level. Sort and filter with the score. Decide by reading.
-- **The proposed terms need your hand.** The wizard proposed the field's own words and four phrases. It also proposed general words such as "people" and "adults", it left out "chronic pain", and it gave "self-management" a weight of 9. The ranking is only as good as the terms and weights you keep.
+- **The proposed terms need your hand.** The wizard proposed the field's own words and six phrases, two of them hyphenated words. It also proposed general words such as "people" and "adults", it left out "chronic pain", and it gave "self-management" a weight of 9. The ranking is only as good as the terms and weights you keep.
 - **A common word as a keyword may not narrow anything.** `pain` fetched 341 of the 369 open notices. Use a phrase such as `chronic pain`, or **Filter within results**.
 - **Eligibility is yours to check.** Grant Matcher shows Section III and does not check it. Read it, and start the registrations early.
 - **A model can invent, and it can shift a claim.** In the example it left a placeholder where it had no fact, which is what it is told to do. It also turned "people in rural areas" into "rural adults" in a polish. The checks catch a made-up citation or number. Only you catch a change of meaning.

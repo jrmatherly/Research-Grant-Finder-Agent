@@ -1987,7 +1987,7 @@ def test_the_announcement_tab_shows_the_award_and_eligibility_sections(tmp_path,
     assert "501(c)(3)" in panels["Section III. Eligibility Information"] and "501(c)(3)" not in panels["Section IV. Application and Submission Information"]
 
 
-@pytest.mark.parametrize("old, new, shown", [("We study heart cells.", "We study cardiac cells.", "We study ~~heart~~ **cardiac** cells\\."), ("First ends here.\n\nSecond starts here.", "First stops here.\n\nSecond starts here.\n\nA third.", "First ~~ends~~ **stops** here\\.\n\nSecond starts here\\.\n\n**A third\\.**"), ("One.\n\nTwo.", "One. Two.", "One\\. Two\\."), ("One. Two.", "Three.\n\nFour.", "~~One\\. Two\\.~~ **Three\\.**\n\n**Four\\.**")], ids=["word", "paragraphs", "joined", "rewritten"])
+@pytest.mark.parametrize("old, new, shown", [("We study heart cells.", "We study cardiac cells.", "We study ~~heart~~ **cardiac** cells\\."), ("First ends here.\n\nSecond starts here.", "First stops here.\n\nSecond starts here.\n\nA third.", "First ~~ends~~ **stops** here\\.\n\nSecond starts here\\.\n\n**A third\\.**"), ("One.\n\nTwo.", "One. Two.", "One\\. ~~¶~~ Two\\."), ("One.\n\nGone.\n\nTwo.", "One.\n\nTwo.", "One\\.\n\n~~Gone\\.~~ ~~¶~~ Two\\."), ("One. Two.", "Three.\n\nFour.", "~~One\\. Two\\.~~ **Three\\.**\n\n**Four\\.**")], ids=["word", "paragraphs", "joined", "removed", "rewritten"])
 def test_a_polish_diff_keeps_the_paragraphs_of_the_proposal(old, new, shown) -> None:
     from nih_grant_matcher.ui.apply_page import _word_diff
     assert _word_diff(old, new) == shown

@@ -157,15 +157,15 @@ def _and(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
 
 def _word_diff(old: str, new: str) -> str:
-    # A line break is a token of its own and a mark closes before it, because Markdown ends a mark at a paragraph.
+    # A line break is a token of its own and a mark closes before it, because Markdown ends a mark at a paragraph. A break that goes shows as a struck pilcrow.
     a, b, parts = re.findall(r"\S+|\n", old), re.findall(r"\S+|\n", new), []
     def marked(tokens: list[str], mark: str) -> None:
-        parts.extend("\n" * len(run) if broken else f"{mark}{escape_markdown(' '.join(run))}{mark}" for broken, group in groupby(tokens, "\n".__eq__) for run in [list(group)])
+        parts.extend(("~~¶~~" if mark == "~~" else "\n" * len(run)) if broken else f"{mark}{escape_markdown(' '.join(run))}{mark}" for broken, group in groupby(tokens, "\n".__eq__) for run in [list(group)])
     for tag, i1, i2, j1, j2 in SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
         if tag == "equal":
             marked(a[i1:i2], "")
         if tag in ("delete", "replace"):
-            marked([t for t in a[i1:i2] if t != "\n"], "~~")
+            marked(a[i1:i2], "~~")
         if tag in ("insert", "replace"):
             marked(b[j1:j2], "**")
     return re.sub(r" ?\n ?", "\n", " ".join(parts))

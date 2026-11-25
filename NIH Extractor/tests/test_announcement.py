@@ -157,3 +157,11 @@ def test_a_limit_needs_an_amount_above_zero() -> None:
             Requirement("limit", "Specific Aims: at most 0 pages.", "q", "parsed", "specific-aims", limit)
     assert Requirement("must", "Name a mentor.", "q", "parsed").limit is None
     assert parse_requirements(_announcement(_in_section_iv("The Specific Aims is limited to 0 pages."))) == ()
+
+def test_a_sentence_that_names_a_section_does_not_start_it() -> None:
+    from nih_grant_matcher.announcement import _section_starts
+    # Every notice read on 2026-11-24 held "Section III. Eligibility Information contains information..." in a sentence.
+    text = "Section I. Notice of Funding Opportunity Description Research areas. Section IV. Application and Submission Information See Section III. Eligibility Information for who may apply. PHS 398 Research Plan. Section V. Application Review Information Criteria."
+    starts = _section_starts(text)
+    assert list(starts) == ["I", "IV", "V"] and text[starts["IV"]:].startswith("Section IV. Application and Submission Information See Section III.")
+
