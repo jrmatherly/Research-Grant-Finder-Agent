@@ -241,7 +241,7 @@ def _page(store: OpportunityStore, db_path: str) -> None:
 
 def model_settings(store: OpportunityStore, db_path: str, expanded: bool | None = None) -> None:
     picked = chosen(store)
-    with st.expander("Model", expanded=expanded if expanded is not None else not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}"))):
+    with st.expander("Model", expanded=expanded if expanded is not None else not (picked and picked[1] and store.setting(f"consent:{host_of(picked[2])}")), key="apply_llm_box"):
         st.caption("A model can help you write. Grant Matcher sends your text to the provider you choose here and to no one else.")
         # The boxes below are seeded once, so another database starts them again from its own record.
         if st.session_state.get("apply_llm_db", db_path) != db_path:
