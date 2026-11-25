@@ -10,7 +10,8 @@ from .normalizer import _nih_guide_url
 from .rules import GRANT_TYPES, Limit
 
 SECTION_TITLES: dict[str, str] = {"I": "Notice of Funding Opportunity Description", "II": "Award Information", "III": "Eligibility Information", "IV": "Application and Submission Information", "V": "Application Review Information", "VI": "Award Administration Information", "VII": "Agency Contacts", "VIII": "Other Information"}
-_NEXT_HEADING = re.compile(r".{0,4}Section")
+# The table of contents runs one heading into the next, and a sentence that names a section goes on in lower case ("Section III. Eligibility Information contains information..."). Neither starts the section.
+_NOT_A_HEADING = re.compile(r".{0,4}Section| *[a-z]")
 _FORMS_AFTER_RESEARCH_PLAN = ("PHS Human Subjects and Clinical Trials Information", "PHS Assignment Request Form")
 _SECTION_KEYS = {s.title: s.key for g in GRANT_TYPES.values() for s in g.sections}
 # The verb follows the title directly, so "is not limited to" does not match.
@@ -64,8 +65,7 @@ def _section_starts(text: str) -> dict[str, int]:
     for numeral, title in SECTION_TITLES.items():
         heading = f"Section {numeral}. {title}"
         at = text.find(heading, after)
-        # The table of contents runs one heading into the next.
-        while at != -1 and _NEXT_HEADING.match(text, at + len(heading)):
+        while at != -1 and _NOT_A_HEADING.match(text, at + len(heading)):
             at = text.find(heading, at + 1)
         if at != -1:
             starts[numeral] = after = at
