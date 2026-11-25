@@ -147,7 +147,7 @@ class NihGuideClient:
         page_size = min(100, max(1, rows))
         offset = 0
         while len(collected) < rows:
-            request = _guide_request(f"{self.api_url}/data", perpage=page_size, sort="reldate:desc" if not keyword else "_score", offset=offset, types=types, keyword=keyword)
+            request = _guide_request(f"{self.api_url}/data", perpage=page_size, sort="reldate:desc" if not keyword else "_score", offset=offset, types=types, keyword=_guide_phrases(keyword))
             parsed = _read_json(request, 30)
             hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
             if not isinstance(hits, list):
@@ -178,6 +178,12 @@ class NihGuideClient:
         if not re.fullmatch(r"[A-Za-z0-9-]+", docnum):
             raise ApiError(f"{docnum!r} is not a notice number")
         return _read(urllib.request.Request(_nih_guide_url(docnum), headers={"User-Agent": "nih-grant-matcher/0.1"}), 30).decode("utf-8", errors="replace")
+
+def _guide_phrases(keyword: str) -> str:
+    # The service matches a notice that has any one of the words anywhere in its text, so "chronic pain" matched nearly every open notice. Each part between commas goes as a quoted phrase. A keyword that already has an operator of the service goes as typed.
+    if re.search(r'["+|*()~]|(^|\s)-', keyword):
+        return keyword
+    return " | ".join(f'"{part.strip()}"' for part in keyword.split(",") if part.strip())
 
 def _guide_request(url: str, perpage: int, sort: str, offset: int, types: str, keyword: str) -> urllib.request.Request:
     params = {

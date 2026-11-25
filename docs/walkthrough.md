@@ -185,16 +185,16 @@ Go back to **Find**. The 369 saved opportunities are scored again with the new p
 
 ### A keyword changes what the search fetches
 
-Enter a **Keyword** and select **Run Search**. The words go to the NIH Guide's own search. The example ran three keywords on 2026-11-24:
+Enter a **Keyword** and select **Run Search**. The words go to the NIH Guide's own search as an exact phrase. The example ran three keywords on 2026-11-24:
 
 | Keyword | Records fetched |
 | --- | --- |
 | Empty | 369 |
-| `self-management` | 366 |
-| `chronic pain` | 344 |
+| `self-management` | 6 |
+| `chronic pain` | 8 |
 | `fatigue` | 4 |
 
-Two of the keywords fetched nearly every open notice, so they narrowed nothing. One word fetched four. A keyword does not change a score. To narrow what you see, use **Filter within results**, as shown below.
+Each keyword fetched a few notices that have the phrase in their text. A common single word narrows little. `pain` fetched 341 of the 369, because the standard text of a notice names it. A keyword does not change a score. To narrow what you already have, use **Filter within results**, as shown below.
 
 After a keyword search, the page shows that search only. To see everything again, open **Display** in the sidebar and select **Load Saved Results**.
 
@@ -517,7 +517,7 @@ project-narrative  final  56 words
 
 - **The score is a first look.** The three highest scores in the example were awards that Lanternwell could not apply for, and the announcement it chose had a score of 21.6 at the Watchlist level. Sort and filter with the score. Decide by reading.
 - **The proposed terms need your hand.** The wizard proposed "we", "live", and "far", and it proposed no phrase. The ranking is only as good as the terms you keep.
-- **A keyword may not narrow anything.** Two of three keywords fetched nearly every open notice. Use **Filter within results** to narrow.
+- **A common word as a keyword may not narrow anything.** `pain` fetched 341 of the 369 open notices. Use a phrase such as `chronic pain`, or **Filter within results**.
 - **Eligibility is yours to check.** Grant Matcher shows Sections I, IV, and V. Read Section III on NIH's page, and start the registrations early.
 - **A model can invent, and it can shift a claim.** In the example it left a placeholder where it had no fact, which is what it is told to do. It also turned "people in rural areas" into "rural adults" in a polish. The checks catch a made-up citation or number. Only you catch a change of meaning.
 - **A model's review is an estimate.** Its scores are not NIH's. Use the points it quotes, and ignore the numbers.
