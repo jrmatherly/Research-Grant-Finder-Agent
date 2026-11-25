@@ -199,3 +199,14 @@ def test_a_profile_that_version_0_2_0_saved_over_a_limit_is_read_ranks_and_is_no
             store.profile()
     finally:
         store.close()
+
+# The summary and the four aims of docs/walkthrough.md, "Step 2. Your research".
+WALKTHROUGH_SUMMARY = "We study how adults who live with chronic illness manage fatigue, chronic pain, and gaps in access to care in rural communities. We work as a community organization with trained peer facilitators, member surveys, and community-based participatory methods, so that self-management support reaches people who live far from specialty clinics."
+WALKTHROUGH_AIMS = ("Aim 1 will test whether a peer-led self-management program delivered by telephone and video reduces fatigue and pain interference in rural adults with chronic illness.", "Aim 2 will find the barriers that keep rural adults with multiple chronic conditions from specialty care and from self-management support.", "Aim 3 will adapt a symptom self-monitoring diary with patient-reported outcomes for people with energy-limiting chronic illness and pilot test its feasibility and acceptability.", "Aim 4 will evaluate whether training peer facilitators as community health workers improves engagement and retention in a behavioral intervention.")
+
+def test_suggested_terms_name_the_field_of_the_walkthrough_text() -> None:
+    scorer = MLRelevanceScorer()
+    terms = suggest_terms((*WALKTHROUGH_AIMS, WALKTHROUGH_SUMMARY), scorer.document_frequency, scorer.documents)
+    assert {"chronic", "pain", "rural", "fatigue", "self-management", "chronic illness"} <= set(terms), list(terms)
+    assert not {"we", "who", "so", "its", "aim", "4", "find", "keep", "live", "far", "reaches", "reduces"} & set(terms), list(terms)
+    assert len(terms) <= 25 and all(4 <= weight <= 18 for weight in terms.values())
