@@ -113,11 +113,11 @@ def apply_filters(frame: pd.DataFrame, min_score: float, classifications: list[s
 
 # A keyed widget drawn again after a run without it shows its default, not the value the server kept, unless it persists, so every keyed Find widget that holds a value persists, except the table, whose selection is set on every run.
 with st.sidebar:
-    view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view")
+    # The tour covers this control, so a view chosen by hand means no tour is open, and a place kept by a tour that never reported its end is dropped.
+    view = st.sidebar.radio("View", ["Find", "Apply", "Profile", "Settings"], key="view", on_change=lambda: st.session_state.pop("tour_back", None))
     # The Database box is drawn under Settings only and its value persists, so every view reads it here. A path is read as typed everywhere below, and without expanduser a ~ would become a folder of that name.
     db_path = os.path.expanduser(st.session_state.get("db_path", DEFAULT_DB))
-    if view == "Find":
-        tour_button()
+    tour_button()
     if view != "Settings" and st.session_state.get("db_path", DEFAULT_DB) != DEFAULT_DB:
         st.caption(f"Database: {f'`{db_path}`' if '`' not in db_path else escape_markdown(db_path)}. Change it under Settings.")
     if view == "Find":

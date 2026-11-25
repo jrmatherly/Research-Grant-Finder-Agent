@@ -1936,3 +1936,20 @@ def test_test_connection_makes_one_try_and_explains_a_busy_provider(tmp_path, mo
     app.button(key="apply_llm_test_button").click().run(timeout=30)
     assert not app.exception and post.calls == 1 and post.slept == []
     assert any("says nothing about your key" in e.value for e in app.error)
+
+def test_every_wizard_input_says_what_it_is_for_and_every_text_box_shows_sample_text(tmp_path, monkeypatch) -> None:
+    from nih_grant_matcher.ui.profile_page import BLANK, STEPS
+    monkeypatch.chdir(tmp_path)
+    app = AppTest.from_file(str(APP)).run(timeout=30)
+    app.session_state["view"], app.session_state["profile_draft"] = "Profile", BLANK
+    seen = set()
+    for step in range(len(STEPS)):
+        app.session_state["profile_step"] = step
+        app.run(timeout=30)
+        boxes = [*app.main.text_input, *app.main.text_area]
+        inputs = [*boxes, *app.main.radio, *app.main.selectbox, *app.main.multiselect]
+        assert not app.exception and not [w.label for w in inputs if not w.help] and not [w.label for w in boxes if not w.placeholder], step
+        seen.update(w.label for w in inputs)
+        # A table cannot show sample text, so a caption under it gives one worked row.
+        assert any("Example row" in c.value for c in app.main.caption) == (step in (2, 4)), step
+    assert seen == {"Ranking", "Name", "Institution", "Career stage", "Research summary", "Aims of recent or planned work", "Your NIH institutes", "Expertise", "Resources", "Import a profile"}
