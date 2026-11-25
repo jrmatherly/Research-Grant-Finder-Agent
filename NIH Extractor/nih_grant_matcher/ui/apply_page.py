@@ -1,8 +1,10 @@
 from __future__ import annotations
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
+from itertools import groupby
 from pathlib import Path
 from typing import Callable
 import streamlit as st
@@ -155,15 +157,18 @@ def _and(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
 
 def _word_diff(old: str, new: str) -> str:
-    a, b, parts = old.split(), new.split(), []
+    # A line break is a token of its own and a mark closes before it, because Markdown ends a mark at a paragraph.
+    a, b, parts = re.findall(r"\S+|\n", old), re.findall(r"\S+|\n", new), []
+    def marked(tokens: list[str], mark: str) -> None:
+        parts.extend("\n" * len(run) if broken else f"{mark}{escape_markdown(' '.join(run))}{mark}" for broken, group in groupby(tokens, "\n".__eq__) for run in [list(group)])
     for tag, i1, i2, j1, j2 in SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
         if tag == "equal":
-            parts.append(escape_markdown(" ".join(a[i1:i2])))
+            marked(a[i1:i2], "")
         if tag in ("delete", "replace"):
-            parts.append(f"~~{escape_markdown(' '.join(a[i1:i2]))}~~")
+            marked([t for t in a[i1:i2] if t != "\n"], "~~")
         if tag in ("insert", "replace"):
-            parts.append(f"**{escape_markdown(' '.join(b[j1:j2]))}**")
-    return " ".join(parts)
+            marked(b[j1:j2], "**")
+    return re.sub(r" ?\n ?", "\n", " ".join(parts))
 
 def owned_by(app_id: int, key: str) -> bool:
     # Every key of an application holds its id third, as in apply_edit_{app}_{section}_{call}, and a section key holds no underscore.
@@ -345,7 +350,7 @@ def _announcement_tab(view: ApplicationView, db_path: str, app_id: int) -> None:
         st.link_button("Open the announcement", a.url, key="apply_announcement_button")
         if view.no_section_iv:
             st.info(NO_SECTION_IV)
-        parts = [(f"Section {n}. {SECTION_TITLES[n]}", a.section(n)) for n in ("I", "IV", "V") if a.section(n)]
+        parts = [(f"Section {n}. {SECTION_TITLES[n]}", a.section(n)) for n in ("I", "II", "III", "IV", "V") if a.section(n)]
         for title, text in parts or [("Full text", a.text)]:
             with st.expander(title):
                 st.text(text)

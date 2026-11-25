@@ -142,8 +142,9 @@ def suggest_terms(sentences: tuple[str, ...], document_frequency: dict[str, int]
         # A phrase is two words that a space or a hyphen joins, in the form the applicant wrote. shortcut: no phrase of three words, add one when a list shows the need.
         pairs.update(text[left.start():right.end()] for left, right in zip(found, found[1:]) if text[left.end():right.start()] in (" ", "-") and not {left.group(), right.group()} & skip)
     # The applicant's own repetition marks a phrase. Of two repeated phrases that share a word ("self-management", "management support"), the more frequent one stays.
-    repeated = {phrase: count for phrase, count in pairs.items() if count >= 2 and any(weight(word) for word in TOKEN_RE.findall(phrase))}
-    phrases = {phrase: count for phrase, count in repeated.items() if not any(other != phrase and more > count and set(TOKEN_RE.findall(other)) & set(TOKEN_RE.findall(phrase)) for other, more in repeated.items())}
+    # A hyphen marks one by itself, and always stays. Its halves ("self", "energy" of "energy-limiting") would match every word that starts with them.
+    repeated = {phrase: count for phrase, count in pairs.items() if (count >= 2 or "-" in phrase) and any(weight(word) for word in TOKEN_RE.findall(phrase))}
+    phrases = {phrase: count for phrase, count in repeated.items() if "-" in phrase or not any(other != phrase and more > count and set(TOKEN_RE.findall(other)) & set(TOKEN_RE.findall(phrase)) for other, more in repeated.items())}
     inside = Counter(word for phrase, count in phrases.items() for word in TOKEN_RE.findall(phrase) for _ in range(count))
     # A word that occurs only inside a proposed phrase is not proposed again by itself.
     found = {**{phrase: (count, max(weight(word) for word in TOKEN_RE.findall(phrase))) for phrase, count in phrases.items()}, **{word: (count, weight(word)) for word, count in counts.items() if word not in skip and weight(word) and count > inside[word]}}

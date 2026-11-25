@@ -54,6 +54,8 @@ def test_every_step_draws_its_place_for_a_user_with_no_profile_and_saves_nothing
     for step in tour.TOUR_STEPS:
         _show(app, step)
         assert not app.exception and app.session_state["view"] == step.view, step
+        # Three controls of Find are drawn only over saved opportunities, and this database has none.
+        assert step.key in {"find_classes", "find_table", "find_tabs"} or step.key in {getattr(e, "key", None) for e in (*app.main, *app.sidebar)}, step
         assert [h.value for h in app.subheader if h.value[:1].isdigit()] == ([f"{step.wizard + 1}. {STEPS[step.wizard]}"] if step.wizard is not None else []), step
     assert saved_profile("data/grants.sqlite3") is None
 
