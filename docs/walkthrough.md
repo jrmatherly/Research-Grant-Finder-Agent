@@ -58,7 +58,7 @@ A green message said `Fetched 369 records from nih-guide; saved 369 current NIH/
 
 ## Set up your profile
 
-Under **View**, select **Profile**, then **Set up my profile**. The wizard has five steps. Every box has a question mark that says what the box is for, and every text box shows sample text until you type.
+Under **View**, select **Profile**, then **Set up my profile**. The wizard has five steps. Every box has a question mark that says what the box is for, every table has a line above it that says the same, and every text box shows sample text until you type.
 
 The boxes are worded for one investigator. The help says what an organization enters.
 

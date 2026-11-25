@@ -210,3 +210,9 @@ def test_suggested_terms_name_the_field_of_the_walkthrough_text() -> None:
     assert {"chronic", "pain", "rural", "fatigue", "self-management", "chronic illness"} <= set(terms), list(terms)
     assert not {"we", "who", "so", "its", "aim", "4", "find", "keep", "live", "far", "reaches", "reduces"} & set(terms), list(terms)
     assert len(terms) <= 25 and all(4 <= weight <= 18 for weight in terms.values())
+
+@pytest.mark.parametrize("text, proposed, absent", [("We study Parkinson's tremor and Parkinson's tremor in older adults.", {"parkinson"}, {"s", "s tremor"}), ("Sjögren’s syndrome matters. Sjögren’s syndrome.", {"syndrome"}, {"s", "s syndrome"}), ("We don't know. Patients don't adhere.", {"adhere"}, {"t"}), ("The 'chronic pain' group and the 'chronic pain' clinic.", {"chronic pain"}, set()), ("Vitamin D and vitamin D in T cells and T cells.", {"vitamin d", "t cells"}, set())], ids=["possessive", "curly", "contraction", "quoted", "letters"])
+def test_suggested_terms_take_no_ending_after_an_apostrophe_as_a_word(text, proposed, absent) -> None:
+    scorer = MLRelevanceScorer()
+    terms = set(suggest_terms((text,), scorer.document_frequency, scorer.documents))
+    assert proposed <= terms and not absent & terms, terms

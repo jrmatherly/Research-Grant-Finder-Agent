@@ -185,7 +185,10 @@ if run_clicked:
         else:
             set_scored_items_in_session(items)
             st.session_state["last_run"] = summary
-            st.success(f"Fetched {summary.fetched} records from {summary.source}; saved {summary.saved} current NIH/HHS opportunities.")
+            if summary.fetched:
+                st.success(f"Fetched {summary.fetched} records from {summary.source}; saved {summary.saved} current NIH/HHS opportunities.")
+            else:
+                st.warning(f"The search found no records in {summary.source}. Any opportunities below were saved by an earlier search. Try fewer words, or put a comma between phrases.")
             if summary.capped:
                 st.warning("A source reached the row limit and may hold more. Raise Rows per source and run again.")
 

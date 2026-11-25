@@ -18,7 +18,7 @@ ACTION_WORDS = frozenset("""test tests define defines determine determines wheth
 map maps after two three examine examines assess assesses investigate investigates characterize characterizes understand
 establish compare explore quantify measure reveal demonstrate among during between within which what why""".split())
 
-# Words of general English that NIH Guide text seldom holds, so the rarity table calls them rare ("we" is in 17 of 3,000 records), and the "aim" that labels a sentence.
+# Words of general English that NIH Guide text seldom holds, so the rarity table calls them rare ("we" is in 17 of 3,000 records), and the "aim" that labels a sentence. The set also keeps these words out of a phrase, so it holds common ones too.
 GENERAL_WORDS = frozenset("""we our us i my they their them its he she his her you your who whom whose so such than then there these those also both
 each all any some more most other into onto over under about across through per via not no nor but if because while when where can could may
 might must should would do does did has have had been being was were live lives far near find finds keep keeps reach reaches reduce reduces
@@ -136,7 +136,8 @@ def suggest_terms(sentences: tuple[str, ...], document_frequency: dict[str, int]
         return 0 if frequency > documents * 0.1 else round(4 + 14 * (math.log((documents + 1) / (frequency + 1)) - floor) / ((ceiling - floor) or 1.0)) if frequency else 10
     skip, counts, pairs = STOPWORDS | ACTION_WORDS | GENERAL_WORDS, Counter(), Counter()
     for text in (sentence.lower() for sentence in sentences):
-        found = [match for match in TOKEN_RE.finditer(text) if not match.group().isdigit()]
+        # The letters after an apostrophe ("parkinson's", "don't") are an ending, not a word, and would pair with the next word as "s tremor".
+        found = [match for match in TOKEN_RE.finditer(text) if not match.group().isdigit() and not (match.start() > 1 and text[match.start() - 1] in "'’" and text[match.start() - 2].isalnum())]
         counts.update(match.group() for match in found)
         # A phrase is two words that a space or a hyphen joins, in the form the applicant wrote. shortcut: no phrase of three words, add one when a list shows the need.
         pairs.update(text[left.start():right.end()] for left, right in zip(found, found[1:]) if text[left.end():right.start()] in (" ", "-") and not {left.group(), right.group()} & skip)

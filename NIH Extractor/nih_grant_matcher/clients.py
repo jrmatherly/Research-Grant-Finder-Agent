@@ -146,8 +146,10 @@ class NihGuideClient:
         collected: list[dict[str, Any]] = []
         page_size = min(100, max(1, rows))
         offset = 0
+        # A keyword of only commas or spaces is no query, and the service sorts an empty query by score in no useful order.
+        query = _guide_phrases(keyword)
         while len(collected) < rows:
-            request = _guide_request(f"{self.api_url}/data", perpage=page_size, sort="reldate:desc" if not keyword else "_score", offset=offset, types=types, keyword=_guide_phrases(keyword))
+            request = _guide_request(f"{self.api_url}/data", perpage=page_size, sort="_score" if query else "reldate:desc", offset=offset, types=types, keyword=query)
             parsed = _read_json(request, 30)
             hits = (((parsed.get("data") or {}).get("hits") or {}).get("hits") or [])
             if not isinstance(hits, list):
@@ -183,7 +185,13 @@ def _guide_phrases(keyword: str) -> str:
     # The service matches a notice that has any one of the words anywhere in its text, so "chronic pain" matched nearly every open notice. Each part between commas goes as a quoted phrase. A keyword that already has an operator of the service goes as typed.
     if re.search(r'["+|*()~]|(^|\s)-', keyword):
         return keyword
-    return " | ".join(f'"{part.strip()}"' for part in keyword.split(",") if part.strip())
+    return " | ".join(_guide_phrase(part.strip()) for part in keyword.split(",") if part.strip())
+
+def _guide_phrase(part: str) -> str:
+    # The service has no AND, OR or NOT words, so a phrase that holds one matched nothing. Its "-" excludes a bare word and not a quoted phrase, so NOT excludes each word after it.
+    first, *rest = re.split(r"\s+(AND|OR|NOT)\s+", part)
+    joined = f'"{first}"' + "".join("".join(f" + -{word}" for word in term.split()) if operator == "NOT" else f' {"+" if operator == "AND" else "|"} "{term}"' for operator, term in zip(rest[::2], rest[1::2]))
+    return f"({joined})" if rest else joined
 
 def _guide_request(url: str, perpage: int, sort: str, offset: int, types: str, keyword: str) -> urllib.request.Request:
     params = {
